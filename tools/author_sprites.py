@@ -607,33 +607,51 @@ ICONS = {
 '  MMMMMMMMMMMM      ',
 ],
 
+# Curling breaker: face rising left to right, crest turning over into a
+# hollow barrel, foam down the face. Modelled on the reference art rather
+# than the twin humps this used to be.
+# Curling breaker: face rises left to right, crest turns over into a hollow
+# barrel, foam cap on top. Kept to four tones so it still reads at 40px.
 'wave': [
 '                        ',
-'     HH          HH     ',
-'    HLLH        HLLH    ',
-'   HLLLLH      HLLLLH   ',
-'  HLLHHLLH    HLLHHLLH  ',
-' HLLHHHHLLH  HLLHHHHLLH ',
-'HMLLHHHHLLMHHMLLHHHHLLMH',
-'MMLLMMMMMMLLMMLLMMMMMMLM',
-'BBMMMMMMMMBBBBMMMMMMMMBB',
-'DBBBBBBBBBBBBBBBBBBBBBBD',
-'SDDDDDDDDDDDDDDDDDDDDDDS',
-'SSSSSSSSSSSSSSSSSSSSSSSS',
+'              LLLLLL    ',
+'          LLLLMMMMMMLL  ',
+'        LLMMMMMBBBBBMML ',
+'       LMMMBBBBB    BMML',
+'      LMMBBBBDDD     BML',
+'     LMMBBBDDDDD     BML',
+'    LMMBBBDDDSSS    BBML',
+'   LMMBBBDDDSSSS   BBML ',
+'  LMMBBBDDDSSSSS BBBML  ',
+' LMMBBBDDDSSSSSBBBBML   ',
+'LMMBBBDDDSSSSSBBBBML    ',
+'LMMBBDDDSSSSSBBBBML     ',
+'BBDDDSSSSSSSSSSSSSSSSSSB',
+'DDSSSSSSSSSSSSSSSSSSSSDD',
 ],
 
+# Traditional J-hook: eye at the top, straight shank, U-bend, point turning
+# back up. Strokes are 2px — a 1px line reads as spindly noise at 40px, and
+# an added barb turned the bend into an unreadable tangle.
 'hook': [
-'       OOO        ',
-'       OAO        ',
-'       OAO        ',
-'       OAO        ',
-'     OOOAOOO      ',
-'    OAAA AAAO     ',
-'    OAO   OAO     ',
-'    OAO   OAO     ',
-'     OAOOOAO      ',
-'      OAAAO       ',
-'       OOO        ',
+'      AAAAAA      ',
+'     AA    AA     ',
+'     AA    AA     ',
+'      AAAAAA      ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'        AA        ',
+'   AA   AA        ',
+'   AA   AA        ',
+'   AA   AA        ',
+'   AAA AA         ',
+'    AAAAA         ',
+'     AAA          ',
 ],
 
 'trophy': [
@@ -651,17 +669,28 @@ ICONS = {
 '   BBBBBBBBBB     ',
 ],
 
+# Bangka / pump boat: narrow hull with bamboo outriggers either side, which
+# is what people actually fish from here — not the generic launch this was.
+# Bangka / pump boat, seen head-on. Side-on the outrigger arms and float
+# stack into yet another horizontal bar and it reads as a layered ferry;
+# from the front the cross-beam and two floats give the unmistakable
+# outrigger silhouette.
 'boat': [
-'       A          ',
-'       AA         ',
-'       AAAA       ',
-'       AAAAAA     ',
-'       AA         ',
-'  OOOOOOOOOOOOO   ',
-'  OAAAAAAAAAAAO   ',
-'   OOOOOOOOOOO    ',
-' MM MMM MMM MMM MM',
-'BLLBLLLBLLLBLLLBLL',
+'             AA           ',
+'             AAAA         ',
+'             AA           ',
+'             SS           ',
+'        SSSSSSSSSS        ',
+'       SLLLLLLLLLLS       ',
+'       SSSSSSSSSSSS       ',
+'   SSSSSSSSSSSSSSSSSSSS   ',
+'   SS    SBBBBBBS    SS   ',
+'  SBBS   SBBBBBBS   SBBS  ',
+'  SBBS   SBBBBBBS   SBBS  ',
+'  SSSS    SBBBBS    SSSS  ',
+'   SS      SSSS      SS   ',
+'                          ',
+'MMLLMMLLMMLLMMLLMMLLMMLLMM',
 ],
 
 'book': [
@@ -843,7 +872,7 @@ WEATHER_PAL = {
 }
 
 
-def sheet(coll, palette, path, cols=4, scale=7):
+def sheet(coll, palette, path, cols=4, scale=7, palette_for=None):
     names = list(coll)
     rows_n = (len(names) + cols - 1) // cols
     maxw = max(len(g[0]) for g in coll.values())
@@ -854,11 +883,12 @@ def sheet(coll, palette, path, cols=4, scale=7):
     d = ImageDraw.Draw(img)
     for i, name in enumerate(names):
         ox, oy = (i % cols) * cw + pad, (i // cols) * ch + pad
+        pal = (palette_for or {}).get(name, palette)
         for y, row in enumerate(coll[name]):
             for x, c in enumerate(row):
-                if c in palette:
+                if c in pal:
                     d.rectangle([ox+x*scale, oy+y*scale,
-                                 ox+x*scale+scale-1, oy+y*scale+scale-1], fill=palette[c])
+                                 ox+x*scale+scale-1, oy+y*scale+scale-1], fill=pal[c])
         d.text((ox, oy + maxh*scale + 2), name, fill='#333')
     img.save(path)
     return maxw, maxh
@@ -870,8 +900,25 @@ CRIMSON = {
     'A': '#ffb703', 'E': '#ffffff', 'P': '#10141c',
 }
 
+# Icons are rendered in the app with different colourways, so preview each
+# with the one it actually uses — a wave judged in cloud-grey is meaningless.
+OCEAN = {'O': '#0b1a28', 'S': '#14536b', 'D': '#1f6f8b', 'B': '#3fa9c9', 'M': '#7fcbe0',
+         'L': '#dff3fa', 'H': '#ffffff', 'F': '#1a7f9c', 'A': '#ffd23f',
+         'E': '#ffffff', 'P': '#10141c'}
+SUNSET = {'O': '#2a1004', 'S': '#8a2c06', 'D': '#c2410c', 'B': '#f97316', 'M': '#fca55d',
+          'L': '#ffe8d1', 'H': '#fff7ed', 'F': '#d1500e', 'A': '#ffd23f',
+          'E': '#ffffff', 'P': '#10141c'}
+GOLD = {'O': '#2e2208', 'S': '#7d5410', 'D': '#b07d1a', 'B': '#e8b53c', 'M': '#f2cf7a',
+        'L': '#fff2cc', 'H': '#fffaeb', 'F': '#c9911f', 'A': '#f26430',
+        'E': '#ffffff', 'P': '#10141c'}
+ICON_PAL = {
+    'wave': OCEAN, 'boat': OCEAN, 'book': OCEAN,
+    'hook': SUNSET, 'trophy': GOLD,
+}
+
 sw, sh = sheet(sprites, PAL, os.path.join(HERE, 'sprite-preview.png'))
-iw, ih = sheet(icons, WEATHER_PAL, os.path.join(HERE, 'icon-preview.png'), cols=4, scale=9)
+iw, ih = sheet(icons, WEATHER_PAL, os.path.join(HERE, 'icon-preview.png'), cols=4, scale=9,
+               palette_for=ICON_PAL)
 if heroes:
     sheet(heroes, CRIMSON, os.path.join(HERE, 'hero-preview.png'), cols=3, scale=10)
 
