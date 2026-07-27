@@ -484,12 +484,37 @@ async def main():
                   str(photo["hit"]))
             check("unknown species returns no photo", photo["miss"] is None, str(photo["miss"]))
 
+            await asyncio.sleep(1.5)  # gallery loads after the sheet opens
             shown = await page.eval("""
-                const fig = document.querySelector('.sheet figure[data-sheet-photo]');
-                return { present: !!fig, hidden: fig ? fig.hidden : null,
-                         src: fig ? (fig.querySelector('img').getAttribute('src') || '') : '',
-                         credited: fig ? /wikipedia\\.org/.test(fig.innerHTML) : false };
+                const sec = document.querySelector('.sheet [data-gallery]');
+                const imgs = sec ? sec.querySelectorAll('.gallery__item img').length : 0;
+                // The gallery must sit BELOW the written information, not
+                // directly under the hero sprite.
+                const hero = document.querySelector('.sheet .species-card__art--hero');
+                const facts = document.querySelector('.sheet .meta-list');
+                const order = sec && hero && facts
+                    ? (hero.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+                      (facts.compareDocumentPosition(sec) & Node.DOCUMENT_POSITION_FOLLOWING)
+                    : false;
+                return { present: !!sec, hidden: sec ? sec.hidden : null, imgs,
+                         belowFacts: !!order,
+                         credited: sec ? /wikimedia\\.org|wikipedia\\.org/.test(sec.innerHTML) : false };
             """)
+            check("gallery sits below the information", shown["belowFacts"], str(shown))
+            check("gallery renders several images", shown["imgs"] >= 2, str(shown))
+            gallery = await page.eval("""
+                const p = await import('./js/api/photos.js');
+                const many = await p.fetchPhotos('Lutjanus argentimaculatus', 4);
+                const junk = many.filter(x => /map|distribution|chart/i.test(x.title));
+                return { n: many.length, junk: junk.length,
+                         allHttps: many.every(x => x.src.startsWith('https://')),
+                         credited: many.every(x => !!x.credit) };
+            """)
+            check("gallery returns multiple photos", gallery["n"] >= 2, str(gallery))
+            check("range maps are filtered out", gallery["junk"] == 0, str(gallery))
+            check("gallery photos are https and credited",
+                  gallery["allHttps"] and gallery["credited"], str(gallery))
+
             check("detail sheet shows the photo", shown["present"] and not shown["hidden"],
                   str(shown))
             check("photo is attributed with a link back", shown["credited"], str(shown))
@@ -583,6 +608,55 @@ async def main():
             """)
             check("conditions offers a location toggle",
                   toggled == ["region", "device"], str(toggled))
+
+            # First visit should prompt automatically, like the map does.
+            first = await page.eval("""
+                const m = await import('./js/store.js');
+                const all = m.prefs.all();
+                delete all.useMyLocation;
+                localStorage.setItem('angler.prefs', JSON.stringify(all));
+                return m.prefs.get('useMyLocation', null);
+            """)
+            check("location choice starts unset", first is None, str(first))
+
+            asked = await page.eval("""
+                let prompted = false;
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok) => {
+                    prompted = true;
+                    ok({ coords: { latitude: 11.238, longitude: 125.004, accuracy: 20 } });
+                };
+                // Must navigate AWAY first — setting the hash to its current
+                // value fires no hashchange, so the page would never re-render.
+                location.hash = '#/tips';
+                await new Promise(r => setTimeout(r, 400));
+                location.hash = '#/conditions';
+                await new Promise(r => setTimeout(r, 2500));
+                navigator.geolocation.getCurrentPosition = real;
+                const m = await import('./js/store.js');
+                return { prompted, stored: m.prefs.get('useMyLocation', null),
+                         label: document.getElementById('condSource')?.textContent || '' };
+            """)
+            check("tides ask for location on first visit", asked["prompted"], str(asked))
+            check("granting location is remembered", asked["stored"] is True, str(asked))
+            check("readout names where you are",
+                  "Cancabato" in asked["label"] or "Your location" in asked["label"],
+                  asked["label"])
+
+            # An explicit "region" choice must stop it asking again.
+            quiet = await page.eval("""
+                const m = await import('./js/store.js');
+                m.prefs.set('useMyLocation', false);
+                let prompted = false;
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok) => { prompted = true; ok({
+                    coords: { latitude: 11.238, longitude: 125.004, accuracy: 20 } }); };
+                location.hash = '#/tips'; await new Promise(r => setTimeout(r, 400));
+                location.hash = '#/conditions'; await new Promise(r => setTimeout(r, 2000));
+                navigator.geolocation.getCurrentPosition = real;
+                return prompted;
+            """)
+            check("choosing the region stops the prompting", quiet is False, str(quiet))
 
             # -------------------------------------------------- map
             print("\nFishing map")

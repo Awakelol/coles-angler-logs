@@ -2,7 +2,7 @@
 
 import { allSpecies, tipsFor } from '../data/index.js';
 import { store, computeStats } from '../store.js';
-import { speciesSprite, icon } from '../pixel.js';
+import { speciesHero, icon } from '../pixel.js';
 import { esc, round, fmtDate } from '../ui.js';
 
 export function render(ctx) {
@@ -72,7 +72,7 @@ export function render(ctx) {
             .map(
               (s) => `
             <a class="card species-card" href="#/species?open=${esc(s.id)}">
-              <div class="species-card__art">${speciesSprite(s, { size: 140 })}</div>
+              <div class="species-card__art">${speciesHero(s, { size: 170 })}</div>
               <h3 class="card__title">${esc(s.common)}</h3>
               <p class="card__sub species-card__sci">${esc(s.scientific)}</p>
               ${
