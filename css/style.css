@@ -310,6 +310,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .fc-day__t { font-size: 16px; font-weight: 900; margin-top: 6px; }
 .fc-day__t small { font-weight: 800; color: var(--ink-60); }
 .fc-day__p { font-size: 11px; font-weight: 800; color: var(--sky-deep); }
+.fc-day__c { font-size: 10px; font-weight: 800; color: var(--ink-60); line-height: 1.2; min-height: 2.4em; }
 
 .tide-list { display: grid; gap: 10px; }
 .tide-row { display: flex; align-items: center; gap: 12px; }
