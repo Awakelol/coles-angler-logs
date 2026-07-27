@@ -12,8 +12,16 @@
 // ---------------------------------------------------------------------------
 
 const CACHE_KEY = 'angler.photocache';
+const GALLERY_KEY = 'angler.gallerycache';
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ENDPOINT = 'https://en.wikipedia.org/api/rest_v1/page/summary/';
+const COMMONS = 'https://commons.wikimedia.org/w/api.php';
+
+// Commons search returns plenty that isn't a photo of the animal: range maps,
+// distribution charts, stamps, museum labels, line drawings. Cheap to filter
+// on the filename, and far better than showing a distribution map as if it
+// were the fish.
+const NOT_A_PHOTO = /(map|distribution|range|chart|diagram|drawing|illustration|stamp|logo|icon|label|sign|graph|skeleton|otolith)/i;
 
 function readCache() {
   try {
@@ -71,6 +79,83 @@ export function fetchPhoto(scientific) {
     .finally(() => inFlight.delete(scientific));
 
   inFlight.set(scientific, req);
+  return req;
+}
+
+function readGalleryCache() {
+  try {
+    return JSON.parse(localStorage.getItem(GALLERY_KEY) || '{}');
+  } catch {
+    localStorage.removeItem(GALLERY_KEY);
+    return {};
+  }
+}
+
+const galleriesInFlight = new Map();
+
+/**
+ * Several photos of one species, from Wikimedia Commons.
+ *
+ * The Wikipedia summary endpoint only ever returns one image, so the detail
+ * sheet uses Commons search instead to show a few angles — a fish in the hand
+ * looks very different to one on a reef.
+ *
+ * @returns {Promise<Array<{src:string,page:string,credit:string,title:string}>>}
+ */
+export function fetchPhotos(scientific, limit = 4) {
+  if (!scientific) return Promise.resolve([]);
+
+  const all = readGalleryCache();
+  const hit = all[scientific];
+  if (hit && Date.now() - hit.at < TTL_MS) return Promise.resolve(hit.data || []);
+  if (galleriesInFlight.has(scientific)) return galleriesInFlight.get(scientific);
+
+  const params = new URLSearchParams({
+    action: 'query',
+    generator: 'search',
+    gsrsearch: `filetype:bitmap ${scientific}`,
+    gsrnamespace: '6', // File:
+    gsrlimit: String(limit * 3), // over-fetch; filtering drops a lot
+    prop: 'imageinfo',
+    iiprop: 'url|extmetadata',
+    iiurlwidth: '640',
+    format: 'json',
+    origin: '*',
+  });
+
+  const req = fetch(`${COMMONS}?${params}`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((d) => {
+      const pages = Object.values(d?.query?.pages || {});
+      const photos = pages
+        .filter((p) => p.imageinfo?.[0]?.thumburl)
+        .filter((p) => !NOT_A_PHOTO.test(p.title))
+        .map((p) => {
+          const info = p.imageinfo[0];
+          const artist = info.extmetadata?.Artist?.value || '';
+          return {
+            src: info.thumburl,
+            page: info.descriptionurl,
+            // extmetadata values are HTML fragments; strip to plain text.
+            credit: artist.replace(/<[^>]*>/g, '').trim() || 'Wikimedia Commons',
+            title: p.title.replace(/^File:/, '').replace(/\.\w+$/, ''),
+          };
+        })
+        .slice(0, limit);
+
+      const store = readGalleryCache();
+      store[scientific] = { at: Date.now(), data: photos };
+      try {
+        localStorage.setItem(GALLERY_KEY, JSON.stringify(store));
+      } catch {
+        localStorage.removeItem(GALLERY_KEY);
+      }
+      return photos;
+    })
+    .catch(() => [])
+    .finally(() => galleriesInFlight.delete(scientific));
+
+  galleriesInFlight.set(scientific, req);
   return req;
 }
 

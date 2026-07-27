@@ -8,7 +8,7 @@ import { icon } from '../pixel.js';
 import { esc, fmtTime, fmtWeekday, round, errorBlock, loadingBlock, toast } from '../ui.js';
 
 export function render(ctx) {
-  const usingLocation = prefs.get('useMyLocation', false);
+  const usingLocation = prefs.get('useMyLocation', null) !== false;
   return `
     <section class="band band--sky">
       <div class="wrap">
@@ -196,7 +196,11 @@ function tideHtml(t, tz) {
  * the screen must never end up with nothing to show.
  */
 async function resolveCoords(ctx) {
-  if (!prefs.get('useMyLocation', false)) {
+  // Tri-state on purpose. null means "never asked", so the first visit
+  // prompts automatically, matching the map. Once the user has chosen — or
+  // been refused — the stored true/false is respected and we stop asking.
+  const choice = prefs.get('useMyLocation', null);
+  if (choice === false || (choice === null && !geolocationSupported())) {
     return { coords: ctx.region.coords, label: ctx.region.name, source: 'region' };
   }
   try {
@@ -204,6 +208,7 @@ async function resolveCoords(ctx) {
     // Snapped to a ~5 km grid so the tide API's monthly quota isn't spent on
     // GPS jitter. See js/api/geo.js.
     const coords = roundCoords(fix);
+    prefs.set('useMyLocation', true);
     const near = nearestPlace(ctx.region, fix);
     const away = Math.round(distanceKm(fix, ctx.region.coords));
     const label = near && near.km < 25
@@ -216,7 +221,9 @@ async function resolveCoords(ctx) {
       coords: ctx.region.coords,
       label: ctx.region.name,
       source: 'region',
-      warning: err.message,
+      // Only nag when the user actively asked for location. On the automatic
+      // first-visit attempt a refusal is an answer, not an error.
+      warning: choice === true ? err.message : null,
     };
   }
 }
@@ -234,7 +241,7 @@ export async function mount(root, ctx) {
       const btn = e.target.closest('[data-source]');
       if (!btn) return;
       const wanted = btn.dataset.source === 'device';
-      if (wanted === prefs.get('useMyLocation', false)) return;
+      if (wanted === prefs.get('useMyLocation', null)) return;
       prefs.set('useMyLocation', wanted);
       for (const b of toggle.querySelectorAll('[data-source]')) {
         b.setAttribute('aria-pressed', String(b === btn));
