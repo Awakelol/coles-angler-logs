@@ -1,12 +1,22 @@
 ﻿<!doctype html>
-<html><head><meta charset="utf-8"><title>store test</title></head>
+<html><head><meta charset="utf-8"><title>store test — LOCAL ONLY</title></head>
 <body>
-<pre id="out">runningâ€¦</pre>
+<pre id="out">running…</pre>
 <script type="module">
 import { store, computeStats } from '../js/store.js';
 
 const log = [];
 const say = (m) => { log.push(m); document.getElementById('out').textContent = log.join('\n'); };
+
+// THIS PAGE DELETES THE CATCH LOG. It is deployed alongside the app, so it
+// must refuse to run anywhere except a local dev server — otherwise a single
+// stray URL on the live site would wipe real data.
+const LOCAL = ['localhost', '127.0.0.1', '::1', ''];
+if (!LOCAL.includes(location.hostname)) {
+  say('REFUSED: this test destroys the catch log and only runs on localhost.');
+  say(`hostname was "${location.hostname}"`);
+  throw new Error('not a local host');
+}
 
 try {
   say('1. clearing');
