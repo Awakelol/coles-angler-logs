@@ -270,6 +270,107 @@ async def main():
             check("unknown code falls back safely",
                   bool(wmo["unknown"]) and wmo["unknown"] != "sun", wmo["unknown"])
 
+            # -------------------------------------------------- theme
+            print("\nTheme")
+            theme = await page.eval("""
+                const t = await import('./js/theme.js');
+                const read = (n) => getComputedStyle(document.documentElement)
+                    .getPropertyValue(n).trim();
+
+                t.setTheme('light');
+                const light = { bg: read('--cream'), ink: read('--ink'), line: read('--line'),
+                                attr: document.documentElement.getAttribute('data-theme'),
+                                meta: document.querySelector('meta[name=theme-color]').content };
+                t.setTheme('dark');
+                const dark = { bg: read('--cream'), ink: read('--ink'), line: read('--line'),
+                               attr: document.documentElement.getAttribute('data-theme'),
+                               meta: document.querySelector('meta[name=theme-color]').content,
+                               scheme: document.documentElement.style.colorScheme };
+
+                // Every custom property must be a real value; a typo like
+                // "#46real" silently falls back and is easy to miss.
+                const names = ['--cream','--paper','--ink','--ink-60','--ink-30','--line',
+                               '--band-cream','--band-sky','--band-yellow','--band-green',
+                               '--band-coral','--band-violet','--art-bg','--art-bg-2',
+                               '--invert-bg','--invert-fg','--notice-warn','--notice-error',
+                               '--skeleton-a','--skeleton-b'];
+                const bad = names.filter(n => !/^(#[0-9a-f]{3,8}|rgba?\\()/i.test(read(n)));
+
+                t.setTheme('system');
+                const sys = t.resolvedTheme();
+                return { light, dark, bad, sys, persisted: localStorage.getItem('angler.theme') };
+            """)
+            check("light theme applies", theme["light"]["attr"] == "light" and
+                  theme["light"]["bg"].upper() == "#FFF8E7", str(theme["light"]))
+            check("dark theme applies", theme["dark"]["attr"] == "dark" and
+                  theme["dark"]["bg"].upper() == "#0F131A", str(theme["dark"]))
+            check("dark text inverts", theme["dark"]["ink"].upper() == "#EAF0F7",
+                  theme["dark"]["ink"])
+            check("dark borders stay visible", theme["dark"]["line"].upper() == "#47566C",
+                  f"borders must be lighter than the page: {theme['dark']['line']}")
+            check("theme-color follows the theme",
+                  theme["dark"]["meta"] == "#0f131a" and theme["light"]["meta"] == "#FFD23F",
+                  f"{theme['light']['meta']} / {theme['dark']['meta']}")
+            check("color-scheme is set for form controls",
+                  theme["dark"]["scheme"] == "dark", str(theme["dark"]["scheme"]))
+            check("no malformed CSS variables", not theme["bad"], ", ".join(theme["bad"]))
+
+            # Real contrast maths on rendered elements. Bright accent fills
+            # (yellow buttons, green chips) don't invert in dark mode, so
+            # anything inheriting --ink ends up near-white on yellow.
+            contrast = await page.eval("""
+                const t = await import('./js/theme.js');
+                const lum = (c) => {
+                    const [r,g,b] = c.match(/\\d+(\\.\\d+)?/g).slice(0,3).map(Number)
+                        .map(v => { v /= 255; return v <= .03928 ? v/12.92
+                                                 : Math.pow((v+.055)/1.055, 2.4); });
+                    return .2126*r + .7152*g + .0722*b;
+                };
+                const ratio = (fg, bg) => {
+                    const a = lum(fg), b = lum(bg);
+                    return (Math.max(a,b) + .05) / (Math.min(a,b) + .05);
+                };
+                const results = {};
+                for (const mode of ['light', 'dark']) {
+                    t.setTheme(mode);
+                    location.hash = '#/tips';
+                    await new Promise(r => setTimeout(r, 250));
+                    location.hash = '#/species';
+                    await new Promise(r => setTimeout(r, 900));
+                    const worst = [];
+                    for (const sel of ['.btn--primary', '.chip--local', '.chip--target',
+                                       '.chip--family', '.card__title', '.card__sub']) {
+                        const el = document.querySelector(sel);
+                        if (!el) continue;
+                        const cs = getComputedStyle(el);
+                        let bg = cs.backgroundColor, node = el;
+                        while (bg === 'rgba(0, 0, 0, 0)' && node.parentElement) {
+                            node = node.parentElement;
+                            bg = getComputedStyle(node).backgroundColor;
+                        }
+                        worst.push({ sel, r: +ratio(cs.color, bg).toFixed(2) });
+                    }
+                    results[mode] = worst;
+                }
+                t.setTheme('system');
+                return results;
+            """)
+            for mode in ("light", "dark"):
+                bad = [f"{x['sel']}={x['r']}" for x in contrast[mode] if x["r"] < 4.5]
+                check(f"{mode} mode text contrast >= 4.5:1", not bad, ", ".join(bad))
+            check("system resolves to a real theme", theme["sys"] in ("light", "dark"),
+                  str(theme["sys"]))
+            check("choice is persisted", theme["persisted"] == "system", str(theme["persisted"]))
+
+            # The inline no-flash script must agree with theme.js.
+            flash = open(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "index.html"),
+                encoding="utf-8").read()
+            check("theme applied before first paint",
+                  "angler.theme" in flash and "data-theme" in flash and
+                  flash.index("angler.theme") < flash.index("js/app.js"),
+                  "inline theme script must run before the module loads")
+
             # -------------------------------------------------- data integrity
             print("\nData model")
             data = await page.eval("""

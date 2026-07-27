@@ -18,6 +18,36 @@
   --green:   #3FBF7F;
   --violet:  #8B5CF6;
 
+  /* Colour-blocked section backgrounds. Separate from the accent colours
+     above so dark mode can deepen the bands while buttons and chips stay
+     bright — a dark-yellow button would be unreadable. */
+  --band-cream:  var(--cream);
+  --band-sky:    var(--sky);
+  --band-yellow: var(--yellow);
+  --band-green:  #BDF0D4;
+  --band-coral:  #FFD9C9;
+  --band-violet: #E4D8FF;
+
+  /* Panel behind pixel art. */
+  --art-bg:      var(--sky);
+  --art-bg-2:    #7FD4E8;
+
+  /* Deliberately inverted surfaces: the "now" weather card, dark buttons,
+     the toast. Named separately from --ink so flipping the text colour in
+     dark mode doesn't silently turn these into light slabs. */
+  --invert-bg:   #10141C;
+  --invert-fg:   #FFF8E7;
+
+  --notice-warn:  #FFF0C2;
+  --notice-error: #FFE0E0;
+  --skeleton-a:   #EDEDED;
+  --skeleton-b:   #F7F7F7;
+  --attribution:  rgba(255, 248, 231, .85);
+
+  /* Text on always-bright accent fills. Fixed dark in BOTH themes: the
+     accents don't invert, so --ink would put near-white on yellow. */
+  --on-accent: #10141C;
+
   --line:    #10141C;
   --radius:  22px;
   --radius-sm: 14px;
@@ -27,6 +57,46 @@
   --tab-h: 64px;
   --font: "Nunito", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
   --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
+}
+
+/* --- dark theme -----------------------------------------------------------
+   Applied via <html data-theme="dark">, set by an inline script in index.html
+   before first paint. `system` is resolved in JS rather than with a media
+   query here, so an explicit light choice still wins on a dark phone.
+
+   The one structural change: --line becomes LIGHTER than both the page and
+   the cards. In light mode the chunky borders and hard offset shadows are
+   near-black on cream; a black border on a dark page would vanish, taking the
+   whole graphic identity with it. Inverting it keeps the outlines reading.  */
+:root[data-theme="dark"] {
+  --cream:   #0F131A;
+  --paper:   #1A2029;
+  --ink:     #EAF0F7;
+  --ink-60:  #9FADBF;
+  --ink-30:  #5F6C7E;
+
+  --sky-deep: #58C4E2;
+
+  --band-cream:  #0F131A;
+  --band-sky:    #12303C;
+  --band-yellow: #33290A;
+  --band-green:  #10301F;
+  --band-coral:  #351709;
+  --band-violet: #241A3D;
+
+  --art-bg:      #143240;
+  --art-bg-2:    #1B4657;
+
+  --invert-bg:   #232B36;
+  --invert-fg:   #EAF0F7;
+
+  --notice-warn:  #33290A;
+  --notice-error: #3A1418;
+  --skeleton-a:   #1F2630;
+  --skeleton-b:   #2A323E;
+  --attribution:  rgba(15, 19, 26, .85);
+
+  --line:    #47566C;
 }
 
 * { box-sizing: border-box; }
@@ -105,7 +175,7 @@ a { color: inherit; }
 .region-select select {
   font-family: inherit; font-weight: 800; font-size: 13px;
   padding: 8px 10px; border: 3px solid var(--line);
-  border-radius: 999px; background: var(--yellow); color: var(--ink);
+  border-radius: 999px; background: var(--yellow); color: var(--on-accent);
   box-shadow: 3px 3px 0 var(--line);
   max-width: 42vw;
 }
@@ -124,12 +194,12 @@ a { color: inherit; }
 main { display: block; }
 
 .band { padding: 34px 16px 40px; border-bottom: 3px solid var(--line); }
-.band--cream  { background: var(--cream); }
-.band--sky    { background: var(--sky); }
-.band--yellow { background: var(--yellow); }
-.band--green  { background: #BDF0D4; }
-.band--coral  { background: #FFD9C9; }
-.band--violet { background: #E4D8FF; }
+.band--cream  { background: var(--band-cream); }
+.band--sky    { background: var(--band-sky); }
+.band--yellow { background: var(--band-yellow); }
+.band--green  { background: var(--band-green); }
+.band--coral  { background: var(--band-coral); }
+.band--violet { background: var(--band-violet); }
 .band:last-child { border-bottom: 0; }
 
 .wrap { max-width: 1100px; margin: 0 auto; }
@@ -206,7 +276,7 @@ a.card:active, button.card:active {
 .species-card { position: relative; overflow: hidden; }
 
 .species-card__art {
-  background: var(--sky);
+  background: var(--art-bg);
   border: 3px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 14px 10px;
@@ -219,7 +289,7 @@ a.card:active, button.card:active {
 .species-card__art--hero {
   min-height: 200px;
   margin-bottom: 16px;
-  background: linear-gradient(160deg, var(--sky) 0%, #7FD4E8 100%);
+  background: linear-gradient(160deg, var(--art-bg) 0%, var(--art-bg-2) 100%);
 }
 .species-card__art--hero svg { max-width: 260px; }
 
@@ -282,13 +352,13 @@ a.card:active, button.card:active {
   border: 2px solid var(--line); background: var(--paper);
   white-space: nowrap;
 }
-.chip--local  { background: var(--yellow); }
-.chip--target { background: var(--green); }
-.chip--family { background: var(--sky); }
+.chip--local  { background: var(--yellow); color: var(--on-accent); }
+.chip--target { background: var(--green); color: var(--on-accent); }
+.chip--family { background: var(--sky); color: var(--on-accent); }
 .chip--tag    { background: var(--paper); }
 
 button.chip { cursor: pointer; font-family: inherit; }
-button.chip[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--invert-fg); border-color: var(--line); }
 
 .meta-list { display: grid; gap: 8px; margin: 0; font-size: 13.5px; }
 .meta-list div { display: flex; gap: 8px; }
@@ -305,8 +375,8 @@ button.chip[aria-pressed="true"] { background: var(--ink); color: var(--cream); 
   box-shadow: var(--shadow); cursor: pointer; text-decoration: none;
 }
 .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line); }
-.btn--primary { background: var(--yellow); }
-.btn--dark    { background: var(--ink); color: var(--cream); }
+.btn--primary { background: var(--yellow); color: var(--on-accent); }
+.btn--dark    { background: var(--invert-bg); color: var(--invert-fg); }
 .btn--coral   { background: var(--coral); color: #fff; }
 .btn--ghost   { box-shadow: none; background: transparent; }
 .btn--sm      { padding: 8px 14px; font-size: 13px; border-width: 2px; box-shadow: 3px 3px 0 var(--line); }
@@ -338,7 +408,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 /* --- conditions ---------------------------------------------------------- */
 
 .now-card {
-  background: var(--ink); color: var(--cream);
+  background: var(--invert-bg); color: var(--invert-fg);
   border: 3px solid var(--line); border-radius: var(--radius);
   padding: 20px; box-shadow: var(--shadow-lg);
 }
@@ -356,8 +426,8 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .stat__v { font-size: 19px; font-weight: 900; }
 
 .advice { margin-top: 14px; padding: 10px 14px; border-radius: 999px; font-weight: 900; font-size: 13px; display: inline-block; }
-.advice--good { background: var(--green); color: var(--ink); }
-.advice--ok   { background: var(--yellow); color: var(--ink); }
+.advice--good { background: var(--green); color: var(--on-accent); }
+.advice--ok   { background: var(--yellow); color: var(--on-accent); }
 .advice--poor { background: var(--coral); color: #fff; }
 .advice--bad  { background: #C1121F; color: #fff; }
 
@@ -375,8 +445,8 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   width: 46px; height: 46px; flex: none; display: grid; place-items: center;
   border: 3px solid var(--line); border-radius: 50%; font-weight: 900; font-size: 11px;
 }
-.tide-row__badge--high { background: var(--sky); }
-.tide-row__badge--low  { background: var(--yellow); }
+.tide-row__badge--high { background: var(--sky); color: var(--on-accent); }
+.tide-row__badge--low  { background: var(--yellow); color: var(--on-accent); }
 .tide-row__time { font-weight: 900; font-size: 16px; }
 .tide-row__meta { font-size: 12.5px; font-weight: 700; color: var(--ink-60); }
 
@@ -416,8 +486,8 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   border: 3px dashed var(--line); border-radius: var(--radius);
   padding: 16px; background: var(--paper);
 }
-.notice--warn { background: #FFF0C2; border-style: solid; }
-.notice--error { background: #FFE0E0; border-style: solid; }
+.notice--warn { background: var(--notice-warn); border-style: solid; }
+.notice--error { background: var(--notice-error); border-style: solid; }
 .notice h3 { margin: 0 0 6px; font-size: 16px; font-weight: 900; }
 .notice p { margin: 0 0 8px; font-size: 14px; line-height: 1.55; }
 .notice code {
@@ -428,7 +498,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .notice ol, .notice ul { margin: 8px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.7; }
 
 .skeleton {
-  background: linear-gradient(90deg, #EDEDED 25%, #F7F7F7 37%, #EDEDED 63%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 37%, var(--skeleton-a) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.3s ease infinite;
   border-radius: var(--radius-sm);
@@ -450,7 +520,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 #fishMap {
   height: min(62vh, 560px);
   width: 100%;
-  background: var(--sky);
+  background: var(--art-bg);
 }
 
 /* Leaflet injects its own controls; keep them in the app's visual language. */
@@ -462,7 +532,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .leaflet-control-attribution {
   font-size: 10px;
-  background: rgba(255, 248, 231, .85) !important;
+  background: var(--attribution) !important;
 }
 
 .zone-pin-wrap { background: none; border: 0; }
@@ -506,7 +576,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 .map-hint {
   position: absolute; left: 12px; bottom: 12px; z-index: 500;
-  background: var(--ink); color: var(--cream);
+  background: var(--invert-bg); color: var(--invert-fg);
   font-size: 11.5px; font-weight: 800;
   padding: 7px 13px; border-radius: 999px;
   pointer-events: none;
@@ -538,7 +608,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
   bottom: calc(var(--tab-h) + 16px + env(safe-area-inset-bottom, 0px));
   z-index: 60;
-  background: var(--ink); color: var(--cream);
+  background: var(--invert-bg); color: var(--invert-fg);
   font-weight: 800; font-size: 14px;
   padding: 12px 20px; border-radius: 999px;
   box-shadow: var(--shadow);
