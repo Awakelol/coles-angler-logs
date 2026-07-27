@@ -1,6 +1,6 @@
 // Weather + tide dashboard for the selected region.
 
-import { fetchWeather, describeCode, compass, windAdvice } from '../api/weather.js';
+import { fetchWeather, describeCode, compass, windAdvice, isNight } from '../api/weather.js';
 import { fetchTides, currentTideState, nextExtremes, tidesConfigured } from '../api/tides.js';
 import { icon } from '../pixel.js';
 import { esc, fmtTime, fmtWeekday, round, errorBlock, loadingBlock } from '../ui.js';
@@ -33,7 +33,8 @@ export function render(ctx) {
 }
 
 function weatherHtml(w, tz) {
-  const [desc] = describeCode(w.current.code);
+  const night = isNight(w.current.time, w.daily);
+  const [desc, iconKey] = describeCode(w.current.code, night);
   const advice = windAdvice(w.current.windKph);
 
   return `
@@ -43,7 +44,7 @@ function weatherHtml(w, tz) {
           <div class="now-card__temp">${round(w.current.tempC, 0)}&deg;</div>
           <div class="now-card__desc">${esc(desc)} &middot; feels ${round(w.current.feelsC, 0)}&deg;</div>
         </div>
-        <div style="flex:none">${icon(w.current.precipMm > 0 ? 'wave' : 'sun', { size: 92, palette: w.current.precipMm > 0 ? 'ocean' : 'gold' })}</div>
+        <div style="flex:none">${icon(iconKey, { size: 96, palette: 'silver' })}</div>
       </div>
 
       <div class="stat-grid">
@@ -67,13 +68,14 @@ function forecastHtml(w, tz) {
       <div class="forecast">
         ${w.daily
           .map((d) => {
-            const [desc] = describeCode(d.code);
+            const [desc, iconKey] = describeCode(d.code);
             return `
             <div class="fc-day">
               <div class="fc-day__d">${esc(fmtWeekday(d.date, tz))}</div>
               <div style="display:grid;place-items:center;margin:6px 0">
-                ${icon(d.precipMm > 1 ? 'wave' : 'sun', { size: 40, palette: d.precipMm > 1 ? 'ocean' : 'gold' })}
+                ${icon(iconKey, { size: 46, palette: 'silver' })}
               </div>
+              <div class="fc-day__c">${esc(desc)}</div>
               <div class="fc-day__t">${round(d.maxC, 0)}&deg;<small> / ${round(d.minC, 0)}&deg;</small></div>
               <div class="fc-day__p">${d.pop != null ? `${round(d.pop, 0)}% rain` : `${round(d.precipMm, 1)} mm`}</div>
               <div class="fc-day__p" style="color:var(--ink-30)">${round(d.windKph, 0)} km/h</div>

@@ -163,6 +163,34 @@ async def main():
             check("all palettes are 9 valid hex slots", not art["bad"], "; ".join(art["bad"]))
             check("no sprite has ragged rows", not art["ragged"], ", ".join(art["ragged"]))
 
+            # Every WMO code the providers can return must resolve to a real icon.
+            wmo = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const w = await import('./js/api/weather.js');
+                const codes = [0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,
+                               71,73,75,77,80,81,82,85,86,95,96,99];
+                const missing = [], unlabelled = [];
+                for (const c of codes) {
+                    const [label, key] = w.describeCode(c);
+                    if (!p.ICONS[key]) missing.push(`${c}->${key}`);
+                    if (!label || label === '—') unlabelled.push(String(c));
+                }
+                // Night variant must swap clear/partly for the moon.
+                const nightClear = w.describeCode(0, true)[1];
+                const nightRain = w.describeCode(63, true)[1];
+                return { missing, unlabelled, nightClear, nightRain,
+                         unknown: w.describeCode(12345)[1] };
+            """)
+            check("every WMO code maps to a real icon", not wmo["missing"],
+                  ", ".join(wmo["missing"]))
+            check("every WMO code has a label", not wmo["unlabelled"],
+                  ", ".join(wmo["unlabelled"]))
+            check("night swaps clear sky for the moon", wmo["nightClear"] == "moon",
+                  wmo["nightClear"])
+            check("night leaves rain alone", wmo["nightRain"] == "rain", wmo["nightRain"])
+            check("unknown code falls back safely",
+                  bool(wmo["unknown"]) and wmo["unknown"] != "sun", wmo["unknown"])
+
             # -------------------------------------------------- data integrity
             print("\nData model")
             data = await page.eval("""

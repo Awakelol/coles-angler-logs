@@ -13,19 +13,40 @@
 
 import { CONFIG } from '../config.js';
 
+// WMO weather code -> [label, sprite key in ICONS (js/pixel.js)]
 const WMO = {
-  0: ['Clear', 'sun'], 1: ['Mainly clear', 'sun'], 2: ['Partly cloudy', 'sun'], 3: ['Overcast', 'cloud'],
-  45: ['Fog', 'cloud'], 48: ['Rime fog', 'cloud'],
-  51: ['Light drizzle', 'rain'], 53: ['Drizzle', 'rain'], 55: ['Heavy drizzle', 'rain'],
+  0: ['Clear', 'sunny'], 1: ['Mainly clear', 'sunny'], 2: ['Partly cloudy', 'partly'],
+  3: ['Overcast', 'cloudy'],
+  45: ['Fog', 'fog'], 48: ['Rime fog', 'fog'],
+  51: ['Light drizzle', 'drizzle'], 53: ['Drizzle', 'drizzle'], 55: ['Heavy drizzle', 'drizzle'],
+  56: ['Freezing drizzle', 'drizzle'], 57: ['Freezing drizzle', 'drizzle'],
   61: ['Light rain', 'rain'], 63: ['Rain', 'rain'], 65: ['Heavy rain', 'rain'],
   66: ['Freezing rain', 'rain'], 67: ['Freezing rain', 'rain'],
-  71: ['Light snow', 'cloud'], 73: ['Snow', 'cloud'], 75: ['Heavy snow', 'cloud'],
-  80: ['Light showers', 'rain'], 81: ['Showers', 'rain'], 82: ['Violent showers', 'rain'],
+  71: ['Light snow', 'cloudy'], 73: ['Snow', 'cloudy'], 75: ['Heavy snow', 'cloudy'],
+  77: ['Snow grains', 'cloudy'],
+  80: ['Light showers', 'showers'], 81: ['Showers', 'showers'], 82: ['Violent showers', 'showers'],
+  85: ['Snow showers', 'showers'], 86: ['Snow showers', 'showers'],
   95: ['Thunderstorm', 'storm'], 96: ['Thunderstorm + hail', 'storm'], 99: ['Thunderstorm + hail', 'storm'],
 };
 
-export function describeCode(code) {
-  return WMO[code] || ['—', 'cloud'];
+/**
+ * @param {number} code   WMO weather code
+ * @param {boolean} night swaps the clear-sky icon for a moon
+ * @returns {[string, string]} [label, icon key]
+ */
+export function describeCode(code, night = false) {
+  const [label, iconKey] = WMO[code] || ['—', 'cloudy'];
+  if (night && (iconKey === 'sunny' || iconKey === 'partly')) return [label, 'moon'];
+  return [label, iconKey];
+}
+
+/** Is `iso` outside the sunrise/sunset window for that day? */
+export function isNight(iso, daily) {
+  if (!iso || !daily?.length) return false;
+  const t = new Date(iso).getTime();
+  const day = daily.find((d) => d.sunrise && iso.startsWith(d.date)) || daily[0];
+  if (!day?.sunrise || !day?.sunset) return false;
+  return t < new Date(day.sunrise).getTime() || t > new Date(day.sunset).getTime();
 }
 
 export function compass(deg) {
