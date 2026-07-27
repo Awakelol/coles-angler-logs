@@ -126,6 +126,17 @@ def static_checks():
     check("code is not served cache-first", not cache_first_all,
           "cache-first for code hides updates until CACHE_VERSION is bumped")
     check("images are cache-first", "CACHE_FIRST" in sw)
+    # skipWaiting is what makes a push take effect without a force-close.
+    check("new worker activates immediately", "skipWaiting" in sw and "clients.claim" in sw)
+
+    upd = open(os.path.join(root, "js", "updates.js"), encoding="utf-8").read()
+    check("app watches for new versions", "controllerchange" in upd and "reg.update()" in upd)
+    check("update reload waits for open forms", "sheetOpen" in upd)
+
+    # CDN headers must not cache the worker or the shell, or deploys go unseen.
+    for name in ("_headers", "vercel.json"):
+        cfg = open(os.path.join(root, name), encoding="utf-8").read()
+        check(f"{name} keeps sw.js uncached", "sw.js" in cfg and "no-cache" in cfg)
     check("offline navigation falls back to the shell", "caches.match('./index.html')" in sw)
 
     # Every app module must be in the precache list, or offline breaks.

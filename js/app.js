@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { loadOverrides, loadLocalConfig } from './config.js';
+import { watchForUpdates } from './updates.js';
 import { REGIONS, DEFAULT_REGION_ID, getRegion } from './data/index.js';
 import { prefs } from './store.js';
 import { icon } from './pixel.js';
@@ -128,3 +129,4 @@ window.addEventListener('hashchange', render);
 buildBrandMark();
 buildRegionPicker();
 render();
+watchForUpdates();
