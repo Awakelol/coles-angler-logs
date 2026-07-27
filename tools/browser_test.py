@@ -133,6 +133,13 @@ def static_checks():
     check("app watches for new versions", "controllerchange" in upd and "reg.update()" in upd)
     check("update reload waits for open forms", "sheetOpen" in upd)
 
+    # The store test wipes the catch log and is deployed with the app, so it
+    # must refuse to run on anything but a local host.
+    tst = open(os.path.join(root, "tools", "test-store.html"), encoding="utf-8").read()
+    check("destructive test page is localhost-only",
+          "location.hostname" in tst and "REFUSED" in tst,
+          "test-store.html would clear real data if opened on the live site")
+
     # CDN headers must not cache the worker or the shell, or deploys go unseen.
     for name in ("_headers", "vercel.json"):
         cfg = open(os.path.join(root, name), encoding="utf-8").read()
