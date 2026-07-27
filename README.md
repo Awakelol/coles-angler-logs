@@ -236,8 +236,20 @@ It's a static site — no server code. Any static host works:
 
 All three give you HTTPS, which the service worker requires.
 
-**After deploying an update:** bump `CACHE_VERSION` in [`sw.js`](sw.js).
-Otherwise returning visitors keep the cached old version.
+**Updates land automatically.** The service worker is *network-first for code*
+(JS/CSS/HTML) and cache-first only for images and fonts, so a deploy shows up on
+the next load without any manual step. Offline still works — the cache is the
+fallback when the network fails.
+
+Bump `CACHE_VERSION` in [`sw.js`](sw.js) only when you want to force-evict old
+**images** (renamed icons, regenerated sprites saved as PNG).
+
+> This used to be cache-first for everything, which meant every JS/CSS edit kept
+> serving the stale copy until `CACHE_VERSION` was bumped by hand. It silently
+> hid a whole round of sprite work — and headless tests never caught it, because
+> each run uses a fresh browser profile with no service worker. If you ever do
+> see stale UI, hard-reload (Ctrl+Shift+R) or unregister the worker under
+> DevTools → Application → Service Workers.
 
 ---
 
