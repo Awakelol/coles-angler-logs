@@ -3,7 +3,7 @@
 import {
   allSpecies, speciesByFamily, fishbaseUrl, localNames, getSpecies, zonesForSpecies,
 } from '../data/index.js';
-import { speciesSprite, icon } from '../pixel.js';
+import { speciesSprite, speciesHero, icon } from '../pixel.js';
 import { esc, el, openSheet } from '../ui.js';
 
 function speciesCard(s) {
@@ -32,7 +32,7 @@ function detailHtml(s, regionId) {
     : '—';
 
   return `
-    <div class="species-card__art" style="margin-bottom:16px">${speciesSprite(s, { size: 260 })}</div>
+    <div class="species-card__art species-card__art--hero">${speciesHero(s, { size: 300 })}</div>
 
     <div class="chips" style="margin-bottom:14px">
       <span class="chip chip--family">${esc(s.familyCommon || s.family)}</span>
