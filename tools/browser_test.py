@@ -13,6 +13,7 @@ Usage:
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -106,6 +107,40 @@ PASS, FAIL = [], []
 def check(name, ok, detail=""):
     (PASS if ok else FAIL).append(name)
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{(' — ' + detail) if detail and not ok else ''}")
+
+
+def static_checks():
+    """
+    Source-level checks the browser can't make.
+
+    A fresh headless profile has no service worker, so the suite is blind to
+    caching bugs by construction — a stale-cache regression once hid a whole
+    round of sprite work while every test passed. These read the files instead.
+    """
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    sw = open(os.path.join(root, "sw.js"), encoding="utf-8").read()
+
+    print("\nService worker")
+    # Code must not be served cache-first, or edits won't reach an installed app.
+    cache_first_all = "caches.match(request).then((hit) => {\n      if (hit) return hit;" in sw
+    check("code is not served cache-first", not cache_first_all,
+          "cache-first for code hides updates until CACHE_VERSION is bumped")
+    check("images are cache-first", "CACHE_FIRST" in sw)
+    check("offline navigation falls back to the shell", "caches.match('./index.html')" in sw)
+
+    # Every app module must be in the precache list, or offline breaks.
+    listed = set(re.findall(r"'\./((?:js|css)/[^']+)'", sw))
+    on_disk = set()
+    for sub in ("js", "css"):
+        for dirpath, _, files in os.walk(os.path.join(root, sub)):
+            for f in files:
+                # config.local.js holds secrets and config.local.example.js is a
+                # template — neither is imported, so neither should be precached.
+                if f.endswith((".js", ".css")) and ".local" not in f:
+                    rel = os.path.relpath(os.path.join(dirpath, f), root)
+                    on_disk.add(rel.replace(os.sep, "/"))
+    missing = sorted(on_disk - listed)
+    check("every module is precached for offline", not missing, ", ".join(missing))
 
 
 async def main():
@@ -536,4 +571,5 @@ async def main():
         sys.exit(1)
 
 
+static_checks()
 asyncio.run(main())
