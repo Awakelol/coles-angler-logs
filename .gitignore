@@ -1,0 +1,12 @@
+# Local API keys — never commit these
+js/config.local.js
+
+# Test output
+_screenshots/
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+.vscode/
+__pycache__/
+*.pyc

@@ -1,0 +1,55 @@
+﻿<!doctype html>
+<html><head><meta charset="utf-8"><title>store test</title></head>
+<body>
+<pre id="out">runningâ€¦</pre>
+<script type="module">
+import { store, computeStats } from '../js/store.js';
+
+const log = [];
+const say = (m) => { log.push(m); document.getElementById('out').textContent = log.join('\n'); };
+
+try {
+  say('1. clearing');
+  await store.clearCatches();
+
+  say('2. allCatches on empty db');
+  const empty = await store.allCatches();
+  say(`   -> ${empty.length} rows (expect 0)`);
+
+  say('3. saving two catches');
+  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 3.4, lengthCm: 58, method: 'Casting lure', bait: 'live tamban' });
+  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte-gulf', date: '2026-07-25', weightKg: 5.1, lengthCm: 66, method: 'Rod & reel' });
+  await store.saveCatch({ speciesId: 'photopectoralis-bindus', regionId: 'leyte-gulf', date: '2026-07-26', weightKg: 0.12, lengthCm: 9 });
+
+  const all = await store.allCatches();
+  say(`4. allCatches -> ${all.length} rows (expect 3)`);
+  say(`   newest first? ${all[0].date} >= ${all[all.length-1].date}`);
+
+  const s = computeStats(all);
+  say(`5. stats: total=${s.total} species=${s.speciesCount} heaviest=${s.heaviest?.weightKg} longest=${s.longest?.lengthCm}`);
+  say(`   biggestBySpecies size=${s.biggestBySpecies.size} (expect 2)`);
+  const best = s.biggestBySpecies.get('lutjanus-argentimaculatus');
+  say(`   snapper PB weight=${best?.weightKg} (expect 5.1)`);
+
+  say('6. update round-trip');
+  const first = all[0];
+  first.notes = 'edited';
+  await store.saveCatch(first);
+  const again = await store.getCatch(first.id);
+  say(`   notes="${again.notes}" (expect edited)`);
+
+  say('7. delete');
+  await store.deleteCatch(first.id);
+  say(`   remaining=${(await store.allCatches()).length} (expect 2)`);
+
+  await store.clearCatches();
+  say(`8. cleared -> ${(await store.allCatches()).length} (expect 0)`);
+
+  say('RESULT: PASS');
+} catch (err) {
+  say('RESULT: FAIL -> ' + (err && err.message ? err.message : String(err)));
+  say(err && err.stack ? err.stack : '');
+}
+</script>
+</body></html>
+

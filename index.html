@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cole's Angler Log</title>
+<meta name="description" content="A personal fishing companion — species guide, tides, weather and catch log.">
+
+<meta name="theme-color" content="#FFD23F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Angler Log">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" href="#/">
+      <span class="brand__mark" id="brandMark"></span>
+      <span class="brand__text">
+        <span class="brand__kicker">A LOG WITH A STORY</span>
+        <span class="brand__name">Cole&rsquo;s Angler Log</span>
+      </span>
+    </a>
+    <div class="topbar__actions">
+      <label class="region-select">
+        <span class="sr-only">Region</span>
+        <select id="regionSelect"></select>
+      </label>
+      <a class="icon-btn" href="#/settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.5 7.5 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2Z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="main" tabindex="-1"></main>
+
+<nav class="tabbar" aria-label="Primary">
+  <a href="#/" data-tab="/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg>
+    <span>Home</span>
+  </a>
+  <a href="#/species" data-tab="/species">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 12s3.5-6 9-6c3.6 0 6.3 2.2 7.7 3.8L22 6v12l-3.3-3.8C17.3 15.8 14.6 18 11 18c-5.5 0-9-6-9-6Zm7-1.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg>
+    <span>Species</span>
+  </a>
+  <a href="#/map" data-tab="/map">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9 2 6 2.2L20.4 2c.7-.2 1.6.2 1.6 1v16c0 .5-.3.9-.7 1L15 22l-6-2.2L3.6 22c-.7.2-1.6-.2-1.6-1V5c0-.5.3-.9.7-1zm0 2.3v13.4l6 2.2V6.5z"/></svg>
+    <span>Map</span>
+  </a>
+  <a href="#/conditions" data-tab="/conditions">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 16c1.6 0 1.6 1.4 3.2 1.4S6.8 16 8.4 16s1.6 1.4 3.2 1.4S13.2 16 14.8 16s1.6 1.4 3.2 1.4S19.6 16 22 16v3c-1.6 0-1.6 1.4-3.2 1.4S17.2 19 15.6 19 14 20.4 12.4 20.4 10.8 19 9.2 19 7.6 20.4 6 20.4 4.4 19 2 19zM17 4a4 4 0 0 1 3.9 4.9A3 3 0 0 1 20 14H7a4 4 0 0 1-.6-8A5 5 0 0 1 17 4Z"/></svg>
+    <span>Tides</span>
+  </a>
+  <a href="#/log" data-tab="/log">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 5v3H9v2h3v3h2v-3h3v-2h-3V8Z"/></svg>
+    <span>Log</span>
+  </a>
+  <a href="#/tips" data-tab="/tips">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2ZM9 19h6v1.5a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 20.5Z"/></svg>
+    <span>Tips</span>
+  </a>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // Surface uncaught errors on <body> so they're visible in headless test runs
+  // and in devtools without scrolling the console.
+  const flagError = (msg) => document.body.setAttribute('data-js-error', String(msg).slice(0, 300));
+  window.addEventListener('error', (e) => flagError(e.message || e.error));
+  window.addEventListener('unhandledrejection', (e) => flagError(e.reason?.message || e.reason));
+</script>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  // Register the service worker only over http(s) — it throws on file://
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

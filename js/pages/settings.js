@@ -1,0 +1,198 @@
+// Settings — API keys, data export/import, storage info.
+
+import { CONFIG, saveOverrides } from '../config.js';
+import { store, exportJson, importJson } from '../store.js';
+import { REGIONS } from '../data/index.js';
+import { esc, toast } from '../ui.js';
+
+export function render() {
+  const t = CONFIG.tides;
+  const w = CONFIG.weather;
+
+  return `
+    <section class="band band--cream">
+      <div class="wrap">
+        <p class="eyebrow">Configuration</p>
+        <h1 class="display">Settings</h1>
+        <p class="subtitle">Keys are stored only in this browser and are never sent anywhere except the provider you choose.</p>
+      </div>
+    </section>
+
+    <section class="band band--sky">
+      <div class="wrap">
+        <div class="section-head"><h2>Weather</h2><p>Works with no key by default</p></div>
+        <div class="card">
+          <div class="field">
+            <label for="w-provider">Provider</label>
+            <select id="w-provider">
+              <option value="open-meteo"${w.provider === 'open-meteo' ? ' selected' : ''}>Open-Meteo — no key needed</option>
+              <option value="openweather"${w.provider === 'openweather' ? ' selected' : ''}>OpenWeather — needs a key</option>
+            </select>
+          </div>
+          <div class="field" id="ow-key-wrap"${w.provider === 'openweather' ? '' : ' hidden'}>
+            <label for="w-key">OpenWeather API key</label>
+            <input type="password" id="w-key" value="${esc(w.openWeatherKey)}" placeholder="paste key here" autocomplete="off">
+            <p class="field__hint">
+              Free at <code>openweathermap.org/api</code> → sign up → API keys.
+              New keys take about 10 minutes to activate.
+            </p>
+          </div>
+          <button class="btn btn--primary" id="saveWeather">Save weather settings</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band--yellow">
+      <div class="wrap">
+        <div class="section-head"><h2>Tides</h2><p>Requires a key from one of these providers</p></div>
+        <div class="card">
+          <div class="field">
+            <label for="t-provider">Provider</label>
+            <select id="t-provider">
+              <option value="none"${t.provider === 'none' ? ' selected' : ''}>Not configured</option>
+              <option value="worldtides"${t.provider === 'worldtides' ? ' selected' : ''}>WorldTides</option>
+              <option value="stormglass"${t.provider === 'stormglass' ? ' selected' : ''}>Stormglass</option>
+            </select>
+          </div>
+
+          <div class="field" data-key-for="worldtides"${t.provider === 'worldtides' ? '' : ' hidden'}>
+            <label for="t-wt">WorldTides key</label>
+            <input type="password" id="t-wt" value="${esc(t.worldTidesKey)}" placeholder="paste key here" autocomplete="off">
+            <p class="field__hint">
+              Sign up at <code>worldtides.info</code> → Account → API key.
+              Free tier is roughly 100 requests/month; this app caches for 6 hours.
+            </p>
+          </div>
+
+          <div class="field" data-key-for="stormglass"${t.provider === 'stormglass' ? '' : ' hidden'}>
+            <label for="t-sg">Stormglass key</label>
+            <input type="password" id="t-sg" value="${esc(t.stormglassKey)}" placeholder="paste key here" autocomplete="off">
+            <p class="field__hint">
+              Sign up at <code>stormglass.io</code> → Dashboard → API key.
+              Free tier is roughly 10 requests/day.
+            </p>
+          </div>
+
+          <button class="btn btn--primary" id="saveTides">Save tide settings</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band--cream">
+      <div class="wrap">
+        <div class="section-head"><h2>Your data</h2><p>Everything lives on this device</p></div>
+        <div class="card">
+          <p class="card__body">
+            Catches are stored in this browser's IndexedDB. Clearing site data — or uninstalling
+            the app from your home screen — deletes them. Export regularly if the log matters to you.
+          </p>
+          <div class="btn-row">
+            <button class="btn btn--sm" id="exportBtn">Export JSON</button>
+            <label class="btn btn--sm" style="cursor:pointer">
+              Import JSON
+              <input type="file" id="importInput" accept="application/json,.json" hidden>
+            </label>
+            <button class="btn btn--sm" id="clearBtn" style="color:#C1121F">Delete all catches</button>
+          </div>
+          <p class="field__hint">Export omits photos — JSON can't carry image data. Photos stay on the device only.</p>
+          <div id="storageInfo" class="field__hint"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band--green">
+      <div class="wrap">
+        <div class="section-head"><h2>Regions</h2><p>${REGIONS.length} loaded</p></div>
+        <div class="card">
+          <ul style="margin:0;padding-left:20px;line-height:1.8;font-weight:700">
+            ${REGIONS.map((r) => `<li>${esc(r.name)}, ${esc(r.country)} — ${r.species.length} species, ${(r.spots || []).length} spots</li>`).join('')}
+          </ul>
+          <p class="card__body" style="margin-top:12px">
+            To add a region, copy <code>js/data/regions/leyte-gulf.js</code>, edit it, then import it in
+            <code>js/data/index.js</code>. The picker in the header appears automatically once there is
+            more than one.
+          </p>
+        </div>
+      </div>
+    </section>`;
+}
+
+export function mount(root) {
+  // --- weather ---
+  const wProvider = root.querySelector('#w-provider');
+  const owWrap = root.querySelector('#ow-key-wrap');
+  wProvider.addEventListener('change', () => {
+    owWrap.hidden = wProvider.value !== 'openweather';
+  });
+
+  root.querySelector('#saveWeather').addEventListener('click', () => {
+    saveOverrides({
+      weather: {
+        provider: wProvider.value,
+        openWeatherKey: root.querySelector('#w-key').value.trim(),
+      },
+    });
+    toast('Weather settings saved');
+  });
+
+  // --- tides ---
+  const tProvider = root.querySelector('#t-provider');
+  const syncTideFields = () => {
+    for (const f of root.querySelectorAll('[data-key-for]')) {
+      f.hidden = f.dataset.keyFor !== tProvider.value;
+    }
+  };
+  tProvider.addEventListener('change', syncTideFields);
+
+  root.querySelector('#saveTides').addEventListener('click', () => {
+    saveOverrides({
+      tides: {
+        provider: tProvider.value,
+        worldTidesKey: root.querySelector('#t-wt').value.trim(),
+        stormglassKey: root.querySelector('#t-sg').value.trim(),
+      },
+    });
+    toast('Tide settings saved');
+  });
+
+  // --- data ---
+  root.querySelector('#exportBtn').addEventListener('click', async () => {
+    const json = await exportJson();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `angler-log-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Exported');
+  });
+
+  root.querySelector('#importInput').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const n = await importJson(await file.text());
+      toast(`Imported ${n} catches`);
+    } catch (err) {
+      toast(err.message);
+    }
+    e.target.value = '';
+  });
+
+  root.querySelector('#clearBtn').addEventListener('click', async () => {
+    if (!confirm('Delete every logged catch? This cannot be undone.')) return;
+    await store.clearCatches();
+    toast('All catches deleted');
+  });
+
+  // --- storage estimate ---
+  const info = root.querySelector('#storageInfo');
+  if (navigator.storage?.estimate) {
+    navigator.storage.estimate().then(({ usage, quota }) => {
+      if (!usage && !quota) return;
+      const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
+      info.textContent = `Using ${mb(usage || 0)} of about ${mb(quota || 0)} available.`;
+    });
+  }
+}
