@@ -36,7 +36,15 @@ export default {
   ],
 
   // Map view: where the map opens, and how far it can be zoomed out.
-  map: { center: { lat: 11.05, lon: 125.25 }, zoom: 9, minZoom: 7, maxZoom: 15 },
+  // `bounds` frames the whole of Leyte plus the gulf and southern Samar — it's
+  // the fallback view when the device won't share a location.
+  map: {
+    center: { lat: 11.05, lon: 125.25 },
+    zoom: 9,
+    minZoom: 7,
+    maxZoom: 15,
+    bounds: { south: 9.85, west: 124.15, north: 11.6, east: 126.0 },
+  },
 
   // ---------------------------------------------------------------------
   // FISHING ZONES — the pins on the map.
@@ -74,7 +82,7 @@ export default {
       name: 'San Pedro Bay',
       type: 'bay',
       coords: { lat: 11.10, lon: 125.02 },
-      minZoom: 9,
+      minZoom: 8,
       depth: '5–30 m',
       blurb: 'The broad inner basin of the gulf. Mixed mud and sand — the main ground for ponyfish and mojarra volume.',
       species: ['photopectoralis-bindus', 'gazza-minuta', 'leiognathus-equulus', 'secutor-ruconius', 'pentaprion-longimanus', 'gerres-filamentosus', 'nemipterus-japonicus'],
@@ -115,7 +123,7 @@ export default {
       name: 'Tanauan coastal shallows',
       type: 'shallows',
       coords: { lat: 11.11, lon: 125.02 },
-      minZoom: 11,
+      minZoom: 10,
       depth: '1–8 m',
       blurb: 'Open sandy shoreline with patchy seagrass. Easy shore access and consistent small-fish action.',
       species: [
@@ -130,7 +138,7 @@ export default {
       name: 'Guiuan fringing reefs',
       type: 'reef',
       coords: { lat: 11.03, lon: 125.72 },
-      minZoom: 10,
+      minZoom: 9,
       depth: '3–25 m',
       blurb: 'Coral fringe on the eastern side of the gulf. Clear water, strong structure and the best grouper and snapper of the region.',
       species: [
@@ -145,7 +153,7 @@ export default {
       name: 'Homonhon Island channel',
       type: 'channel',
       coords: { lat: 10.75, lon: 125.70 },
-      minZoom: 10,
+      minZoom: 9,
       depth: '15–60 m',
       blurb: 'Deep channel between islands with hard tidal flow. Bait funnels through and predators sit on the edges waiting.',
       species: [
@@ -171,7 +179,7 @@ export default {
       name: 'Western gulf shelf',
       type: 'shallows',
       coords: { lat: 10.90, lon: 125.15 },
-      minZoom: 9,
+      minZoom: 8,
       depth: '10–45 m',
       blurb: 'Gently shelving mud and sand along the Leyte shoreline. Steady bottom fishing when the wind keeps you off the eastern reefs.',
       species: [
@@ -186,7 +194,7 @@ export default {
       name: 'Central sardine grounds',
       type: 'offshore',
       coords: { lat: 11.00, lon: 125.40 },
-      minZoom: 9,
+      minZoom: 8,
       depth: '20–80 m',
       blurb: 'Open water where the small pelagic schools hold. Where you fill the bait bucket before doing anything else.',
       species: ['sardinella-fimbriata', 'rastrelliger-kanagurta', 'decapterus-macarellus', 'selar-crumenophthalmus', 'auxis-thazard'],

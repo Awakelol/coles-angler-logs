@@ -8,8 +8,9 @@
 
 import { resolveSpecies } from '../data/index.js';
 import { tacticsFor, lureSummary, habitatTactics } from '../data/tactics.js';
+import { getLocation, distanceKm, nearestPlace, geolocationSupported } from '../api/geo.js';
 import { speciesSprite, icon, renderSprite, SPRITES } from '../pixel.js';
-import { esc, openSheet } from '../ui.js';
+import { esc, openSheet, toast } from '../ui.js';
 
 let leafletPromise = null;
 
@@ -144,6 +145,16 @@ export function render(ctx) {
     <div id="mapWrap">
       <div id="fishMap" role="application" aria-label="Fishing zone map"></div>
       <div id="mapHint" class="map-hint"></div>
+      ${
+        geolocationSupported()
+          ? `<button class="map-locate" id="locateBtn" title="Centre on my location"
+                     aria-label="Centre the map on my location">
+               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                 <path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 3a9 9 0 0 0-8-8V1h-2v2a9 9 0 0 0-8 8H1v2h2a9 9 0 0 0 8 8v2h2v-2a9 9 0 0 0 8-8h2v-2h-2Zm-9 8a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/>
+               </svg>
+             </button>`
+          : ''
+      }
     </div>
 
     <section class="band band--cream">
@@ -254,20 +265,94 @@ export async function mount(root, ctx) {
   map.on('zoomend', syncMarkers);
   syncMarkers();
 
-  // Frame the zones that are actually visible, so the map never opens on
-  // empty water just because the region's centre point sits offshore.
-  const initial = markers.filter(({ zone }) => map.getZoom() >= (zone.minZoom ?? 0));
-  if (initial.length) {
-    map.fitBounds(
-      L.latLngBounds(initial.map(({ zone }) => [zone.coords.lat, zone.coords.lon])),
-      { padding: [50, 50], maxZoom: cfg.zoom || 9 }
-    );
+  /**
+   * The fallback view: the whole region. Used before a location is known and
+   * whenever the device won't give one, so the map always shows something
+   * useful rather than an arbitrary point of empty water.
+   */
+  function showWholeRegion() {
+    const b = cfg.bounds;
+    if (b) {
+      map.fitBounds(L.latLngBounds([b.south, b.west], [b.north, b.east]), { padding: [20, 20] });
+    } else {
+      const visible = markers.filter(({ zone }) => map.getZoom() >= (zone.minZoom ?? 0));
+      if (visible.length) {
+        map.fitBounds(
+          L.latLngBounds(visible.map(({ zone }) => [zone.coords.lat, zone.coords.lon])),
+          { padding: [50, 50], maxZoom: cfg.zoom || 9 }
+        );
+      }
+    }
     syncMarkers();
   }
+
+  showWholeRegion();
 
   // The container is sized by CSS after render; Leaflet needs telling.
   setTimeout(() => map.invalidateSize(), 60);
 
+  // --- follow the angler ---------------------------------------------------
+
+  const LOCATE_ZOOM = 13;
+  let youLayer = null;
+
+  function showYouAreHere(fix) {
+    if (youLayer) map.removeLayer(youLayer);
+    youLayer = L.layerGroup([
+      // Accuracy halo, so a poor fix doesn't look like false precision.
+      L.circle([fix.lat, fix.lon], {
+        radius: Math.max(fix.accuracyM, 25),
+        color: '#F26430',
+        weight: 2,
+        fillColor: '#F26430',
+        fillOpacity: 0.12,
+      }),
+      L.marker([fix.lat, fix.lon], {
+        icon: L.divIcon({ className: 'you-pin-wrap', html: '<div class="you-pin"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }),
+        title: 'You are here',
+        zIndexOffset: 1000,
+      }),
+    ]).addTo(map);
+  }
+
+  async function locate({ silent = false } = {}) {
+    const btn = root.querySelector('#locateBtn');
+    btn?.classList.add('is-busy');
+    try {
+      const fix = await getLocation();
+      showYouAreHere(fix);
+      map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), LOCATE_ZOOM));
+      syncMarkers();
+
+      // Being far outside the region is worth saying — otherwise the map just
+      // looks empty and broken.
+      const near = nearestPlace(ctx.region, fix);
+      const away = Math.round(distanceKm(fix, ctx.region.coords));
+      if (!near || near.km > 60) {
+        hint.textContent = `You're ~${away} km from ${ctx.region.name} — no zones nearby`;
+      } else {
+        hint.textContent = `Nearest: ${near.name}, ~${Math.round(near.km)} km`;
+      }
+      return true;
+    } catch (err) {
+      // Any refusal or failure drops back to the whole region rather than
+      // leaving the map wherever it happened to be.
+      showWholeRegion();
+      if (!silent) toast(err.message);
+      return false;
+    } finally {
+      btn?.classList.remove('is-busy');
+    }
+  }
+
+  root.querySelector('#locateBtn')?.addEventListener('click', () => locate());
+
+  // Ask on open. A browser only shows the prompt once — after that it answers
+  // from the stored decision — so this is not a repeated interruption, and a
+  // refusal simply leaves the whole-region view already on screen.
+  if (geolocationSupported()) locate({ silent: true });
+
   // Handle for the browser test suite (tools/browser_test.py).
   container._leafletMap = map;
+  container._locate = locate;
 }
