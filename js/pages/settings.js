@@ -3,6 +3,7 @@
 import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
 import { REGIONS } from '../data/index.js';
+import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
 import { esc, toast } from '../ui.js';
 
 export function render() {
@@ -15,6 +16,27 @@ export function render() {
         <p class="eyebrow">Configuration</p>
         <h1 class="display">Settings</h1>
         <p class="subtitle">Keys are stored only in this browser and are never sent anywhere except the provider you choose.</p>
+      </div>
+    </section>
+
+    <section class="band band--violet">
+      <div class="wrap">
+        <div class="section-head"><h2>Appearance</h2><p>Follows your phone unless you choose</p></div>
+        <div class="card">
+          <div class="field">
+            <label>Theme</label>
+            <div class="chips" id="themePicker">
+              ${THEMES.map(
+                (t) => `
+                <button class="chip" data-theme-choice="${esc(t)}"
+                        aria-pressed="${t === getTheme()}">
+                  ${t === 'system' ? 'Match phone' : t[0].toUpperCase() + t.slice(1)}
+                </button>`
+              ).join('')}
+            </div>
+            <p class="field__hint" id="themeHint"></p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -118,6 +140,29 @@ export function render() {
 }
 
 export function mount(root) {
+  // --- theme ---
+  const themePicker = root.querySelector('#themePicker');
+  const themeHint = root.querySelector('#themeHint');
+
+  const describeTheme = () => {
+    const choice = getTheme();
+    themeHint.textContent =
+      choice === 'system'
+        ? `Following your phone — currently ${resolvedTheme()}.`
+        : `Always ${choice}, whatever your phone is set to.`;
+  };
+  describeTheme();
+
+  themePicker.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-theme-choice]');
+    if (!btn) return;
+    setTheme(btn.dataset.themeChoice);
+    for (const b of themePicker.querySelectorAll('[data-theme-choice]')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+    describeTheme();
+  });
+
   // --- weather ---
   const wProvider = root.querySelector('#w-provider');
   const owWrap = root.querySelector('#ow-key-wrap');

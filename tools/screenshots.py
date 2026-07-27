@@ -49,6 +49,15 @@ SHOTS = [
     ("7-log",        "#/log",        ".kpi__v",                      None),
     ("8-tips",       "#/tips",       ".tip-card",                    None),
     ("9-settings",   "#/settings",   "#saveTides",                   None),
+    # Dark theme sweep — set once, then walk the same screens.
+    ("d1-home",      "#/",           ".kpi__v, .empty",
+     "const t = await import('./js/theme.js'); t.setTheme('dark')"),
+    ("d2-species",   "#/species",    ".species-card",
+     "window.scrollTo(0, 1150); await new Promise(r => setTimeout(r, 1400))"),
+    ("d3-conditions", "#/conditions", ".now-card__temp",             None),
+    ("d4-map",       "#/map",        "#fishMap .leaflet-tile-pane",  None),
+    ("d5-settings",  "#/settings",   "#themePicker",                 None),
+    ("d6-log",       "#/log",        ".kpi__v",                      None),
 ]
 
 
