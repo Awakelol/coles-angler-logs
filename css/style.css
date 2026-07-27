@@ -225,6 +225,36 @@ a.card:active, button.card:active {
 
 .species-card__sci { font-style: italic; font-size: 12.5px; font-weight: 700; color: var(--ink-60); }
 
+/* Real reference photo. Hidden until one loads, so a species with no free
+   image simply shows the pixel art with no empty slot. */
+.photo {
+  margin: 0;
+  border: 3px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--cream);
+}
+.photo img {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+}
+.photo figcaption {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  padding: 5px 8px;
+  border-top: 2px solid var(--line);
+  background: var(--paper);
+}
+.photo--hero { margin-bottom: 16px; }
+.photo--hero img { height: 190px; }
+.photo--hero figcaption { text-transform: none; font-size: 11px; letter-spacing: 0; }
+.photo--hero figcaption a { color: var(--ink); }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .chip {

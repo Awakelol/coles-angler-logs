@@ -4,13 +4,14 @@ import {
   allSpecies, speciesByFamily, fishbaseUrl, localNames, getSpecies, zonesForSpecies,
 } from '../data/index.js';
 import { speciesSprite, speciesHero, icon } from '../pixel.js';
+import { hydratePhotos, fetchPhoto } from '../api/photos.js';
 import { esc, el, openSheet } from '../ui.js';
 
 function speciesCard(s) {
   const locals = localNames(s).slice(0, 2);
   return `
     <button class="card species-card" data-species="${esc(s.id)}">
-      <div class="species-card__art">${speciesSprite(s, { size: 150 })}</div>
+      <div class="species-card__art">${speciesHero(s, { size: 170 })}</div>
       <div>
         <h3 class="card__title">${esc(s.common)}</h3>
         <p class="card__sub species-card__sci">${esc(s.scientific)}</p>
@@ -19,6 +20,10 @@ function speciesCard(s) {
         ${locals.map((l) => `<span class="chip chip--local">${esc(l.name)}</span>`).join('')}
         ${s.target ? '<span class="chip chip--target">Target</span>' : ''}
       </div>
+      <figure class="photo" data-photo="${esc(s.scientific)}" hidden>
+        <img alt="" loading="lazy" decoding="async">
+        <figcaption></figcaption>
+      </figure>
     </button>`;
 }
 
@@ -33,6 +38,11 @@ function detailHtml(s, regionId) {
 
   return `
     <div class="species-card__art species-card__art--hero">${speciesHero(s, { size: 300 })}</div>
+
+    <figure class="photo photo--hero" data-sheet-photo hidden>
+      <img alt="" decoding="async">
+      <figcaption></figcaption>
+    </figure>
 
     <div class="chips" style="margin-bottom:14px">
       <span class="chip chip--family">${esc(s.familyCommon || s.family)}</span>
@@ -73,6 +83,21 @@ function detailHtml(s, regionId) {
     <p class="field__hint" style="margin-top:10px">
       FishBase opens in a new tab for photos and full biology. Photos aren't embedded here — they're copyrighted by their contributors.
     </p>`;
+}
+
+/** Fills the sheet's photo slot once it's in the DOM; hides it on a miss. */
+function mountSheetPhoto(s) {
+  return async (rootEl) => {
+    const fig = rootEl.querySelector('[data-sheet-photo]');
+    if (!fig) return;
+    const photo = await fetchPhoto(s.scientific);
+    if (!photo || !fig.isConnected) return;
+    fig.querySelector('img').src = photo.src;
+    fig.querySelector('img').alt = `Photograph of ${s.common}`;
+    fig.querySelector('figcaption').innerHTML =
+      `Photo: <a href="${esc(photo.page)}" target="_blank" rel="noopener noreferrer">${esc(photo.credit)}</a>`;
+    fig.hidden = false;
+  };
 }
 
 export function render(ctx) {
@@ -187,9 +212,11 @@ export function mount(root, ctx) {
     for (const btn of results.querySelectorAll('[data-species]')) {
       btn.addEventListener('click', () => {
         const s = getSpecies(btn.dataset.species);
-        if (s) openSheet(s.common, () => detailHtml(s, ctx.regionId));
+        if (s) openSheet(s.common, () => detailHtml(s, ctx.regionId), mountSheetPhoto(s));
       });
     }
+
+    hydratePhotos(results);
   }
 
   search.addEventListener('input', () => {
@@ -213,6 +240,6 @@ export function mount(root, ctx) {
   const open = ctx.params.get('open');
   if (open) {
     const s = getSpecies(open);
-    if (s) openSheet(s.common, () => detailHtml(s, ctx.regionId));
+    if (s) openSheet(s.common, () => detailHtml(s, ctx.regionId), mountSheetPhoto(s));
   }
 }
