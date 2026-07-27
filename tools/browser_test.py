@@ -285,7 +285,8 @@ async def main():
                 const dark = { bg: read('--cream'), ink: read('--ink'), line: read('--line'),
                                attr: document.documentElement.getAttribute('data-theme'),
                                meta: document.querySelector('meta[name=theme-color]').content,
-                               scheme: document.documentElement.style.colorScheme };
+                               scheme: document.documentElement.style.colorScheme,
+                               shadow: read('--shadow'), bw: read('--border-w') };
 
                 // Every custom property must be a real value; a typo like
                 // "#46real" silently falls back and is easy to miss.
@@ -303,13 +304,17 @@ async def main():
             check("light theme applies", theme["light"]["attr"] == "light" and
                   theme["light"]["bg"].upper() == "#FFF8E7", str(theme["light"]))
             check("dark theme applies", theme["dark"]["attr"] == "dark" and
-                  theme["dark"]["bg"].upper() == "#0F131A", str(theme["dark"]))
-            check("dark text inverts", theme["dark"]["ink"].upper() == "#EAF0F7",
+                  theme["dark"]["bg"].upper() == "#0D1117", str(theme["dark"]))
+            check("dark text inverts", theme["dark"]["ink"].upper() == "#E6EDF3",
                   theme["dark"]["ink"])
-            check("dark borders stay visible", theme["dark"]["line"].upper() == "#47566C",
-                  f"borders must be lighter than the page: {theme['dark']['line']}")
+            # GitHub-style: hairline border on a lifted surface, no outline.
+            check("dark uses a hairline border", theme["dark"]["line"].upper() == "#30363D",
+                  theme["dark"]["line"])
+            check("dark drops the hard offset shadow",
+                  theme["dark"]["shadow"] == "none", str(theme["dark"]["shadow"]))
+            check("dark uses a 1px border", theme["dark"]["bw"] == "1px", str(theme["dark"]["bw"]))
             check("theme-color follows the theme",
-                  theme["dark"]["meta"] == "#0f131a" and theme["light"]["meta"] == "#FFD23F",
+                  theme["dark"]["meta"] == "#0d1117" and theme["light"]["meta"] == "#FFD23F",
                   f"{theme['light']['meta']} / {theme['dark']['meta']}")
             check("color-scheme is set for form controls",
                   theme["dark"]["scheme"] == "dark", str(theme["dark"]["scheme"]))
@@ -512,10 +517,69 @@ async def main():
             check("shared names merge their languages",
                   dupes["sapsap"] == "Waray / Cebuano", str(dupes["sapsap"]))
 
+            # --- "did you mean?" ---
+            fuzzy = await page.eval("""
+                const { suggestSpecies } = await import('./js/search.js');
+                const d = await import('./js/data/index.js');
+                const list = d.allSpecies('leyte-gulf');
+                const top = (q) => {
+                    const r = suggestSpecies(q, list, d.localNames, { limit: 3 });
+                    return r.map(x => x.species.common);
+                };
+                return {
+                    sapsap:    top('sapsap'),      // hyphen dropped
+                    barakuda:  top('barakuda'),    // spelled by ear
+                    mayamaya:  top('maya maya'),   // spacing
+                    lapulapu:  top('lapu lapu'),
+                    snaper:    top('snaper'),      // typo
+                    gibberish: top('zzzqqqxyw'),
+                };
+            """)
+            check("suggests for a dropped hyphen",
+                  any("ponyfish" in n.lower() or "pony" in n.lower() for n in fuzzy["sapsap"]),
+                  str(fuzzy["sapsap"]))
+            check("suggests for a phonetic spelling",
+                  any("barracuda" in n.lower() for n in fuzzy["barakuda"]),
+                  str(fuzzy["barakuda"]))
+            check("suggests for spacing differences",
+                  any("snapper" in n.lower() for n in fuzzy["mayamaya"]),
+                  str(fuzzy["mayamaya"]))
+            check("suggests for a local name with a space",
+                  any("grouper" in n.lower() for n in fuzzy["lapulapu"]),
+                  str(fuzzy["lapulapu"]))
+            check("suggests for a simple typo",
+                  any("snapper" in n.lower() for n in fuzzy["snaper"]),
+                  str(fuzzy["snaper"]))
+            check("stays quiet for gibberish", fuzzy["gibberish"] == [], str(fuzzy["gibberish"]))
+
+            shownSuggest = await page.eval("""
+                const i = document.getElementById('speciesSearch');
+                i.value = 'snaper';
+                i.dispatchEvent(new Event('input', {bubbles:true}));
+                await new Promise(r => setTimeout(r, 300));
+                const s = document.querySelector('.suggest');
+                return { visible: !!s,
+                         n: document.querySelectorAll('[data-suggest]').length,
+                         text: s ? s.textContent.replace(/\\s+/g,' ').slice(0, 80) : '' };
+            """)
+            check("empty search shows suggestions in the UI",
+                  shownSuggest["visible"] and shownSuggest["n"] > 0, str(shownSuggest))
+
+            picked = await page.eval("""
+                document.querySelector('[data-suggest]').click();
+                await new Promise(r => setTimeout(r, 500));
+                return { box: document.getElementById('speciesSearch').value,
+                         sheet: !!document.querySelector('.sheet') };
+            """)
+            check("picking a suggestion corrects the box and opens it",
+                  picked["sheet"] and "snaper" != picked["box"].lower(), str(picked))
+
             await page.eval("""
+                document.querySelector('.sheet-backdrop')?.remove();
                 const i = document.getElementById('speciesSearch');
                 i.value = '';
                 i.dispatchEvent(new Event('input', {bubbles:true}));
+                await new Promise(r => setTimeout(r, 300));
                 document.querySelector('.species-card').click();
             """)
             await asyncio.sleep(0.5)

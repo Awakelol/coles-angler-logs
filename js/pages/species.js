@@ -5,6 +5,7 @@ import {
 } from '../data/index.js';
 import { speciesSprite, speciesHero, icon } from '../pixel.js';
 import { hydratePhotos, fetchPhoto, fetchPhotos } from '../api/photos.js';
+import { suggestSpecies } from '../search.js';
 import { esc, el, openSheet } from '../ui.js';
 
 function speciesCard(s) {
@@ -195,12 +196,57 @@ export function mount(root, ctx) {
     const shown = list.filter(matches);
 
     if (!shown.length) {
+      // Local names get spelled by ear, so an empty result is usually a
+      // near-miss rather than a species we don't have.
+      const guesses = query ? suggestSpecies(query, list, localNames) : [];
+
       results.innerHTML = `
         <div class="empty">
           ${icon('book', { size: 96, palette: 'slate' })}
-          <p>No species match that search.</p>
+          <p>Nothing matches &ldquo;${esc(search.value.trim())}&rdquo;.</p>
+          ${
+            guesses.length
+              ? `<div class="suggest">
+                   <p class="suggest__lead">Did you mean&hellip;</p>
+                   <div class="grid grid--3">
+                     ${guesses
+                       .map(
+                         (g) => `
+                       <button class="card suggest__item" data-suggest="${esc(g.species.id)}">
+                         <div class="species-card__art">${speciesHero(g.species, { size: 140 })}</div>
+                         <div>
+                           <h3 class="card__title">${esc(g.species.common)}</h3>
+                           <p class="card__sub species-card__sci">${esc(g.species.scientific)}</p>
+                         </div>
+                         ${
+                           g.kind === 'local'
+                             ? `<div class="chips"><span class="chip chip--local">${esc(g.term)}${
+                                 g.label ? ` · ${esc(g.label)}` : ''
+                               }</span></div>`
+                             : ''
+                         }
+                       </button>`
+                       )
+                       .join('')}
+                   </div>
+                 </div>`
+              : ''
+          }
           <button class="btn btn--sm" data-clear>Clear filters</button>
         </div>`;
+
+      for (const btn of results.querySelectorAll('[data-suggest]')) {
+        btn.addEventListener('click', () => {
+          const s = getSpecies(btn.dataset.suggest);
+          if (!s) return;
+          // Put the corrected name in the box so the next search works.
+          search.value = s.common;
+          query = s.common.toLowerCase();
+          draw();
+          openSheet(s.common, () => detailHtml(s, ctx.regionId), mountSheetPhoto(s));
+        });
+      }
+
       results.querySelector('[data-clear]').addEventListener('click', () => {
         query = '';
         family = '';

@@ -49,6 +49,8 @@
   --on-accent: #10141C;
 
   --line:    #10141C;
+  --border-w:    3px;
+  --border-w-sm: 2px;
   --radius:  22px;
   --radius-sm: 14px;
   --shadow:  4px 4px 0 var(--line);
@@ -64,39 +66,90 @@
    before first paint. `system` is resolved in JS rather than with a media
    query here, so an explicit light choice still wins on a dark phone.
 
-   The one structural change: --line becomes LIGHTER than both the page and
-   the cards. In light mode the chunky borders and hard offset shadows are
-   near-black on cream; a black border on a dark page would vanish, taking the
-   whole graphic identity with it. Inverting it keeps the outlines reading.  */
+   Modelled on GitHub's mobile app, which is a different philosophy from the
+   light theme rather than an inversion of it. Light mode is neo-brutalist:
+   thick near-black outlines and hard offset shadows on cream. GitHub's dark
+   is flat — a near-black canvas, cards lifted by surface colour alone, and
+   hairline dividers instead of outlines. Trying to keep the chunky borders on
+   a dark canvas reads as a wireframe, so dark mode drops them: --border-w
+   goes hairline and the offset shadows go away entirely.
+
+   Colours are GitHub's own dark tokens (canvas #0D1117, surface #151B23,
+   border #30363D, fg #E6EDF3, muted #8B949E) so it sits naturally beside
+   the app in the screenshot.                                              */
 :root[data-theme="dark"] {
-  --cream:   #0F131A;
-  --paper:   #1A2029;
-  --ink:     #EAF0F7;
-  --ink-60:  #9FADBF;
-  --ink-30:  #5F6C7E;
+  --cream:   #0D1117;   /* canvas */
+  --paper:   #151B23;   /* raised surface */
+  --ink:     #E6EDF3;   /* primary text */
+  --ink-60:  #8B949E;   /* muted text */
+  --ink-30:  #6E7681;
 
-  --sky-deep: #58C4E2;
+  /* GitHub's accent set — vivid on near-black, unlike the pastel light ones. */
+  --yellow:  #D29922;
+  --sky:     #58A6FF;
+  --sky-deep:#4493F8;
+  --coral:   #DB6D28;
+  --green:   #3FB950;
+  --violet:  #AB7DF8;
 
-  --band-cream:  #0F131A;
-  --band-sky:    #12303C;
-  --band-yellow: #33290A;
-  --band-green:  #10301F;
-  --band-coral:  #351709;
-  --band-violet: #241A3D;
+  /* Bands are barely-there tints. Bright colour blocks are the light theme's
+     idea; here the section rhythm comes from a whisper of hue over canvas. */
+  --band-cream:  #0D1117;
+  --band-sky:    #0E1620;
+  --band-yellow: #14120C;
+  --band-green:  #0C1410;
+  --band-coral:  #14100C;
+  --band-violet: #110F19;
 
-  --art-bg:      #143240;
-  --art-bg-2:    #1B4657;
+  --art-bg:      #10202E;
+  --art-bg-2:    #16293A;
 
-  --invert-bg:   #232B36;
-  --invert-fg:   #EAF0F7;
+  --invert-bg:   #21262D;
+  --invert-fg:   #E6EDF3;
 
-  --notice-warn:  #33290A;
-  --notice-error: #3A1418;
-  --skeleton-a:   #1F2630;
-  --skeleton-b:   #2A323E;
-  --attribution:  rgba(15, 19, 26, .85);
+  --notice-warn:  #1E1A0B;
+  --notice-error: #1F1315;
+  --skeleton-a:   #161B22;
+  --skeleton-b:   #21262D;
+  --attribution:  rgba(13, 17, 23, .85);
 
-  --line:    #47566C;
+  /* Text on the vivid accent fills. GitHub's blue and green are mid-tone, so
+     near-black still reads on them. */
+  --on-accent: #0D1117;
+
+  --line:        #30363D;
+  --border-w:    1px;
+  --border-w-sm: 1px;
+  --shadow:      none;
+  --shadow-lg:   none;
+}
+
+/* Flatten the light theme's tactile flourishes: pressing a card shifted it
+   into its own shadow, which makes no sense once the shadow is gone. */
+:root[data-theme="dark"] a.card:active,
+:root[data-theme="dark"] button.card:active,
+:root[data-theme="dark"] .btn:active,
+:root[data-theme="dark"] .icon-btn:active,
+:root[data-theme="dark"] .map-locate:active,
+:root[data-theme="dark"] .gallery__item:active {
+  transform: none;
+  box-shadow: none;
+  filter: brightness(1.25);
+}
+
+:root[data-theme="dark"] .region-select select,
+:root[data-theme="dark"] .icon-btn,
+:root[data-theme="dark"] .zone-pin,
+:root[data-theme="dark"] .btn--sm {
+  box-shadow: none;
+}
+
+/* GitHub groups list rows in one rounded surface with hairline dividers,
+   rather than giving every row its own outline. */
+:root[data-theme="dark"] .tide-row + .tide-row,
+:root[data-theme="dark"] .catch-row + .catch-row {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
 }
 
 * { box-sizing: border-box; }
@@ -148,7 +201,7 @@ a { color: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 40;
   background: var(--cream);
-  border-bottom: 3px solid var(--line);
+  border-bottom: var(--border-w) solid var(--line);
 }
 
 .topbar__inner {
@@ -174,7 +227,7 @@ a { color: inherit; }
 
 .region-select select {
   font-family: inherit; font-weight: 800; font-size: 13px;
-  padding: 8px 10px; border: 3px solid var(--line);
+  padding: 8px 10px; border: var(--border-w) solid var(--line);
   border-radius: 999px; background: var(--yellow); color: var(--on-accent);
   box-shadow: 3px 3px 0 var(--line);
   max-width: 42vw;
@@ -183,7 +236,7 @@ a { color: inherit; }
 .icon-btn {
   display: grid; place-items: center;
   width: 42px; height: 42px; flex: none;
-  border: 3px solid var(--line); border-radius: 50%;
+  border: var(--border-w) solid var(--line); border-radius: 50%;
   background: var(--paper); box-shadow: 3px 3px 0 var(--line);
   text-decoration: none;
 }
@@ -193,7 +246,7 @@ a { color: inherit; }
 
 main { display: block; }
 
-.band { padding: 34px 16px 40px; border-bottom: 3px solid var(--line); }
+.band { padding: 34px 16px 40px; border-bottom: var(--border-w) solid var(--line); }
 .band--cream  { background: var(--band-cream); }
 .band--sky    { background: var(--band-sky); }
 .band--yellow { background: var(--band-yellow); }
@@ -249,7 +302,7 @@ main { display: block; }
 
 .card {
   background: var(--paper);
-  border: 3px solid var(--line);
+  border: var(--border-w) solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
@@ -277,7 +330,7 @@ a.card:active, button.card:active {
 
 .species-card__art {
   background: var(--art-bg);
-  border: 3px solid var(--line);
+  border: var(--border-w) solid var(--line);
   border-radius: var(--radius-sm);
   padding: 14px 10px;
   display: grid; place-items: center;
@@ -299,7 +352,7 @@ a.card:active, button.card:active {
    image simply shows the pixel art with no empty slot. */
 .photo {
   margin: 0;
-  border: 3px solid var(--line);
+  border: var(--border-w) solid var(--line);
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--cream);
@@ -317,7 +370,7 @@ a.card:active, button.card:active {
   text-transform: uppercase;
   color: var(--ink-60);
   padding: 5px 8px;
-  border-top: 2px solid var(--line);
+  border-top: var(--border-w-sm) solid var(--line);
   background: var(--paper);
 }
 /* Reference gallery on the detail sheet — several angles, since a fish in the
@@ -327,7 +380,7 @@ a.card:active, button.card:active {
 
 .gallery__item {
   display: block;
-  border: 3px solid var(--line);
+  border: var(--border-w) solid var(--line);
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--paper);
@@ -338,7 +391,7 @@ a.card:active, button.card:active {
   display: block;
   font-size: 9.5px; font-weight: 800;
   padding: 4px 6px;
-  border-top: 2px solid var(--line);
+  border-top: var(--border-w-sm) solid var(--line);
   color: var(--ink-60);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -349,7 +402,7 @@ a.card:active, button.card:active {
 .chip {
   font-size: 11px; font-weight: 800; letter-spacing: .04em;
   padding: 4px 9px; border-radius: 999px;
-  border: 2px solid var(--line); background: var(--paper);
+  border: var(--border-w-sm) solid var(--line); background: var(--paper);
   white-space: nowrap;
 }
 .chip--local  { background: var(--yellow); color: var(--on-accent); }
@@ -371,7 +424,7 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   font-family: inherit; font-size: 14px; font-weight: 900; letter-spacing: -.01em;
   padding: 12px 20px; border-radius: 999px;
-  border: 3px solid var(--line); background: var(--paper); color: var(--ink);
+  border: var(--border-w) solid var(--line); background: var(--paper); color: var(--ink);
   box-shadow: var(--shadow); cursor: pointer; text-decoration: none;
 }
 .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line); }
@@ -396,7 +449,7 @@ input[type="text"], input[type="number"], input[type="date"], input[type="passwo
 input[type="search"], select, textarea {
   font-family: inherit; font-size: 15px; font-weight: 700;
   padding: 12px 14px; width: 100%;
-  border: 3px solid var(--line); border-radius: var(--radius-sm);
+  border: var(--border-w) solid var(--line); border-radius: var(--radius-sm);
   background: var(--paper); color: var(--ink);
 }
 textarea { min-height: 84px; resize: vertical; }
@@ -409,7 +462,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 .now-card {
   background: var(--invert-bg); color: var(--invert-fg);
-  border: 3px solid var(--line); border-radius: var(--radius);
+  border: var(--border-w) solid var(--line); border-radius: var(--radius);
   padding: 20px; box-shadow: var(--shadow-lg);
 }
 .now-card__temp { font-size: 54px; font-weight: 900; line-height: 1; letter-spacing: -.04em; }
@@ -443,14 +496,14 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .tide-row { display: flex; align-items: center; gap: 12px; }
 .tide-row__badge {
   width: 46px; height: 46px; flex: none; display: grid; place-items: center;
-  border: 3px solid var(--line); border-radius: 50%; font-weight: 900; font-size: 11px;
+  border: var(--border-w) solid var(--line); border-radius: 50%; font-weight: 900; font-size: 11px;
 }
 .tide-row__badge--high { background: var(--sky); color: var(--on-accent); }
 .tide-row__badge--low  { background: var(--yellow); color: var(--on-accent); }
 .tide-row__time { font-weight: 900; font-size: 16px; }
 .tide-row__meta { font-size: 12.5px; font-weight: 700; color: var(--ink-60); }
 
-.tide-bar { height: 14px; border: 3px solid var(--line); border-radius: 999px; background: var(--paper); overflow: hidden; }
+.tide-bar { height: 14px; border: var(--border-w) solid var(--line); border-radius: 999px; background: var(--paper); overflow: hidden; }
 .tide-bar__fill { height: 100%; background: var(--sky-deep); }
 
 /* --- stats / log --------------------------------------------------------- */
@@ -461,7 +514,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 .catch-row { display: flex; gap: 12px; align-items: center; }
 .catch-row__thumb {
-  width: 62px; height: 62px; flex: none; border: 3px solid var(--line);
+  width: 62px; height: 62px; flex: none; border: var(--border-w) solid var(--line);
   border-radius: var(--radius-sm); overflow: hidden;
   display: grid; place-items: center; background: var(--sky);
 }
@@ -479,6 +532,16 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 .tip-card { border-left: 10px solid var(--yellow); }
 .tip-card--general { border-left-color: var(--sky-deep); }
+
+/* --- search suggestions --------------------------------------------------- */
+
+.suggest { width: 100%; max-width: 720px; margin: 0 auto 22px; text-align: left; }
+.suggest__lead {
+  font-size: 13px; font-weight: 900; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-60);
+  margin: 0 0 12px; text-align: center;
+}
+.suggest__item { cursor: pointer; }
 
 /* --- notices ------------------------------------------------------------- */
 
@@ -514,7 +577,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   position: relative;
   isolation: isolate;
   z-index: 0;
-  border-bottom: 3px solid var(--line);
+  border-bottom: var(--border-w) solid var(--line);
 }
 
 #fishMap {
@@ -526,7 +589,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 /* Leaflet injects its own controls; keep them in the app's visual language. */
 .leaflet-container { font-family: var(--font); }
 .leaflet-control-zoom a {
-  border: 2px solid var(--line) !important;
+  border: var(--border-w-sm) solid var(--line) !important;
   font-weight: 900 !important;
   color: var(--ink) !important;
 }
@@ -540,7 +603,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   width: 44px; height: 44px;
   display: grid; place-items: center;
   background: var(--paper);
-  border: 3px solid var(--line);
+  border: var(--border-w) solid var(--line);
   border-radius: 50%;
   box-shadow: 3px 3px 0 var(--line);
   cursor: pointer;
@@ -555,7 +618,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   position: absolute; right: 12px; bottom: 12px; z-index: 900;
   width: 46px; height: 46px;
   display: grid; place-items: center;
-  border: 3px solid var(--line); border-radius: 50%;
+  border: var(--border-w) solid var(--line); border-radius: 50%;
   background: var(--paper); color: var(--ink);
   box-shadow: 3px 3px 0 var(--line);
   cursor: pointer;
@@ -590,7 +653,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: grid; grid-template-columns: repeat(6, 1fr);
-  background: var(--paper); border-top: 3px solid var(--line);
+  background: var(--paper); border-top: var(--border-w) solid var(--line);
 }
 .tabbar a {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -627,7 +690,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .sheet {
   background: var(--cream); width: 100%; max-width: 620px;
-  border: 3px solid var(--line); border-bottom: 0;
+  border: var(--border-w) solid var(--line); border-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   max-height: 92vh; overflow-y: auto;
   padding: 20px 16px calc(28px + env(safe-area-inset-bottom, 0px));
@@ -637,5 +700,5 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 @media (min-width: 720px) {
   .sheet-backdrop { place-items: center; padding: 20px; }
-  .sheet { border-bottom: 3px solid var(--line); border-radius: var(--radius); }
+  .sheet { border-bottom: var(--border-w) solid var(--line); border-radius: var(--radius); }
 }
