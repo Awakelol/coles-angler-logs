@@ -388,6 +388,60 @@ BODIES = {
 
 
 # =========================================================================
+# HEROES — large angled art, shown ONLY on the species detail sheet.
+#
+# Style, taken from the reference art:
+#   - body on a ~35 degree axis, nose upper-right, tail lower-left
+#   - NO black outline: 'O' is the palette's darkest slot, which is a dark
+#     shade of the body hue (crimson's O is #2b0f14, a dark red), so the
+#     silhouette self-outlines instead of looking like a sticker
+#   - a bright specular streak (H) down the upper flank — this is what makes
+#     them read as living fish rather than flat shapes
+#   - smooth tonal blocks S -> D -> B -> M -> L, dither used sparingly
+#   - small eye set high on the head, sclera + pupil + one highlight pixel
+#
+# Tails are hand-drawn here: the fan generator only works on horizontal
+# bodies, so HEROES are built with fork=None.
+# =========================================================================
+HEROES = {
+
+'snapper': [
+'                      OOOO      ',
+'                    OOSSSSOO    ',
+'                  OOSSDDDDSSO   ',
+'                 OSSDDDDDDDSSO  ',
+'               OOSDDDDDDDDDDDSO ',
+'              OSSDDDDDDDDDDDDSO ',
+'            OOSDDDDDDDDDDDDDDSO ',
+'           OSSDDDDDDDDDDDDEPDSO ',
+'         OOSDDDDDDDDDDDDDDEEDSO ',
+'        OSSDDDDDDHDDDDDDDDDDSO  ',
+'      OOSDDDDDDDHHDDDDDDDDDSO   ',
+'     OSSDDDDDDDHHBBBBBBBBDSO    ',
+'    OSDDDDDDDDHHBBBBBBBBDSO     ',
+'   OSDDDDDDDDHHBBBBBBBBDSO      ',
+'  OSDDDDDDDDHHBBBBBBBBDSO       ',
+' OSDDDDDDDDHHBBBBBBBBDSO        ',
+' OSDDDDDDDHHBBBBBBBBDSO         ',
+'OSDDDDDDDHHBBBBBBBBDSO          ',
+'OSDDDDDDHHBBBBBBBBDSO           ',
+'OSDDDDDHHBBBBBBBBMSO            ',
+'OSDDDDDHBBBBBBBBMSO             ',
+'OSSDDDDBBBBBBBBMSO              ',
+'OOSDDDDBBBBBBBMSO               ',
+' OSSDDDBBBBBBMSO                ',
+'  OSSDDBBBBBMSO                 ',
+'   OSSDDBBBMSO                  ',
+' OO OSSDDBMSO                   ',
+'OSSO OSSDMSO                    ',
+'OSSSO OSSSO                     ',
+' OSSSO OOO                      ',
+'  OSSSSO                        ',
+'   OOOOO                        ',
+],
+}
+
+# =========================================================================
 # ICONS — non-species art. Rendered with the dedicated 'weather' palette,
 # which carries five cloud tones (S->H) plus two golds (F edge, A core) so
 # clouds have real depth and the sun has a rim rather than being flat.
@@ -681,10 +735,98 @@ def build(fork, rows):
     return out
 
 
+def rotate(grid, degrees, scale=3):
+    """
+    Build an angled hero from a horizontal sprite.
+
+    Hand-drawing diagonal bodies row by row is unreliable — the silhouette
+    drifts and reads as a sausage. Instead the horizontal art, which is
+    already tuned, is supersampled, rotated with nearest-neighbour sampling
+    (so pixels stay hard rather than blurring), then majority-downsampled.
+    A cleanup pass fills pinholes and re-outlines the result.
+    """
+    import math
+
+    h, w = len(grid), len(grid[0])
+    big_h, big_w = h * scale, w * scale
+    big = [[grid[y // scale][x // scale] for x in range(big_w)] for y in range(big_h)]
+
+    rad = math.radians(degrees)
+    cos_t, sin_t = math.cos(rad), math.sin(rad)
+    # Output canvas sized to hold the rotated bounding box.
+    out_w = int(abs(big_w * cos_t) + abs(big_h * sin_t)) + 2
+    out_h = int(abs(big_w * sin_t) + abs(big_h * cos_t)) + 2
+    cx_i, cy_i = big_w / 2, big_h / 2
+    cx_o, cy_o = out_w / 2, out_h / 2
+
+    rot = [['.'] * out_w for _ in range(out_h)]
+    for y in range(out_h):
+        for x in range(out_w):
+            dx, dy = x - cx_o, y - cy_o
+            sx = cos_t * dx + sin_t * dy + cx_i
+            sy = -sin_t * dx + cos_t * dy + cy_i
+            ix, iy = int(round(sx)), int(round(sy))
+            if 0 <= ix < big_w and 0 <= iy < big_h:
+                rot[y][x] = big[iy][ix]
+
+    # Majority downsample back to pixel-art density.
+    ow, oh = out_w // scale, out_h // scale
+    small = [['.'] * ow for _ in range(oh)]
+    for y in range(oh):
+        for x in range(ow):
+            tally = {}
+            for dy in range(scale):
+                for dx in range(scale):
+                    c = rot[y * scale + dy][x * scale + dx]
+                    tally[c] = tally.get(c, 0) + 1
+            # Prefer any real colour over transparency unless it dominates.
+            solid = {k: v for k, v in tally.items() if k != '.'}
+            if solid and tally.get('.', 0) <= (scale * scale) // 2:
+                small[y][x] = max(solid, key=solid.get)
+
+    # Fill pinholes: a transparent pixel ringed by body becomes body.
+    for y in range(1, oh - 1):
+        for x in range(1, ow - 1):
+            if small[y][x] != '.':
+                continue
+            ring = [small[y - 1][x], small[y + 1][x], small[y][x - 1], small[y][x + 1]]
+            solid = [c for c in ring if c != '.']
+            if len(solid) >= 4:
+                small[y][x] = max(set(solid), key=solid.count)
+
+    # Re-outline: any transparent pixel touching non-outline body becomes O.
+    for y in range(oh):
+        for x in range(ow):
+            if small[y][x] != '.':
+                continue
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < oh and 0 <= nx < ow and small[ny][nx] not in ('.', 'O'):
+                    small[y][x] = 'O'
+                    break
+
+    out = [''.join(r) for r in small]
+    while out and set(out[0]) == {'.'}:
+        out.pop(0)
+    while out and set(out[-1]) == {'.'}:
+        out.pop()
+    return out
+
+
 sprites = {n: build(f, rows) for n, (f, rows) in BODIES.items()}
 icons = {n: build(None, rows) for n, rows in ICONS.items()}
 
-for label, coll in (('sprite', sprites), ('icon', icons)):
+# Heroes are derived from the horizontal art. The source sprites face LEFT,
+# so each is mirrored first, then tilted — putting the nose up-right and the
+# tail down-left, matching the reference art.
+HERO_ANGLE = -32
+heroes = {
+    n: rotate([r[::-1] for r in g], HERO_ANGLE)
+    for n, g in sprites.items()
+    if n not in ('squid', 'crab')
+}
+
+for label, coll in (('sprite', sprites), ('icon', icons), ('hero', heroes)):
     for n, g in coll.items():
         assert len({len(r) for r in g}) == 1, f"{label} {n} has ragged rows"
         stray = {c for r in g for c in r} - set(PAL) - {'.'}
@@ -722,8 +864,16 @@ def sheet(coll, palette, path, cols=4, scale=7):
     return maxw, maxh
 
 
+CRIMSON = {
+    'O': '#2b0f14', 'S': '#7d1226', 'D': '#a11d33', 'B': '#d94257',
+    'M': '#ec7d8e', 'L': '#ffd9de', 'H': '#fff5f6', 'F': '#b8283f',
+    'A': '#ffb703', 'E': '#ffffff', 'P': '#10141c',
+}
+
 sw, sh = sheet(sprites, PAL, os.path.join(HERE, 'sprite-preview.png'))
 iw, ih = sheet(icons, WEATHER_PAL, os.path.join(HERE, 'icon-preview.png'), cols=4, scale=9)
+if heroes:
+    sheet(heroes, CRIMSON, os.path.join(HERE, 'hero-preview.png'), cols=3, scale=10)
 
 # ---------------------------------------------------------------- emit JS
 def emit(coll):
@@ -738,6 +888,8 @@ with open(os.path.join(HERE, 'sprites.generated.js'), 'w', encoding='utf-8') as 
     f.write(emit(sprites))
 with open(os.path.join(HERE, 'icons.generated.js'), 'w', encoding='utf-8') as f:
     f.write(emit(icons))
+with open(os.path.join(HERE, 'heroes.generated.js'), 'w', encoding='utf-8') as f:
+    f.write(emit(heroes))
 
 print(f"{len(sprites)} sprites (max {sw}x{sh}), {len(icons)} icons (max {iw}x{ih})")
 print("previews -> tools/sprite-preview.png, tools/icon-preview.png")

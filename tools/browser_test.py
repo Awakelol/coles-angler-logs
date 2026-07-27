@@ -161,6 +161,31 @@ async def main():
                 }
                 return { bad, ragged, sprites: Object.keys(m.SPRITES).length };
             """)
+            hero = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const d = await import('./js/data/index.js');
+                const species = d.allSpecies('leyte-gulf');
+                const missing = [], ragged = [];
+                for (const [n, g] of Object.entries(p.HEROES)) {
+                    if (new Set(g.map(r => r.length)).size !== 1) ragged.push(n);
+                }
+                // Every species must render a hero (real or fallback) without throwing.
+                let withHero = 0;
+                for (const s of species) {
+                    const svg = p.speciesHero(s, { size: 200 });
+                    if (!svg.startsWith('<svg')) missing.push(s.id);
+                    if (p.hasHero(s)) withHero++;
+                }
+                return { count: Object.keys(p.HEROES).length, ragged, missing,
+                         withHero, total: species.length };
+            """)
+            check("hero art present for every archetype", hero["count"] >= 13, str(hero["count"]))
+            check("no hero has ragged rows", not hero["ragged"], ", ".join(hero["ragged"]))
+            check("every species renders a hero", not hero["missing"], ", ".join(hero["missing"][:5]))
+            check("most species have real angled art",
+                  hero["withHero"] >= hero["total"] - 5,
+                  f"{hero['withHero']}/{hero['total']} (rest fall back)")
+
             check("all palettes are 9 valid hex slots", not art["bad"], "; ".join(art["bad"]))
             check("no sprite has ragged rows", not art["ragged"], ", ".join(art["ragged"]))
 
@@ -331,7 +356,46 @@ async def main():
                 return s ? s.innerText.includes('FishBase') : false;
             """)
             check("species detail sheet opens", sheet)
-            await page.shot("species-detail")
+
+            # The sheet must show the big angled hero; the cards behind it must
+            # keep the small horizontal sprite.
+            # Aspect ratio can't tell these apart (a 'deep' body is near-square
+            # either way), so compare each rendered viewBox against the actual
+            # grid dimensions in HEROES vs SPRITES.
+            art_split = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const vb = (el) => {
+                    if (!el) return null;
+                    const v = el.getAttribute('viewBox').split(' ');
+                    return `${v[2]}x${v[3]}`;
+                };
+                const dims = (g) => `${g[0].length}x${g.length}`;
+
+                const openId = document.querySelector('.sheet a[href*="#/log?species="]')
+                    ?.getAttribute('href').split('=')[1];
+                const d = await import('./js/data/index.js');
+                const s = d.getSpecies(openId);
+                const heroGrid = p.HEROES[s.hero] || p.HEROES[s.sprite];
+                const spriteGrid = p.SPRITES[s.sprite];
+
+                return {
+                    id: openId,
+                    sheet: vb(document.querySelector('.species-card__art--hero svg')),
+                    card: vb(document.querySelector('.species-card:not(.sheet *) .species-card__art svg')),
+                    expectHero: heroGrid ? dims(heroGrid) : null,
+                    expectSprite: spriteGrid ? dims(spriteGrid) : null,
+                };
+            """)
+            check("detail sheet renders the angled hero grid",
+                  art_split["sheet"] == art_split["expectHero"],
+                  f"{art_split['id']}: got {art_split['sheet']}, hero is {art_split['expectHero']}")
+            check("hero grid differs from the horizontal sprite",
+                  art_split["expectHero"] != art_split["expectSprite"],
+                  f"both {art_split['expectHero']}")
+            check("cards keep the horizontal sprite",
+                  art_split["card"] == art_split["expectSprite"],
+                  f"got {art_split['card']}, sprite is {art_split['expectSprite']}")
+            await page.shot("species-detail", full=False)
 
             fb = await page.eval("""
                 const a = [...document.querySelectorAll('.sheet a')].find(x => x.href.includes('fishbase'));
