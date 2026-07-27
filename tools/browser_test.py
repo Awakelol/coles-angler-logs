@@ -148,6 +148,7 @@ async def main():
                 const bad = [];
                 for (const [name, p] of Object.entries(m.PALETTES)) {
                     if (p.length !== 9) bad.push(`${name}: ${p.length} slots`);
+                    if (new Set(p).size < 7) bad.push(`${name}: only ${new Set(p).size} distinct tones`);
                     p.forEach((c, i) => {
                         if (!/^#[0-9a-fA-F]{6}$/.test(c)) bad.push(`${name}[${i}]="${c}"`);
                     });

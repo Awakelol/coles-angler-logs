@@ -44,7 +44,7 @@ function weatherHtml(w, tz) {
           <div class="now-card__temp">${round(w.current.tempC, 0)}&deg;</div>
           <div class="now-card__desc">${esc(desc)} &middot; feels ${round(w.current.feelsC, 0)}&deg;</div>
         </div>
-        <div style="flex:none">${icon(iconKey, { size: 96, palette: 'silver' })}</div>
+        <div style="flex:none">${icon(iconKey, { size: 96, palette: 'weather' })}</div>
       </div>
 
       <div class="stat-grid">
@@ -73,7 +73,7 @@ function forecastHtml(w, tz) {
             <div class="fc-day">
               <div class="fc-day__d">${esc(fmtWeekday(d.date, tz))}</div>
               <div style="display:grid;place-items:center;margin:6px 0">
-                ${icon(iconKey, { size: 46, palette: 'silver' })}
+                ${icon(iconKey, { size: 46, palette: 'weather' })}
               </div>
               <div class="fc-day__c">${esc(desc)}</div>
               <div class="fc-day__t">${round(d.maxC, 0)}&deg;<small> / ${round(d.minC, 0)}&deg;</small></div>

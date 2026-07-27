@@ -40,6 +40,135 @@ PAL = {
 # with a gap of outline between them and the belly.
 BODIES = {
 
+# =========================================================================
+# DETAIL PASS — what stops these reading as blobs:
+#   1. a real EYE: 3x3 socket, white sclera, pupil, plus a highlight pixel
+#   2. a MOUTH line and jaw at the snout, not a blunt nose
+#   3. an OPERCULUM (gill cover) arc behind the head
+#   4. FIN RAYS drawn as alternating F/S columns instead of solid blocks
+#   5. a LATERAL LINE running the flank
+#   6. species MARKINGS (A) — bars, spots, stripes — that break up the flank
+#   7. staggered scale dither rather than uniform horizontal bands
+# =========================================================================
+
+# --- snapper: sloped forehead, big eye, deep body (Lutjanidae) ------------
+'snapper': (7, [
+'                OOOOOOOOOOO',
+'              OOFSFSFSFSFSO',
+'            OOFSFSFSFSFSFSO',
+'        OOOOOFSFSFSFSFSFSFO',
+'    OOOOOSSSSSSSSSSSSSSSSSO',
+'  OOSSSSSSSSSSSSSSSSSSSSSDO',
+' OSSSSSSDDDDDDDDDDDDDDDDDDO',
+' OSSDDDDDDDDDDDDDDDDDDDDDDO',
+'OOODDDDDBDBDBDBDBDBDBDBDBDO',
+'OOOOOODBDBDBDBDBDBDBDBDBDBO',
+'OOEEEODBBBBBBBHBBBBBBBBBBBO',
+'OEEPPEOBBBBBBHHBBBBBBBBBBBO',
+'OEEPPEOMMMMMMMMMMMMMMMMMMMO',
+'OOEEEOBMBMBMBMBMBMBMBMBMBBO',
+'.OOOOMBMBMBMBMBMBMBMBMBMBBO',
+' OOMMMMMMMMMMMMMMMMMMMMMMBO',
+'  OMLMLMLMLMLMLMLMLMLMLMLBO',
+'  OLMLMLMLMLMLMLMLMLMLMLMBO',
+'  OLLLLLLLLLLLLLLLLLLLLLLBO',
+'  OHLLLLLLLLLLLLLLLLLLLLLOO',
+'  OOHHLLLLLLLLLLLLLLLLLLOO',
+'    OOOFSFOOOOFSFSFSFOOOO',
+'      OFSFO   OFSFSFO',
+'      OOOO    OOOOOO',
+]),
+
+# --- barracuda: long snout, underslung jaw, two split dorsals ------------
+'barracuda': (7, [
+'              OOOOO                   ',
+'            OOFSFSFO                  ',
+'          OOOFSFSFOO      OOOOO       ',
+'      OOOOOSSSSSSSSSSSSOOFSFSFO       ',
+'  OOOOSSSSSSSSSSSSSSSSSSSSSSSSSO      ',
+' OSSSSSDDDDDDDDDDDDDDDDDDDDDDDDDO     ',
+'OSSDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDO    ',
+'OODDDBDBDBDBDBDBDBDBDBDBDBDBDBDBDO    ',
+'OEEEODBDBDBDBDBDBDBDBDBDBDBDBDBDBO    ',
+'OEPPEOMMMMMMMMMMMMMMMMMMMMMMMMMMMO    ',
+'OEEEOMBMBMBMBMBMBMBMBMBMBMBMBMBMBO    ',
+'OOOOOMMMMMMMMMMMMMMMMMMMMMMMMMMMBO    ',
+'.OOOLMLMLMLMLMLMLMLMLMLMLMLMLMLMBO    ',
+'  OLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOO    ',
+'   OOHLLLLLLLLLLLLLLLLLLLLLLLLLOO     ',
+'     OOOOFSFOOOOOOOOOOFSFSFOOOO       ',
+'        OFSFO        OFSFSFO          ',
+'        OOOO         OOOOOO           ',
+]),
+
+# --- trevally / jack: blunt steep head, keeled peduncle (Carangidae) -----
+'jack': (8, [
+'             OOOOOOOOO',
+'           OOFSFSFSFSFO',
+'         OOOFSFSFSFSFSFO',
+'      OOOOSSSSSSSSSSSSSO',
+'   OOOSSSSSSSSSSSSSSSSSSO',
+' OOSSSSSSSSSSSSSSSSSSSSSDO',
+'OOSSSSDDDDDDDDDDDDDDDDDDDO',
+'OSSDDDDDDDDDDDDDDDDDDDDDDO',
+'OODDDDBDBDBDBDBDBDBDBDBDBO',
+'OOEEEODBDBDBDBDBDBDBDBDBDO',
+'OEPPEOBBBBBHBBBBBBBBBBBBBO',
+'OEPPEOMMMMHMMMMMMMMMMMMMMO',
+'OOEEEOBMBMBMBMBMBMBMBMBMBO',
+'.OOOOMBMBMBMBMBMBMBMBMBMBO',
+' OOMMMMMMMMMMMMMMMMMMMMMBO',
+'  OMLMLMLMLMLMLMLMLMLMLMBO',
+'  OLMLMLMLMLMLMLMLMLMLMLBO',
+'  OLLLLLLLLLLLLLLLLLLLLLOO',
+'   OHHLLLLLLLLLLLLLLLLLOO',
+'    OOOFSFOOOOFSFSFSFOOO',
+'      OFSFO   OFSFSFO',
+'      OOOO    OOOOOO',
+]),
+
+# --- mullet: blunt rounded head, small mouth, split dorsals (Mugilidae) --
+'mullet': (7, [
+'            OOOOO                 ',
+'          OOFSFSFO                ',
+'        OOOFSFSFOO     OOOOO      ',
+'    OOOOOSSSSSSSSSSSOOFSFSFO      ',
+'  OOSSSSSSSSSSSSSSSSSSSSSSSSO     ',
+' OSSSSDDDDDDDDDDDDDDDDDDDDDDDO    ',
+'OOSDDDDDDDDDDDDDDDDDDDDDDDDDDO    ',
+'OODDDBDBDBDBDBDBDBDBDBDBDBDBDO    ',
+'OEEEODBDBDBDBDBDBDBDBDBDBDBDBO    ',
+'OEPPEOBBBBHBBBBBBBBBBBBBBBBBBO    ',
+'OEEEEOMMMMMMMMMMMMMMMMMMMMMMMO    ',
+'OOOOOMBMBMBMBMBMBMBMBMBMBMBMBO    ',
+'.OOMMMMMMMMMMMMMMMMMMMMMMMMMBO    ',
+'  OMLMLMLMLMLMLMLMLMLMLMLMLMBO    ',
+'  OLLLLLLLLLLLLLLLLLLLLLLLLLOO    ',
+'   OOHHLLLLLLLLLLLLLLLLLLLLOO     ',
+'     OOOFSFOOOOOOOFSFSFOOOO       ',
+'       OFSFO     OFSFSFO          ',
+'       OOOO      OOOOOO           ',
+]),
+
+# --- eel catfish: barbels, low slung, continuous fin (Plotosidae) --------
+'catfish': (4, [
+'  AA                                ',
+'   AA     OOOOOOOOOOOOOOOOOOO       ',
+'    AA  OOFSFSFSFSFSFSFSFSFSFOO     ',
+'  OOOOOOOSSSSSSSSSSSSSSSSSSSSSSO    ',
+' OSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSO   ',
+'OOSSDDDDDDDDDDDDDDDDDDDDDDDDDDDDO   ',
+'OEEEODDDBDBDBDBDBDBDBDBDBDBDBDBDO   ',
+'OEPPEODBDBDBDBDBDBDBDBDBDBDBDBDBO   ',
+'OEEEEOMMMMMMMMMMMMMMMMMMMMMMMMMMO   ',
+'OOOOOMBMBMBMBMBMBMBMBMBMBMBMBMBBO   ',
+' AAOMMMMMMMMMMMMMMMMMMMMMMMMMMMBO   ',
+'  AAOLMLMLMLMLMLMLMLMLMLMLMLMLMBO   ',
+'   AAOLLLLLLLLLLLLLLLLLLLLLLLLLOO   ',
+'    OOFSFSFSFSFSFSFSFSFSFSFSFSFOO   ',
+'     OOOOOOOOOOOOOOOOOOOOOOOOOO     ',
+]),
+
 # --- deep-bodied: ponyfish, mojarras -------------------------------------
 'deep': (5, [
 '          OOOOOOOO',
@@ -258,6 +387,243 @@ BODIES = {
 }
 
 
+# =========================================================================
+# ICONS — non-species art. Rendered with the dedicated 'weather' palette,
+# which carries five cloud tones (S->H) plus two golds (F edge, A core) so
+# clouds have real depth and the sun has a rim rather than being flat.
+# =========================================================================
+ICONS = {
+
+# Round disc with a darker rim (F), a bright core offset up-left (H), and
+# eight separated rays. The rays must not touch the disc or it reads as a gear.
+'sunny': [
+'                    ',
+'         FF         ',
+'   F     FF     F   ',
+'    F          F    ',
+'       FFFFFF       ',
+'     FFAAAAAAFF     ',
+'    FAAAHHHAAAAF    ',
+'   FAAAHHHHHAAAAF   ',
+'   FAAHHHHHAAAAAF   ',
+'FF FAAAHHHAAAAAAF FF',
+'   FAAAAAAAAAAAAF   ',
+'   FAAAAAAAAAAAAF   ',
+'    FAAAAAAAAAAF    ',
+'     FFAAAAAAFF     ',
+'       FFFFFF       ',
+'    F          F    ',
+'   F     FF     F   ',
+'         FF         ',
+],
+
+# Crescent: convex left edge, concave right. Rim in F, body in A.
+'moon': [
+'                    ',
+'         FFFFF      ',
+'  F    FFAAAAAF     ',
+'      FFAAAAAF      ',
+'     FFAAAAF        ',
+'     FAAAAF         ',
+' F   FAAAAF         ',
+'     FAAAAF         ',
+'     FFAAAAF        ',
+'      FFAAAAAF      ',
+'       FFAAAAAF     ',
+'         FFFFF      ',
+'                    ',
+],
+
+'cloudy': [
+'                    ',
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+' ODBBMMMMMMMMMBBDO  ',
+' OSDDBBBBBBBBBDDSO  ',
+'  OOSSSSSSSSSSSOO   ',
+'                    ',
+],
+
+'partly': [
+'              FAA   ',
+'           FFAAAAAF ',
+'          FAAAHHAAF ',
+'    OOOO  FAAAHHAAF ',
+'  OOHHHHOOFAAAAAAAF ',
+' OLHHHHHHHOFAAAAAF  ',
+' OMLLHHHHHHOFFFFF   ',
+' OBMMLLLLLLLO       ',
+' ODBBMMMMMMMBO      ',
+' OSDDBBBBBBBDSO     ',
+'  OOSSSSSSSSSOO     ',
+'                    ',
+],
+
+'drizzle': [
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+' ODBBMMMMMMMMMBBDO  ',
+'  OOSSSSSSSSSSSOO   ',
+'                    ',
+'    D   D   D       ',
+'                    ',
+'   D   D   D        ',
+'                    ',
+],
+
+'rain': [
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+' ODBBMMMMMMMMMBBDO  ',
+'  OOSSSSSSSSSSSOO   ',
+'                    ',
+'   D   D   D   D    ',
+'   D   D   D   D    ',
+'                    ',
+'  D   D   D   D     ',
+'  D   D   D   D     ',
+],
+
+'showers': [
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+' ODBBMMMMMMMMMBBDO  ',
+'  OOSSSSSSSSSSSOO   ',
+'                    ',
+'  D  D  D  D  D     ',
+' D  D  D  D  D      ',
+'  D  D  D  D  D     ',
+' D  D  D  D  D      ',
+],
+
+'storm': [
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+' ODBBMMMMMMMMMBBDO  ',
+'  OOSSSSSSSSSSSOO   ',
+'          FAAAF     ',
+'         FAAAF      ',
+'        FAAAF       ',
+'      FAAAAAAAF     ',
+'         FAAF       ',
+'        FAAF        ',
+'        FAF         ',
+],
+
+'fog': [
+'                    ',
+'       OOOOO        ',
+'     OOHHHHHOO      ',
+'    OHHHHHHHHHO     ',
+'  OOLHHHHHHHHHLOO   ',
+' OLLLHHHHHHHHHLLLO  ',
+' OMLLLLHHHHHLLLLMO  ',
+' OBMMLLLLLLLLLMMBO  ',
+'  OOSSSSSSSSSSSOO   ',
+'                    ',
+'  MMMMMMMMMMMMMM    ',
+'                    ',
+' MMMMMMMMMMMMMM     ',
+'                    ',
+'  MMMMMMMMMMMM      ',
+],
+
+'wave': [
+'                        ',
+'     HH          HH     ',
+'    HLLH        HLLH    ',
+'   HLLLLH      HLLLLH   ',
+'  HLLHHLLH    HLLHHLLH  ',
+' HLLHHHHLLH  HLLHHHHLLH ',
+'HMLLHHHHLLMHHMLLHHHHLLMH',
+'MMLLMMMMMMLLMMLLMMMMMMLM',
+'BBMMMMMMMMBBBBMMMMMMMMBB',
+'DBBBBBBBBBBBBBBBBBBBBBBD',
+'SDDDDDDDDDDDDDDDDDDDDDDS',
+'SSSSSSSSSSSSSSSSSSSSSSSS',
+],
+
+'hook': [
+'       OOO        ',
+'       OAO        ',
+'       OAO        ',
+'       OAO        ',
+'     OOOAOOO      ',
+'    OAAA AAAO     ',
+'    OAO   OAO     ',
+'    OAO   OAO     ',
+'     OAOOOAO      ',
+'      OAAAO       ',
+'       OOO        ',
+],
+
+'trophy': [
+'   BBBBBBBBBB     ',
+'  BOOOOOOOOOOB    ',
+' BMOLLLLLLLLOMB   ',
+' BMOLMMMMMMLOMB   ',
+' BMOMMMMMMMMOMB   ',
+'  BOMMMMMMMMOB    ',
+'   BOMMMMMMOB     ',
+'    BOMMMMOB      ',
+'     BBMMBB       ',
+'       BB         ',
+'     BBBBBB       ',
+'   BBBBBBBBBB     ',
+],
+
+'boat': [
+'       A          ',
+'       AA         ',
+'       AAAA       ',
+'       AAAAAA     ',
+'       AA         ',
+'  OOOOOOOOOOOOO   ',
+'  OAAAAAAAAAAAO   ',
+'   OOOOOOOOOOO    ',
+' MM MMM MMM MMM MM',
+'BLLBLLLBLLLBLLLBLL',
+],
+
+'book': [
+'  OOOOOOOOOOOOOO  ',
+'  OBBBBBBOBBBBBO  ',
+'  OBLLLLBOBLLLLO  ',
+'  OBLLLLBOBLLLLO  ',
+'  OBBBBBBOBBBBBO  ',
+'  OBLLLLBOBLLLLO  ',
+'  OBLLLLBOBLLLLO  ',
+'  OBBBBBBOBBBBBO  ',
+'  OOOOOOOOOOOOOO  ',
+],
+}
+
+
 def build(fork, rows):
     grid = [list(r.replace(' ', '.')) for r in rows]
     w = max((len(r) for r in grid), default=0)
@@ -316,38 +682,62 @@ def build(fork, rows):
 
 
 sprites = {n: build(f, rows) for n, (f, rows) in BODIES.items()}
-for n, g in sprites.items():
-    assert len({len(r) for r in g}) == 1, f"{n} has ragged rows"
-    stray = {c for r in g for c in r} - set(PAL) - {'.'}
-    assert not stray, f"{n} has stray characters {stray}"
+icons = {n: build(None, rows) for n, rows in ICONS.items()}
+
+for label, coll in (('sprite', sprites), ('icon', icons)):
+    for n, g in coll.items():
+        assert len({len(r) for r in g}) == 1, f"{label} {n} has ragged rows"
+        stray = {c for r in g for c in r} - set(PAL) - {'.'}
+        assert not stray, f"{label} {n} has stray characters {stray}"
 
 # ---------------------------------------------------------------- preview
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCALE, PAD, cols = 7, 14, 4
-names = list(sprites)
-rows_n = (len(names) + cols - 1) // cols
-maxw = max(len(g[0]) for g in sprites.values())
-maxh = max(len(g) for g in sprites.values())
-cw, ch = maxw * SCALE + PAD * 2, maxh * SCALE + PAD * 2 + 16
-img = Image.new('RGB', (cw * cols, ch * rows_n), '#fff8e7')
-d = ImageDraw.Draw(img)
-for i, name in enumerate(names):
-    ox, oy = (i % cols) * cw + PAD, (i // cols) * ch + PAD
-    for y, row in enumerate(sprites[name]):
-        for x, c in enumerate(row):
-            if c in PAL:
-                d.rectangle([ox+x*SCALE, oy+y*SCALE, ox+x*SCALE+SCALE-1, oy+y*SCALE+SCALE-1], fill=PAL[c])
-    d.text((ox, oy + maxh*SCALE + 2), name, fill='#333')
-preview = os.path.join(HERE, 'sprite-preview.png')
-img.save(preview)
+
+# Icons use the weather palette so clouds show depth and the sun has a rim.
+WEATHER_PAL = {
+    'O': '#1b2430', 'S': '#5b6b80', 'D': '#8496ab', 'B': '#aebccd',
+    'M': '#d5e0ea', 'L': '#f2f7fb', 'H': '#ffffff',
+    'F': '#d99b23', 'A': '#ffd23f', 'E': '#ffffff', 'P': '#10141c',
+}
+
+
+def sheet(coll, palette, path, cols=4, scale=7):
+    names = list(coll)
+    rows_n = (len(names) + cols - 1) // cols
+    maxw = max(len(g[0]) for g in coll.values())
+    maxh = max(len(g) for g in coll.values())
+    pad = 14
+    cw, ch = maxw * scale + pad * 2, maxh * scale + pad * 2 + 16
+    img = Image.new('RGB', (cw * cols, ch * rows_n), '#fff8e7')
+    d = ImageDraw.Draw(img)
+    for i, name in enumerate(names):
+        ox, oy = (i % cols) * cw + pad, (i // cols) * ch + pad
+        for y, row in enumerate(coll[name]):
+            for x, c in enumerate(row):
+                if c in palette:
+                    d.rectangle([ox+x*scale, oy+y*scale,
+                                 ox+x*scale+scale-1, oy+y*scale+scale-1], fill=palette[c])
+        d.text((ox, oy + maxh*scale + 2), name, fill='#333')
+    img.save(path)
+    return maxw, maxh
+
+
+sw, sh = sheet(sprites, PAL, os.path.join(HERE, 'sprite-preview.png'))
+iw, ih = sheet(icons, WEATHER_PAL, os.path.join(HERE, 'icon-preview.png'), cols=4, scale=9)
 
 # ---------------------------------------------------------------- emit JS
-out = []
-for name, g in sprites.items():
-    body = ',\n'.join("    '%s'" % r for r in g)
-    out.append("  %s: [\n%s,\n  ]," % (name, body))
-with open(os.path.join(HERE, 'sprites.generated.js'), 'w', encoding='utf-8') as f:
-    f.write('\n'.join(out))
+def emit(coll):
+    out = []
+    for name, g in coll.items():
+        body = ',\n'.join("    '%s'" % r for r in g)
+        out.append("  %s: [\n%s,\n  ]," % (name, body))
+    return '\n'.join(out)
 
-print(f"{len(sprites)} sprites, max {maxw}x{maxh}")
-print("preview ->", preview)
+
+with open(os.path.join(HERE, 'sprites.generated.js'), 'w', encoding='utf-8') as f:
+    f.write(emit(sprites))
+with open(os.path.join(HERE, 'icons.generated.js'), 'w', encoding='utf-8') as f:
+    f.write(emit(icons))
+
+print(f"{len(sprites)} sprites (max {sw}x{sh}), {len(icons)} icons (max {iw}x{ih})")
+print("previews -> tools/sprite-preview.png, tools/icon-preview.png")
