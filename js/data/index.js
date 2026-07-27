@@ -100,12 +100,21 @@ export function fishbaseUrl(species) {
   return `https://www.fishbase.se/summary/${genus}-${rest.join('-')}.html`;
 }
 
-/** All local names flattened to a display list. */
+/**
+ * Local names flattened for display. The same word is often used in both
+ * Waray and Cebuano ("sap-sap", "maya-maya"), so identical names are merged
+ * and their languages joined rather than listed twice.
+ */
 export function localNames(species) {
-  const out = [];
+  const byName = new Map();
   for (const [lang, names] of Object.entries(species.local || {})) {
     const label = { war: 'Waray', ceb: 'Cebuano', tl: 'Tagalog' }[lang] || lang;
-    for (const n of names) out.push({ name: n, label });
+    for (const n of names) {
+      const key = n.trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, { name: n.trim(), langs: [] });
+      const entry = byName.get(key);
+      if (!entry.langs.includes(label)) entry.langs.push(label);
+    }
   }
-  return out;
+  return [...byName.values()].map((e) => ({ name: e.name, label: e.langs.join(' / ') }));
 }

@@ -38,6 +38,8 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screensho
 SHOTS = [
     ("1-home",       "#/",           ".kpi__v, .empty",              None),
     ("2-species",    "#/species",    ".species-card",                None),
+    ("2b-species-cards", "#/species", ".species-card",
+     "window.scrollTo(0, 1150); await new Promise(r => setTimeout(r, 1400))"),
     ("3-species-detail", "#/species", ".species-card",
      "document.querySelectorAll('.species-card')[4].click()"),
     ("4-map",        "#/map",        "#fishMap .leaflet-tile-pane",  None),

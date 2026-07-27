@@ -379,6 +379,20 @@ async def main():
             found = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("local-name search works", 0 < found < total, f"{found} of {total}")
 
+            dupes = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const bad = [];
+                for (const s of d.allSpecies('leyte-gulf')) {
+                    const names = d.localNames(s).map(l => l.name.toLowerCase());
+                    if (new Set(names).size !== names.length) bad.push(s.id);
+                }
+                const merged = d.localNames(d.getSpecies('photopectoralis-bindus'));
+                return { bad, sapsap: merged.find(l => l.name === 'sap-sap')?.label };
+            """)
+            check("local names are deduped", not dupes["bad"], ", ".join(dupes["bad"][:5]))
+            check("shared names merge their languages",
+                  dupes["sapsap"] == "Waray / Cebuano", str(dupes["sapsap"]))
+
             await page.eval("""
                 const i = document.getElementById('speciesSearch');
                 i.value = '';
@@ -427,9 +441,10 @@ async def main():
             check("hero grid differs from the horizontal sprite",
                   art_split["expectHero"] != art_split["expectSprite"],
                   f"both {art_split['expectHero']}")
-            check("cards keep the horizontal sprite",
-                  art_split["card"] == art_split["expectSprite"],
-                  f"got {art_split['card']}, sprite is {art_split['expectSprite']}")
+            # Cards now use the angled art too; only small UI keeps horizontal.
+            check("species cards use the angled hero",
+                  art_split["card"] == art_split["expectHero"],
+                  f"got {art_split['card']}, hero is {art_split['expectHero']}")
             await page.shot("species-detail", full=False)
 
             fb = await page.eval("""
@@ -437,6 +452,29 @@ async def main():
                 return a ? a.href : '';
             """)
             check("fishbase link built", "fishbase.se/summary/" in fb and "-" in fb, fb)
+
+            # Real photos come from Wikipedia (free licences); FishBase photos
+            # are copyrighted and must stay as outbound links only.
+            photo = await page.eval("""
+                const p = await import('./js/api/photos.js');
+                const hit = await p.fetchPhoto('Lutjanus argentimaculatus');
+                const miss = await p.fetchPhoto('Notarealfish madeupii');
+                return { hit, miss };
+            """)
+            check("species photo fetched from Wikimedia",
+                  bool(photo["hit"] and photo["hit"]["src"].startswith("https://")),
+                  str(photo["hit"]))
+            check("unknown species returns no photo", photo["miss"] is None, str(photo["miss"]))
+
+            shown = await page.eval("""
+                const fig = document.querySelector('.sheet figure[data-sheet-photo]');
+                return { present: !!fig, hidden: fig ? fig.hidden : null,
+                         src: fig ? (fig.querySelector('img').getAttribute('src') || '') : '',
+                         credited: fig ? /wikipedia\\.org/.test(fig.innerHTML) : false };
+            """)
+            check("detail sheet shows the photo", shown["present"] and not shown["hidden"],
+                  str(shown))
+            check("photo is attributed with a link back", shown["credited"], str(shown))
 
             # -------------------------------------------------- tides
             print("\nTides")
@@ -512,6 +550,18 @@ async def main():
 
             listed = await page.eval("return document.querySelectorAll('[data-zone]').length;")
             check("zone list rendered", listed == 10, f"got {listed}")
+
+            # Map pins must stay horizontal — angled art aliases badly at 34px.
+            pin = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const svg = document.querySelector('.zone-pin svg');
+                if (!svg) return null;
+                const v = svg.getAttribute('viewBox').split(' ');
+                const g = p.SPRITES.perch;
+                return { pin: `${v[2]}x${v[3]}`, sprite: `${g[0].length}x${g.length}` };
+            """)
+            check("map pins use the horizontal sprite",
+                  pin and pin["pin"] == pin["sprite"], str(pin))
 
             await page.eval("return document.querySelector('[data-zone]').click(), 1;")
             await asyncio.sleep(0.5)
