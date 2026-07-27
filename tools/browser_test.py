@@ -532,6 +532,58 @@ async def main():
                       f"extremes={state['n']} now={state['dir']}")
                 await page.shot("conditions-tides")
 
+            # -------------------------------------------------- geolocation
+            print("\nLocation")
+            geo = await page.eval("""
+                const g = await import('./js/api/geo.js');
+                const d = await import('./js/data/index.js');
+                const region = d.getRegion('leyte-gulf');
+
+                // Nearby GPS readings must snap to the same grid cell, or every
+                // few metres of drift burns a tide-API request.
+                const a = g.roundCoords({ lat: 11.2381234, lon: 125.0043210 });
+                const b = g.roundCoords({ lat: 11.2401111, lon: 125.0061111 });
+                const far = g.roundCoords({ lat: 11.9000000, lon: 125.9000000 });
+
+                const near = g.nearestPlace(region, { lat: 11.238, lon: 125.004 });
+                const dist = g.distanceKm({lat:11.238,lon:125.004}, {lat:11.03,lon:125.72});
+                return {
+                    same: JSON.stringify(a) === JSON.stringify(b),
+                    differs: JSON.stringify(a) !== JSON.stringify(far),
+                    snapped: a,
+                    nearest: near && near.name,
+                    distOk: dist > 70 && dist < 90,
+                    supported: g.geolocationSupported(),
+                };
+            """)
+            check("nearby fixes share one tide-cache cell", geo["same"], str(geo["snapped"]))
+            check("distant fixes do not collide", geo["differs"], str(geo["snapped"]))
+            check("nearest named place resolves", geo["nearest"] == "Cancabato Bay", str(geo["nearest"]))
+            check("distance maths is sane", geo["distOk"])
+
+            # Denying permission must fall back to the region, not break the page.
+            denied = await page.eval("""
+                const g = await import('./js/api/geo.js');
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok, fail) => fail({ code: 1 });
+                let code = null, msg = '';
+                try { await g.getLocation(); } catch (e) { code = e.code; msg = e.message; }
+                navigator.geolocation.getCurrentPosition = real;
+                return { code, msg };
+            """)
+            check("refused permission reports 'denied'", denied["code"] == "denied", str(denied))
+
+            await page.goto(f"{BASE}/index.html#/conditions")
+            await page.wait_for(
+                "document.querySelector('.now-card__temp, .notice--error')",
+                timeout=30, label="conditions")
+            toggled = await page.eval("""
+                const t = document.getElementById('sourceToggle');
+                return t ? [...t.querySelectorAll('[data-source]')].map(b => b.dataset.source) : null;
+            """)
+            check("conditions offers a location toggle",
+                  toggled == ["region", "device"], str(toggled))
+
             # -------------------------------------------------- map
             print("\nFishing map")
             await page.goto(f"{BASE}/index.html#/map")

@@ -2,17 +2,33 @@
 
 import { fetchWeather, describeCode, compass, windAdvice, isNight } from '../api/weather.js';
 import { fetchTides, currentTideState, nextExtremes, tidesConfigured } from '../api/tides.js';
+import { getLocation, roundCoords, distanceKm, nearestPlace, geolocationSupported } from '../api/geo.js';
+import { prefs } from '../store.js';
 import { icon } from '../pixel.js';
-import { esc, fmtTime, fmtWeekday, round, errorBlock, loadingBlock } from '../ui.js';
+import { esc, fmtTime, fmtWeekday, round, errorBlock, loadingBlock, toast } from '../ui.js';
 
 export function render(ctx) {
-  const { coords } = ctx.region;
+  const usingLocation = prefs.get('useMyLocation', false);
   return `
     <section class="band band--sky">
       <div class="wrap">
-        <p class="eyebrow">${esc(ctx.region.name)} &middot; ${round(coords.lat, 2)}&deg;, ${round(coords.lon, 2)}&deg;</p>
+        <p class="eyebrow" id="condSource">${esc(ctx.region.name)}</p>
         <h1 class="display">Conditions</h1>
         <p class="subtitle">Live weather and tide movement for where you're fishing.</p>
+
+        ${
+          geolocationSupported()
+            ? `<div class="chips" id="sourceToggle" style="justify-content:center;margin-bottom:20px">
+                 <button class="chip" data-source="region" aria-pressed="${!usingLocation}">
+                   ${esc(ctx.region.name)}
+                 </button>
+                 <button class="chip" data-source="device" aria-pressed="${usingLocation}">
+                   Use my location
+                 </button>
+               </div>`
+            : ''
+        }
+
         <div id="weatherPane">${loadingBlock('Fetching weather…')}</div>
       </div>
     </section>
@@ -174,14 +190,76 @@ function tideHtml(t, tz) {
     </p>`;
 }
 
+/**
+ * Which coordinates to use, and a human label for them.
+ * Falls back to the region whenever the device can't or won't report a fix —
+ * the screen must never end up with nothing to show.
+ */
+async function resolveCoords(ctx) {
+  if (!prefs.get('useMyLocation', false)) {
+    return { coords: ctx.region.coords, label: ctx.region.name, source: 'region' };
+  }
+  try {
+    const fix = await getLocation();
+    // Snapped to a ~5 km grid so the tide API's monthly quota isn't spent on
+    // GPS jitter. See js/api/geo.js.
+    const coords = roundCoords(fix);
+    const near = nearestPlace(ctx.region, fix);
+    const away = Math.round(distanceKm(fix, ctx.region.coords));
+    const label = near && near.km < 25
+      ? `Near ${near.name} · ±${fix.accuracyM} m`
+      : `Your location · ${away} km from ${ctx.region.name}`;
+    return { coords, label, source: 'device' };
+  } catch (err) {
+    prefs.set('useMyLocation', false);
+    return {
+      coords: ctx.region.coords,
+      label: ctx.region.name,
+      source: 'region',
+      warning: err.message,
+    };
+  }
+}
+
 export async function mount(root, ctx) {
   const tz = ctx.region.timezone;
   const weatherPane = root.querySelector('#weatherPane');
   const forecastPane = root.querySelector('#forecastPane');
   const tidePane = root.querySelector('#tidePane');
+  const sourceLabel = root.querySelector('#condSource');
+  const toggle = root.querySelector('#sourceToggle');
+
+  if (toggle) {
+    toggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-source]');
+      if (!btn) return;
+      const wanted = btn.dataset.source === 'device';
+      if (wanted === prefs.get('useMyLocation', false)) return;
+      prefs.set('useMyLocation', wanted);
+      for (const b of toggle.querySelectorAll('[data-source]')) {
+        b.setAttribute('aria-pressed', String(b === btn));
+      }
+      weatherPane.innerHTML = loadingBlock(wanted ? 'Getting your location…' : 'Fetching weather…');
+      tidePane.innerHTML = loadingBlock('Fetching tides…');
+      mount(root, ctx);
+    });
+  }
+
+  const { coords, label, warning } = await resolveCoords(ctx);
+  if (sourceLabel) {
+    sourceLabel.textContent = `${label} · ${round(coords.lat, 2)}°, ${round(coords.lon, 2)}°`;
+  }
+  if (warning) {
+    toast(warning);
+    if (toggle) {
+      for (const b of toggle.querySelectorAll('[data-source]')) {
+        b.setAttribute('aria-pressed', String(b.dataset.source === 'region'));
+      }
+    }
+  }
 
   // Weather and tides are independent — a failure in one must not blank the other.
-  fetchWeather(ctx.region.coords, tz)
+  fetchWeather(coords, tz)
     .then((w) => {
       weatherPane.innerHTML = weatherHtml(w, tz);
       forecastPane.innerHTML = forecastHtml(w, tz);
@@ -199,7 +277,7 @@ export async function mount(root, ctx) {
   }
 
   try {
-    const t = await fetchTides(ctx.region.coords);
+    const t = await fetchTides(coords);
     tidePane.innerHTML = t.unconfigured ? tideSetupHtml() : tideHtml(t, tz);
   } catch (err) {
     console.error('[tides]', err);
