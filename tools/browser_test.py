@@ -621,6 +621,74 @@ async def main():
             listed = await page.eval("return document.querySelectorAll('[data-zone]').length;")
             check("zone list rendered", listed == 10, f"got {listed}")
 
+            # --- centre-on-me ---
+            has_btn = await page.eval("return !!document.getElementById('locateBtn');")
+            check("map has a locate button", has_btn)
+
+            # Pretend to be in Cancabato Bay.
+            located = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok) => ok({
+                    coords: { latitude: 11.238, longitude: 125.004, accuracy: 30 }
+                });
+                await el._locate();
+                navigator.geolocation.getCurrentPosition = real;
+                const c = el._leafletMap.getCenter();
+                return {
+                    lat: +c.lat.toFixed(2), lon: +c.lng.toFixed(2),
+                    zoom: el._leafletMap.getZoom(),
+                    pin: document.querySelectorAll('.you-pin').length,
+                    hint: document.getElementById('mapHint').textContent,
+                };
+            """)
+            check("map centres on the reported position",
+                  abs(located["lat"] - 11.238) < 0.05 and abs(located["lon"] - 125.004) < 0.05,
+                  str(located))
+            check("map zooms in when locating", located["zoom"] >= 13, str(located["zoom"]))
+            check("your position is marked", located["pin"] == 1, str(located["pin"]))
+            check("hint names the nearest zone", "Cancabato" in located["hint"], located["hint"])
+
+            # Far outside the region the map must say so, not look broken.
+            far = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok) => ok({
+                    coords: { latitude: 14.60, longitude: 120.98, accuracy: 40 }
+                });
+                await el._locate();
+                navigator.geolocation.getCurrentPosition = real;
+                return document.getElementById('mapHint').textContent;
+            """)
+            check("far-away position is explained", "no zones nearby" in far, far)
+
+            # Refusing must fall back to the whole of Leyte, not leave the map
+            # wherever it happened to be sitting.
+            refused = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const d = await import('./js/data/index.js');
+                const b = d.getRegion('leyte-gulf').map.bounds;
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok, fail) => fail({ code: 1 });
+                await el._locate();
+                navigator.geolocation.getCurrentPosition = real;
+                const m = el._leafletMap;
+                const v = m.getBounds();
+                return {
+                    usable: !!m && document.querySelectorAll('.zone-pin').length > 0,
+                    // The view must span the island, not a 5km box.
+                    coversWest: v.getWest() <= b.west + 0.4,
+                    coversEast: v.getEast() >= b.east - 0.4,
+                    coversNorth: v.getNorth() >= b.north - 0.4,
+                    coversSouth: v.getSouth() <= b.south + 0.4,
+                    zoom: m.getZoom(),
+                };
+            """)
+            check("refused location leaves the map usable", refused["usable"])
+            check("refused location shows the whole of Leyte",
+                  all(refused[k] for k in ("coversWest", "coversEast", "coversNorth", "coversSouth")),
+                  str(refused))
+
             # Map pins must stay horizontal — angled art aliases badly at 34px.
             pin = await page.eval("""
                 const p = await import('./js/pixel.js');
