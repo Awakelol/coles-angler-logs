@@ -16,7 +16,9 @@ export const THEMES = ['light', 'dark', 'system'];
 
 // Matches the --cream / page background of each theme, so the phone's status
 // bar and PWA chrome tint to match instead of staying stuck on yellow.
-const THEME_COLOR = { light: '#FFD23F', dark: '#0f131a' };
+// Must match --cream / the page canvas for each theme, or the phone's status
+// bar sits a shade off the top of the page. Dark is GitHub's canvas colour.
+const THEME_COLOR = { light: '#FFD23F', dark: '#0d1117' };
 
 export function getTheme() {
   const saved = localStorage.getItem(THEME_KEY);
