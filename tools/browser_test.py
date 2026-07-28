@@ -276,6 +276,51 @@ async def main():
             check("unknown code falls back safely",
                   bool(wmo["unknown"]) and wmo["unknown"] != "sun", wmo["unknown"])
 
+            # -------------------------------------------------- transitions
+            print("\nPage transitions")
+            trans = await page.eval("""
+                const supported = typeof document.startViewTransition === 'function';
+
+                // Navigating must still land on the right page, transition or not.
+                location.hash = '#/tips';
+                await new Promise(r => setTimeout(r, 700));
+                const onTips = !!document.querySelector('.tip-card');
+                location.hash = '#/species';
+                await new Promise(r => setTimeout(r, 900));
+                const onSpecies = !!document.querySelector('.species-card');
+
+                // Rapid navigation must not strand a half-finished transition.
+                location.hash = '#/tips';
+                location.hash = '#/species';
+                location.hash = '#/tips';
+                await new Promise(r => setTimeout(r, 1200));
+                const settled = !!document.querySelector('.tip-card');
+
+                return { supported, onTips, onSpecies, settled,
+                         err: document.body.getAttribute('data-js-error') };
+            """)
+            check("navigation still lands correctly",
+                  trans["onTips"] and trans["onSpecies"], str(trans))
+            check("rapid navigation settles on the last route", trans["settled"], str(trans))
+            check("transitions raise no errors", not trans["err"], str(trans["err"]))
+
+            css = open(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "css", "style.css"),
+                encoding="utf-8").read()
+            check("chrome is excluded from the page snapshot",
+                  "view-transition-name: topbar" in css and "view-transition-name: tabbar" in css,
+                  "top/tab bars would cross-fade against themselves")
+            check("transitions respect reduced motion",
+                  "prefers-reduced-motion: no-preference" in css and
+                  "::view-transition-new(root)" in css)
+
+            app = open(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "js", "app.js"),
+                encoding="utf-8").read()
+            check("only the markup swap is wrapped, not mount()",
+                  "updateCallbackDone" in app,
+                  "awaiting the full transition would hold the old page during network waits")
+
             # -------------------------------------------------- theme
             print("\nTheme")
             theme = await page.eval("""

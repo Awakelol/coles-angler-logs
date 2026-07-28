@@ -762,6 +762,36 @@ img.is-video ~ .play-badge { content: ''; }
   max-width: calc(100% - 24px);
 }
 
+/* --- page transitions ----------------------------------------------------- */
+/*
+   Cross-fade between routes via the View Transitions API. Browsers without it
+   swap instantly, which is the current behaviour — nothing to fall back to.
+
+   The top bar and tab bar get their own transition names so they are treated
+   as persistent elements rather than part of the page snapshot. Without this
+   they cross-fade against themselves on every navigation, which reads as a
+   flicker on the one part of the UI that never actually changes.
+*/
+.topbar { view-transition-name: topbar; }
+.tabbar { view-transition-name: tabbar; }
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: page-out 140ms ease both;
+  }
+  ::view-transition-new(root) {
+    animation: page-in 190ms ease both;
+  }
+}
+
+@keyframes page-out {
+  to { opacity: 0; }
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* --- tab bar ------------------------------------------------------------- */
 
 .tabbar {
