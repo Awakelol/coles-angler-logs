@@ -607,51 +607,59 @@ ICONS = {
 '  MMMMMMMMMMMM      ',
 ],
 
-# Curling breaker: face rising left to right, crest turning over into a
-# hollow barrel, foam down the face. Modelled on the reference art rather
-# than the twin humps this used to be.
-# Curling breaker: face rises left to right, crest turns over into a hollow
-# barrel, foam cap on top. Kept to four tones so it still reads at 40px.
+# Curling breaker. The barrel is the whole point: the crest turns over to the
+# right and the pocket beneath it is left EMPTY, so the hollow reads as the
+# tube. Foam (L) rides the crest and the face; the body darkens downward
+# through B and D into S at the waterline.
 'wave': [
-'                        ',
-'              LLLLLL    ',
-'          LLLLMMMMMMLL  ',
-'        LLMMMMMBBBBBMML ',
-'       LMMMBBBBB    BMML',
-'      LMMBBBBDDD     BML',
-'     LMMBBBDDDDD     BML',
-'    LMMBBBDDDSSS    BBML',
-'   LMMBBBDDDSSSS   BBML ',
-'  LMMBBBDDDSSSSS BBBML  ',
-' LMMBBBDDDSSSSSBBBBML   ',
-'LMMBBBDDDSSSSSBBBBML    ',
-'LMMBBDDDSSSSSBBBBML     ',
-'BBDDDSSSSSSSSSSSSSSSSSSB',
-'DDSSSSSSSSSSSSSSSSSSSSDD',
+'',
+'             LLLLLLLL',
+'          LLLLLLLLLLLLLLL',
+'        LLLLLLLLLLLLLLLLLLLL',
+'       LLLLLLLLL       MLLLLLL',
+'      LMMMMMMM           MLLLL',
+'     LMMBBBBB             MLLL',
+'    LMBBBBBB              MLLL',
+'    LMBBBBB              MLLL',
+'   LMBBBBBB             MLLL',
+'   LMBBBBBB            MLLL',
+'  LMBBBBBBD          MLLLL',
+'  LMBBBBBDD       MMLLLL',
+' LMBBBBBDDDD  MMMLLLL',
+' LMBBBBDDDDDMMLLLLL',
+'LMBBBBDDDDDDDLLLL',
+'LMBBBDDDDDDDDDD',
+'MBBBDDDDDDDDDDDDDDDDDDDDDDDDDD',
+'BDDDDDDDDSSSSSSSSSSSSSSSSSSSSS',
+'DDSSSSSSSSSSSSSSSSSSSSSSSSSSSS',
 ],
 
-# Traditional J-hook: eye at the top, straight shank, U-bend, point turning
-# back up. Strokes are 2px — a 1px line reads as spindly noise at 40px, and
-# an added barb turned the bend into an unreadable tangle.
+# Traditional J-hook: round eye, straight shank, U-bend, and a barbed point
+# rising on the left. Two pixels thick — a one-pixel version reads as bent
+# wire at icon size. The point tapers to a single pixel so it looks sharp.
 'hook': [
-'      AAAAAA      ',
-'     AA    AA     ',
-'     AA    AA     ',
-'      AAAAAA      ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'        AA        ',
-'   AA   AA        ',
-'   AA   AA        ',
-'   AA   AA        ',
-'   AAA AA         ',
-'    AAAAA         ',
-'     AAA          ',
+'         AAAA',
+'        AA  AA',
+'       AA    AA',
+'       AA    AA',
+'        AA  AA',
+'         AAAA',
+'          AA',
+'          AA',
+'          AA',
+'          AA',
+'          AA',
+'          AA',
+'          AA',
+'   A      AA',
+'   AA     AA',
+'   AAA    AA',
+'   A AA   AA',
+'   A      AA',
+'   AA     AA',
+'    AA   AA',
+'     AA AA',
+'      AAA',
 ],
 
 'trophy': [
