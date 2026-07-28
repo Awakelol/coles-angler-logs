@@ -71,7 +71,7 @@ export function currentUser() {
       writeSession(null);
       return null;
     }
-    return { ...profile, syncs: true };
+    return { ...profile, providers: profile.providers || [], syncs: true };
   }
 
   const user = local.getById(session.id);
@@ -102,15 +102,59 @@ export async function signIn(username, password) {
 
 // --- cloud ------------------------------------------------------------------
 
-export async function signInWithGoogle() {
+function requireCloud(what) {
   if (!cloud.cloudConfigured()) {
-    const err = new Error('Google sign-in is not set up yet — see Settings.');
+    const err = new Error(`${what} is not set up yet — see Settings.`);
     err.code = 'unconfigured';
     throw err;
   }
+}
+
+export async function signInWithGoogle() {
+  requireCloud('Google sign-in');
   // Leaves the page; init() finishes the job when the browser comes back.
   await cloud.signInWithGoogle();
 }
+
+export async function signInWithFacebook() {
+  requireCloud('Facebook sign-in');
+  await cloud.signInWithFacebook();
+}
+
+// --- account linking --------------------------------------------------------
+//
+// Deliberately no UI yet. These are the functions a "Connected accounts" panel
+// in Settings will call — the point of building them now is that the data
+// model has to support one person having several sign-in methods BEFORE
+// anyone signs up. Retrofitting it later means merging real catch logs.
+
+/** Attach another provider to the signed-in account. */
+export async function linkProvider(name) {
+  requireCloud('Account linking');
+  const user = currentUser();
+  if (!user) throw new Error('Sign in before connecting another account.');
+  if (!user.syncs) {
+    throw new Error('Device-only accounts cannot be linked. Sign in with Google first.');
+  }
+  await cloud.linkProvider(name);
+}
+
+export async function unlinkProvider(providerId) {
+  requireCloud('Account linking');
+  await cloud.unlinkProvider(providerId);
+}
+
+/** Short provider names linked to the current account, e.g. ['google']. */
+export function linkedProviders() {
+  return currentUser()?.providers || [];
+}
+
+/**
+ * A sign-in that collided with an existing account, awaiting a link.
+ * Non-null means: this email already has an account via another provider.
+ */
+export const pendingLink = cloud.pendingLink;
+export const clearPendingLink = cloud.clearPendingLink;
 
 /**
  * Run once at start-up, before the first render.
