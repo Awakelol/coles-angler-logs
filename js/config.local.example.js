@@ -11,6 +11,14 @@
 // ---------------------------------------------------------------------------
 
 export const LOCAL_CONFIG = {
+  // Google sign-in. Paste the whole config object from
+  // console.firebase.google.com → Project settings → Your apps → Web.
+  // These values are public identifiers, not secrets.
+  // firebase: {
+  //   apiKey: '', authDomain: '', projectId: '',
+  //   appId: '', storageBucket: '', messagingSenderId: '',
+  // },
+
   tides: {
     provider: 'worldtides',       // 'worldtides' | 'stormglass' | 'none'
     worldTidesKey: '',

@@ -11,6 +11,20 @@ export const CONFIG = {
     provider: 'open-meteo',
     openWeatherKey: '',
   },
+  // Firebase web config for Google/Facebook sign-in. NOT a secret — apiKey
+  // here is a project identifier, not a credential, and access is controlled
+  // by Firebase Security Rules. Safe to commit; kept in config.local.js only
+  // for convenience alongside the tide key.
+  //   console.firebase.google.com → Project settings → Your apps → Web
+  firebase: {
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    appId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+  },
+
   tides: {
     // 'worldtides' (needs key) | 'stormglass' (needs key) | 'none'
     provider: 'worldtides',

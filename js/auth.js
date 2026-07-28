@@ -1,186 +1,140 @@
 // ---------------------------------------------------------------------------
-// LOCAL PROFILES
+// AUTH FACADE
 //
-// ⚠ THIS IS NOT AUTHENTICATION. There is no server, so nothing is verified
-// anywhere. Accounts live in this browser's localStorage and anyone with
-// devtools can read or edit them. It gates nothing from a determined person
-// and protects nothing on an unlocked phone.
+// The app talks to this and never to a provider directly. Two kinds of account
+// coexist deliberately:
 //
-// What it IS: a "who is using the app" switch, so each person's catch log is
-// their own. That is what makes the future move to real accounts (Firebase
-// Auth) a swap of this module rather than a rewrite — everything downstream
-// already keys off `userId`.
+//   local  (js/auth/local.js)  username + password, this device only, needs
+//                              nothing — no network, no Firebase project.
+//                              Does not sync.
+//   cloud  (js/auth/cloud.js)  Google (later Facebook) via Firebase Auth.
+//                              Genuinely verified, and the basis for sync.
 //
-// Passwords are salted and hashed with SHA-256 rather than stored in plain
-// text. That doesn't make this secure, but people reuse passwords, and
-// leaving them readable in localStorage would be careless for no reason.
+// Keeping both means the app still works with zero setup and no signal, which
+// is the normal case on the water, while anyone who wants their log on more
+// than one device can have that.
 //
-// ADDING GOOGLE / FACEBOOK LATER
-// Every user object carries a `provider` ('local' today). The rest of the app
-// only ever touches currentUser().id and isSignedIn(), so a real provider is
-// additive rather than a rewrite:
-//
-//   1. Add js/auth/providers/google.js exposing signInWithGoogle(), returning
-//      the same { id, username, provider } shape. Use the Firebase Auth uid
-//      as `id`.
-//   2. Add a button to the gate in js/pages/log.js that calls it.
-//   3. Keep setSession()/currentUser() as the single source of truth.
-//
-// The one thing to plan for: catches are keyed by the local user id, so when
-// someone links a real account their existing entries need re-pointing at the
-// new uid — the same mechanism as store.adoptOrphans().
+// currentUser() is SYNCHRONOUS on purpose — render() calls it while building
+// markup. Cloud profiles are therefore cached in localStorage and reconciled
+// with Firebase in the background by init(), rather than being awaited.
 // ---------------------------------------------------------------------------
 
-const USERS_KEY = 'angler.users';
+import * as local from './auth/local.js';
+import * as cloud from './auth/cloud.js';
+
 const SESSION_KEY = 'angler.session';
 
-export const USERNAME_RULES = {
-  min: 3,
-  max: 20,
-  pattern: /^[a-zA-Z0-9_-]+$/,
-  describe: '3–20 characters: letters, numbers, underscore or hyphen.',
-};
+// Re-exported so pages don't need to know which provider owns what.
+export const {
+  USERNAME_RULES,
+  validateUsername,
+  validatePassword,
+  usernameTaken,
+  listUsers,
+  changePassword,
+} = local;
 
-function readUsers() {
+export const cloudConfigured = cloud.cloudConfigured;
+export const CLOUD_SETUP_STEPS = cloud.SETUP_STEPS;
+
+/** { kind: 'local' | 'cloud', id } */
+function readSession() {
   try {
-    const raw = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    return Array.isArray(raw) ? raw : [];
+    const raw = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (raw && raw.kind && raw.id) return raw;
+    // Sessions used to be a bare local user id; keep those working.
+    if (typeof raw === 'string') return { kind: 'local', id: raw };
+    const legacy = localStorage.getItem(SESSION_KEY);
+    return legacy ? { kind: 'local', id: legacy } : null;
   } catch {
-    return [];
+    const legacy = localStorage.getItem(SESSION_KEY);
+    return legacy ? { kind: 'local', id: legacy } : null;
   }
 }
 
-function writeUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+function writeSession(session) {
+  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(SESSION_KEY);
 }
 
-/** Usernames are compared case-insensitively but displayed as typed. */
-const key = (name) => String(name || '').trim().toLowerCase();
-
-function randomSalt() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hash(password, salt) {
-  // SubtleCrypto needs a secure context; localhost and https both qualify.
-  if (!crypto?.subtle) {
-    throw new Error('This browser cannot hash passwords securely. Use https.');
-  }
-  const data = new TextEncoder().encode(`${salt}:${password}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export function validateUsername(name) {
-  const n = String(name || '').trim();
-  if (n.length < USERNAME_RULES.min) return `Username needs at least ${USERNAME_RULES.min} characters.`;
-  if (n.length > USERNAME_RULES.max) return `Username can be at most ${USERNAME_RULES.max} characters.`;
-  if (!USERNAME_RULES.pattern.test(n)) return USERNAME_RULES.describe;
-  return null;
-}
-
-export function validatePassword(pw) {
-  if (String(pw || '').length < 4) return 'Password needs at least 4 characters.';
-  return null;
-}
-
-export function usernameTaken(name) {
-  return readUsers().some((u) => u.key === key(name));
-}
-
-export function listUsers() {
-  return readUsers().map((u) => ({
-    id: u.id,
-    username: u.username,
-    provider: u.provider || 'local',
-    createdAt: u.createdAt,
-  }));
-}
-
-export async function signUp(name, password) {
-  const nameError = validateUsername(name);
-  if (nameError) throw new Error(nameError);
-  const pwError = validatePassword(password);
-  if (pwError) throw new Error(pwError);
-  if (usernameTaken(name)) throw new Error('That username is already taken on this device.');
-
-  const salt = randomSalt();
-  const user = {
-    id: crypto.randomUUID(),
-    username: String(name).trim(),
-    key: key(name),
-    salt,
-    hash: await hash(password, salt),
-    provider: 'local',
-    createdAt: new Date().toISOString(),
-  };
-
-  const users = readUsers();
-  users.push(user);
-  writeUsers(users);
-  setSession(user.id);
-  return { id: user.id, username: user.username, provider: 'local' };
-}
-
-export async function signIn(name, password) {
-  const user = readUsers().find((u) => u.key === key(name));
-  // Deliberately the same message for both cases — there's no reason to
-  // confirm which usernames exist on a shared device.
-  const wrong = new Error('Wrong username or password.');
-  if (!user) throw wrong;
-  if ((await hash(password, user.salt)) !== user.hash) throw wrong;
-
-  setSession(user.id);
-  return { id: user.id, username: user.username, provider: user.provider || 'local' };
-}
-
-export function setSession(userId) {
-  localStorage.setItem(SESSION_KEY, userId);
-}
-
-export function signOut() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-/** The signed-in user, or null. */
+/**
+ * The signed-in user, or null.
+ * @returns {{id, username, provider, syncs}|null}
+ */
 export function currentUser() {
-  const id = localStorage.getItem(SESSION_KEY);
-  if (!id) return null;
-  const user = readUsers().find((u) => u.id === id);
+  const session = readSession();
+  if (!session) return null;
+
+  if (session.kind === 'cloud') {
+    const profile = cloud.cachedCloudUser();
+    if (!profile || profile.id !== session.id) {
+      writeSession(null);
+      return null;
+    }
+    return { ...profile, syncs: true };
+  }
+
+  const user = local.getById(session.id);
   if (!user) {
-    signOut(); // stale session, e.g. account deleted
+    writeSession(null); // account deleted
     return null;
   }
-  return {
-    id: user.id,
-    username: user.username,
-    provider: user.provider || 'local',
-    createdAt: user.createdAt,
-  };
+  return { ...user, syncs: false };
 }
 
 export function isSignedIn() {
   return currentUser() !== null;
 }
 
-export async function changePassword(name, oldPw, newPw) {
-  const user = readUsers().find((u) => u.key === key(name));
-  if (!user || (await hash(oldPw, user.salt)) !== user.hash) {
-    throw new Error('Wrong current password.');
-  }
-  const pwError = validatePassword(newPw);
-  if (pwError) throw new Error(pwError);
+// --- local ------------------------------------------------------------------
 
-  const users = readUsers();
-  const target = users.find((u) => u.id === user.id);
-  target.salt = randomSalt();
-  target.hash = await hash(newPw, target.salt);
-  writeUsers(users);
+export async function signUp(username, password) {
+  const user = await local.signUp(username, password);
+  writeSession({ kind: 'local', id: user.id });
+  return { ...user, syncs: false };
 }
 
-/** Removes the account. Catches are handled by the caller. */
+export async function signIn(username, password) {
+  const user = await local.signIn(username, password);
+  writeSession({ kind: 'local', id: user.id });
+  return { ...user, syncs: false };
+}
+
+// --- cloud ------------------------------------------------------------------
+
+export async function signInWithGoogle() {
+  if (!cloud.cloudConfigured()) {
+    const err = new Error('Google sign-in is not set up yet — see Settings.');
+    err.code = 'unconfigured';
+    throw err;
+  }
+  // Leaves the page; init() finishes the job when the browser comes back.
+  await cloud.signInWithGoogle();
+}
+
+/**
+ * Run once at start-up, before the first render.
+ * Finishes any provider redirect and reconciles the cached cloud profile.
+ */
+export async function init() {
+  const justSignedIn = await cloud.completeRedirect();
+  if (justSignedIn) {
+    writeSession({ kind: 'cloud', id: justSignedIn.id });
+    return { signedIn: true, user: justSignedIn };
+  }
+  // Don't block start-up on the network.
+  if (readSession()?.kind === 'cloud') cloud.verify();
+  return { signedIn: false };
+}
+
+// --- shared -----------------------------------------------------------------
+
+export async function signOut() {
+  if (readSession()?.kind === 'cloud') await cloud.signOutCloud();
+  writeSession(null);
+}
+
 export function deleteAccount(userId) {
-  writeUsers(readUsers().filter((u) => u.id !== userId));
-  if (localStorage.getItem(SESSION_KEY) === userId) signOut();
+  local.deleteAccount(userId);
+  if (readSession()?.id === userId) writeSession(null);
 }

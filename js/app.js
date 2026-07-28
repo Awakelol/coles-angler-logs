@@ -8,6 +8,7 @@
 import { loadOverrides, loadLocalConfig } from './config.js';
 import { watchForUpdates } from './updates.js';
 import { applyTheme, watchSystemTheme } from './theme.js';
+import { init as initAuth } from './auth.js';
 import { REGIONS, DEFAULT_REGION_ID, getRegion } from './data/index.js';
 import { prefs } from './store.js';
 import { icon } from './pixel.js';
@@ -24,6 +25,10 @@ import * as settings from './pages/settings.js';
 // Untracked local keys first, then anything entered in Settings wins.
 await loadLocalConfig();
 loadOverrides();
+
+// Finishes a Google sign-in redirect before the first render, so the app
+// doesn't flash the signed-out gate on the way back from the provider.
+await initAuth();
 
 const ROUTES = [
   { path: '/', page: home },
