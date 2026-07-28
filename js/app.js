@@ -67,6 +67,18 @@ function syncTabs(path) {
   }
 }
 
+/**
+ * Whether to cross-fade between pages.
+ *
+ * Checked per navigation rather than once at start-up: the OS reduced-motion
+ * setting can change while the app is open, and someone who turns it on
+ * because motion is making them ill should not have to restart the app.
+ */
+function canAnimatePages() {
+  if (typeof document.startViewTransition !== 'function') return false;
+  return !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 let renderToken = 0;
 
 async function render() {
@@ -82,7 +94,32 @@ async function render() {
   for (const sheet of document.querySelectorAll('.sheet-backdrop')) sheet.remove();
 
   try {
-    main.innerHTML = route.page.render(ctx);
+    const swap = () => {
+      main.innerHTML = route.page.render(ctx);
+    };
+
+    // Cross-fade the page when the browser can do it. Only the markup swap is
+    // wrapped — mount() often waits on the network, and holding the transition
+    // open for a weather fetch would freeze the old page on screen for seconds.
+    // updateCallbackDone resolves as soon as the DOM is updated, so mount()
+    // proceeds while the animation finishes on its own.
+    if (canAnimatePages()) {
+      try {
+        const transition = document.startViewTransition(swap);
+        // `ready` and `finished` REJECT when a transition is skipped — which
+        // is routine: tapping two tabs quickly, or navigating with the tab
+        // hidden. Nothing needs doing about it, but leaving them unhandled
+        // raises unhandledrejection and looks like a real fault.
+        transition.ready?.catch(() => {});
+        transition.finished?.catch(() => {});
+        await transition.updateCallbackDone;
+      } catch {
+        swap(); // a transition already running, or the browser refused
+      }
+    } else {
+      swap();
+    }
+
     if (route.page.mount) await route.page.mount(main, ctx);
   } catch (err) {
     console.error('[render]', err);
