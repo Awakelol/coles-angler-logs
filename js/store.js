@@ -187,7 +187,7 @@ export function computeStats(catches) {
 
 // --- backup ----------------------------------------------------------------
 
-/** Photos are dropped from the export — Blobs don't survive JSON. */
+/** Photos and clips are dropped from the export — Blobs don't survive JSON. */
 export async function exportJson() {
   const catches = await store.allCatches();
   return JSON.stringify(
@@ -196,7 +196,11 @@ export async function exportJson() {
       exportedAt: new Date().toISOString(),
       version: 1,
       prefs: prefs.all(),
-      catches: catches.map(({ photo, ...rest }) => ({ ...rest, hadPhoto: Boolean(photo) })),
+      catches: catches.map(({ photo, video, poster, ...rest }) => ({
+        ...rest,
+        hadPhoto: Boolean(photo),
+        hadVideo: Boolean(video),
+      })),
     },
     null,
     2
@@ -208,7 +212,7 @@ export async function importJson(text) {
   if (!Array.isArray(data.catches)) throw new Error('Not a valid Angler Log export');
   let n = 0;
   for (const c of data.catches) {
-    const { hadPhoto, ...rest } = c;
+    const { hadPhoto, hadVideo, ...rest } = c;
     await store.saveCatch(rest);
     n++;
   }

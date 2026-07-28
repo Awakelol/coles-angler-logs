@@ -600,6 +600,98 @@ async def main():
             check("personal bests rendered", records == 2, f"got {records}")
             await page.shot("log-with-data")
 
+            # -------------------------------------------------- media
+            print("\nCatch media")
+            media = await page.eval("""
+                const m = await import('./js/media.js');
+                const mk = (name, type, bytes) =>
+                    new File([new Uint8Array(bytes)], name, { type });
+
+                const out = {};
+                out.image = m.kindOf(mk('a.jpg', 'image/jpeg', 10));
+                out.video = m.kindOf(mk('a.mp4', 'video/mp4', 10));
+                // iOS often reports an empty MIME type; extension must still work.
+                out.movNoType = m.kindOf(mk('a.MOV', '', 10));
+                out.heicNoType = m.kindOf(mk('a.HEIC', '', 10));
+                out.pdf = m.kindOf(mk('a.pdf', 'application/pdf', 10));
+
+                out.rejectedType = null;
+                try { await m.prepareMedia(mk('a.pdf', 'application/pdf', 10)); }
+                catch (e) { out.rejectedType = e.message; }
+
+                out.rejectedBig = null;
+                try {
+                    await m.prepareMedia(mk('big.mp4', 'video/mp4', m.LIMITS.videoBytes + 1024));
+                } catch (e) { out.rejectedBig = e.message; }
+
+                return { ...out, limits: m.LIMITS,
+                         accept: m.ACCEPT_ATTR.includes('video/mp4') &&
+                                 m.ACCEPT_ATTR.includes('image/jpeg') };
+            """)
+            check("images are recognised", media["image"] == "image", str(media["image"]))
+            check("videos are recognised", media["video"] == "video", str(media["video"]))
+            check("falls back to file extension when iOS sends no MIME type",
+                  media["movNoType"] == "video" and media["heicNoType"] == "image",
+                  f"mov={media['movNoType']} heic={media['heicNoType']}")
+            check("non-media is rejected", media["pdf"] is None, str(media["pdf"]))
+            check("picking a document is refused with a readable message",
+                  bool(media["rejectedType"]) and "photos and short videos" in media["rejectedType"],
+                  str(media["rejectedType"]))
+            check("oversized clip is refused before decoding",
+                  bool(media["rejectedBig"]) and "trimmed" in media["rejectedBig"],
+                  str(media["rejectedBig"]))
+            check("video limits are set", media["limits"]["videoSeconds"] == 15 and
+                  media["limits"]["videoBytes"] == 20 * 1024 * 1024, str(media["limits"]))
+            check("file picker offers images and video", media["accept"])
+
+            # A real clip: encoded live so the duration check runs for real.
+            clip = await page.eval("""
+                const m = await import('./js/media.js');
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                const stream = canvas.captureStream(10);
+                const rec = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const parts = [];
+                rec.ondataavailable = (e) => parts.push(e.data);
+                rec.start();
+                for (let i = 0; i < 8; i++) {
+                    ctx.fillStyle = i % 2 ? '#3fa9c9' : '#ffd23f';
+                    ctx.fillRect(0, 0, 64, 64);
+                    await new Promise(r => setTimeout(r, 60));
+                }
+                await new Promise(r => { rec.onstop = r; rec.stop(); });
+                const file = new File(parts, 'clip.webm', { type: 'video/webm' });
+                try {
+                    const res = await m.prepareMedia(file);
+                    return { ok: true, kind: res.kind, poster: !!res.poster,
+                             duration: res.duration, bytes: res.blob.size };
+                } catch (e) { return { ok: false, error: e.message }; }
+            """)
+            check("a short clip is accepted", clip.get("ok") and clip.get("kind") == "video",
+                  str(clip))
+            check("a poster frame is extracted", clip.get("poster") is True, str(clip))
+
+            # And the same clip stored on a catch, then read back.
+            roundtrip = await page.eval("""
+                const a = await import('./js/auth.js');
+                const s = await import('./js/store.js');
+                const me = a.currentUser();
+                const all = await s.store.allCatches(me.id);
+                const blob = new Blob([new Uint8Array(2048)], { type: 'video/webm' });
+                const poster = new Blob([new Uint8Array(256)], { type: 'image/jpeg' });
+                const saved = await s.store.saveCatch({
+                    userId: me.id, speciesId: 'caranx-ignobilis', regionId: 'leyte-gulf',
+                    date: '2026-07-25', video: blob, poster,
+                });
+                const back = await s.store.getCatch(saved.id);
+                await s.store.deleteCatch(saved.id);
+                return { video: back.video instanceof Blob, poster: back.poster instanceof Blob,
+                         size: back.video?.size };
+            """)
+            check("clip survives a storage round-trip",
+                  roundtrip["video"] and roundtrip["poster"], str(roundtrip))
+
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
             await page.goto(f"{BASE}/index.html#/species")
