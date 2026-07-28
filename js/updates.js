@@ -38,10 +38,21 @@ function reloadWhenIdle() {
 export function watchForUpdates() {
   if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
 
+  // Whether a worker was ALREADY in charge when this page loaded.
+  //
+  // This distinction is the whole game. On a first visit there is no
+  // controller; the worker installs, calls clients.claim(), and that fires
+  // controllerchange — which is not an update, it's the initial handover.
+  // Reloading on it made every first load reload itself, and worse, it
+  // reloaded the page mid-way through resolving a Google sign-in redirect,
+  // consuming getRedirectResult() and dumping the user back on the login
+  // screen with no error.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // Fires once when a new worker takes over. Guarded so a reload can't loop.
-    if (reloading) return;
+    if (!hadController) return; // first install, not an update
+    if (reloading) return; // guard against a reload loop
     reloading = true;
     reloadWhenIdle();
   });

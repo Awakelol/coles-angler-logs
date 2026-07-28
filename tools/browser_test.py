@@ -132,6 +132,12 @@ def static_checks():
     upd = open(os.path.join(root, "js", "updates.js"), encoding="utf-8").read()
     check("app watches for new versions", "controllerchange" in upd and "reg.update()" in upd)
     check("update reload waits for open forms", "sheetOpen" in upd)
+    # A first visit has no controller; clients.claim() fires controllerchange
+    # anyway. Reloading on that made every fresh load reload itself, and it
+    # ate the Google sign-in redirect result mid-flight.
+    check("first install does not trigger a reload",
+          "hadController" in upd and "if (!hadController) return" in upd,
+          "controllerchange on first install must not reload")
 
     # The store test wipes the catch log and is deployed with the app, so it
     # must refuse to run on anything but a local host.
