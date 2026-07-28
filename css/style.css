@@ -439,6 +439,37 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .center { display: flex; justify-content: center; }
 
+/* --- sign in / sign up --------------------------------------------------- */
+
+/* Provider buttons: white so the brand marks read, stacked full width. */
+.btn--provider {
+  background: var(--paper);
+  justify-content: center;
+  margin-bottom: 10px;
+}
+:root[data-theme="dark"] .btn--provider { background: var(--paper); }
+
+/* The "sign up" action — visually distinct from the neutral log-in button,
+   the way a suggested choice is highlighted in a confirm dialog. */
+.btn--suggest {
+  background: var(--green);
+  color: var(--on-accent);
+}
+
+/* Divider with centred text: "or", "Don't have an account?" */
+.rule {
+  display: flex; align-items: center; gap: 12px;
+  margin: 18px 0 14px;
+  color: var(--ink-60);
+  font-size: 12.5px; font-weight: 800;
+}
+.rule::before, .rule::after {
+  content: '';
+  flex: 1;
+  border-top: var(--border-w-sm) solid var(--line);
+}
+.rule span { white-space: nowrap; }
+
 /* --- forms --------------------------------------------------------------- */
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }

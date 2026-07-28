@@ -2,7 +2,8 @@
 
 import { store, computeStats } from '../store.js';
 import {
-  isSignedIn, currentUser, listUsers, signUp, signIn, signInWithGoogle,
+  isSignedIn, currentUser, listUsers, signUp, signIn,
+  signInWithGoogle, signInWithFacebook,
   cloudConfigured, lastAuthError, clearAuthError, USERNAME_RULES,
 } from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
@@ -266,86 +267,134 @@ function openCatchForm(ctx, entry, onDone) {
   });
 }
 
-/** The sign-in / sign-up gate shown when nobody is signed in. */
+// --- sign-in / sign-up gate --------------------------------------------------
+//
+// Two screens rather than tabs: signing in is the common case and should be
+// the shortest path, while creating an account asks more and deserves its own
+// page. Which one is showing lives here rather than in the router, so the
+// browser Back button still means "leave the log", not "go back a form step".
+
+let gateView = 'signin';
+
+const PROVIDER_BUTTONS = `
+  <button class="btn btn--block btn--provider" data-provider="google">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7C21.7 18.9 23 15.9 23 12.3z"/>
+      <path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3C3.7 21.4 7.6 24 12 24z"/>
+      <path fill="#FBBC05" d="M5.6 14.7a7.2 7.2 0 0 1 0-4.6v-3H1.8a12 12 0 0 0 0 10.6l3.8-3z"/>
+      <path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.2 15.1 0 12 0 7.6 0 3.7 2.6 1.8 6.1l3.8 3c.9-2.7 3.4-4.3 6.4-4.3z"/>
+    </svg>
+    Continue with Google
+  </button>
+  <button class="btn btn--block btn--provider" data-provider="facebook">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path fill="#1877F2" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7v-3.5h3.1V9.4c0-3 1.8-4.7 4.6-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9v2.2h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/>
+    </svg>
+    Continue with Facebook
+  </button>`;
+
+function signInHtml() {
+  return `
+    ${cloudConfigured() ? PROVIDER_BUTTONS : ''}
+    ${cloudConfigured() ? '<div class="rule"><span>or</span></div>' : ''}
+
+    <form id="authForm" autocomplete="on">
+      <div class="field">
+        <label for="a-user">Username</label>
+        <input type="text" id="a-user" name="username" required
+               autocapitalize="none" autocorrect="off" spellcheck="false"
+               autocomplete="username" placeholder="e.g. cole">
+      </div>
+      <div class="field">
+        <label for="a-pass">Password</label>
+        <input type="password" id="a-pass" name="password" required
+               autocomplete="current-password" placeholder="your password">
+      </div>
+      <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
+      <button type="submit" class="btn btn--primary btn--block">Log in</button>
+    </form>
+
+    <div class="rule"><span>Don&rsquo;t have an account?</span></div>
+    <button class="btn btn--block btn--suggest" data-goto="signup">Sign up</button>`;
+}
+
+function signUpHtml() {
+  return `
+    <button class="btn btn--sm btn--ghost" data-goto="signin" style="align-self:flex-start">
+      &larr; Back to sign in
+    </button>
+
+    <form id="authForm" autocomplete="on">
+      <div class="field">
+        <label for="a-user">Username</label>
+        <input type="text" id="a-user" name="username" required
+               autocapitalize="none" autocorrect="off" spellcheck="false"
+               autocomplete="username" placeholder="e.g. cole">
+        <p class="field__hint">${esc(USERNAME_RULES.describe)}</p>
+      </div>
+
+      <div class="field">
+        <label for="a-email">Email <span style="text-transform:none;font-weight:700">(optional)</span></label>
+        <input type="email" id="a-email" name="email"
+               autocapitalize="none" autocorrect="off" spellcheck="false"
+               autocomplete="email" placeholder="you@example.com">
+        <p class="field__hint">
+          Nothing is sent to it. It only gives you a way to link this account
+          to a real one later.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="a-pass">Password</label>
+        <input type="password" id="a-pass" name="password" required
+               autocomplete="new-password" placeholder="at least 4 characters">
+      </div>
+
+      <div class="field">
+        <label for="a-pass2">Confirm password</label>
+        <input type="password" id="a-pass2" name="password2" required
+               autocomplete="new-password" placeholder="type it again">
+      </div>
+
+      <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
+      <button type="submit" class="btn btn--suggest btn--block">Create account</button>
+    </form>
+
+    <div class="notice" style="margin-top:16px">
+      <h3>Device-only accounts don&rsquo;t sync</h3>
+      <p>
+        A username and password works with no internet and no setup, but the log
+        stays on this phone. ${
+          cloudConfigured()
+            ? 'Use Google or Facebook if you want it on more than one device.'
+            : 'Cloud sign-in will sync when it is set up.'
+        }
+        There is no server behind this yet, so
+        <strong>don&rsquo;t reuse a password from elsewhere.</strong>
+      </p>
+    </div>`;
+}
+
 function gateHtml() {
-  const hasAccounts = listUsers().length > 0;
+  const signingUp = gateView === 'signup';
   return `
     <section class="band band--green">
       <div class="wrap">
-        <p class="eyebrow">Your logbook</p>
-        <h1 class="display">Catch log</h1>
-        <p class="subtitle">Sign in so your catches stay yours. Several people can share this device, each with their own log.</p>
+        <p class="eyebrow">${signingUp ? 'New angler' : 'Your logbook'}</p>
+        <h1 class="display">${signingUp ? 'Create account' : 'Sign in'}</h1>
+        <p class="subtitle">
+          ${
+            signingUp
+              ? 'Pick a name for your logbook. Several people can share this device, each with their own.'
+              : 'Sign in so your catches stay yours.'
+          }
+        </p>
       </div>
     </section>
 
     <section class="band band--cream">
-      <div class="wrap" style="max-width:460px">
-        <div class="card">
-          ${
-            cloudConfigured()
-              ? `<button class="btn btn--block" id="googleBtn" style="margin-bottom:6px">
-                   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                     <path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7C21.7 18.9 23 15.9 23 12.3z"/>
-                     <path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3C3.7 21.4 7.6 24 12 24z"/>
-                     <path fill="#FBBC05" d="M5.6 14.7a7.2 7.2 0 0 1 0-4.6v-3H1.8a12 12 0 0 0 0 10.6l3.8-3z"/>
-                     <path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.2 15.1 0 12 0 7.6 0 3.7 2.6 1.8 6.1l3.8 3c.9-2.7 3.4-4.3 6.4-4.3z"/>
-                   </svg>
-                   Continue with Google
-                 </button>
-                 <p class="field__hint" style="text-align:center;margin-bottom:10px">
-                   Syncs across your devices. Or use a device-only account below.
-                 </p>
-                 <hr style="border:0;border-top:var(--border-w-sm) solid var(--line);margin:0 0 14px">`
-              : ''
-          }
-          <div class="chips" id="authTabs" style="margin-bottom:6px">
-            <button class="chip" data-mode="signin" aria-pressed="${hasAccounts}">Sign in</button>
-            <button class="chip" data-mode="signup" aria-pressed="${!hasAccounts}">Create account</button>
-          </div>
-
-          <form id="authForm" autocomplete="off">
-            <div class="field">
-              <label for="a-user">Username</label>
-              <input type="text" id="a-user" name="username" required
-                     autocapitalize="none" autocorrect="off" spellcheck="false"
-                     placeholder="e.g. cole">
-              <p class="field__hint" data-user-hint></p>
-            </div>
-
-            <div class="field">
-              <label for="a-pass">Password</label>
-              <input type="password" id="a-pass" name="password" required
-                     placeholder="at least 4 characters">
-            </div>
-
-            <div class="field" data-confirm hidden>
-              <label for="a-pass2">Confirm password</label>
-              <input type="password" id="a-pass2" name="password2" placeholder="type it again">
-            </div>
-
-            <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
-            <button type="submit" class="btn btn--primary btn--block" id="authSubmit">Sign in</button>
-          </form>
-
-          <div class="notice" style="margin-top:16px">
-            <h3>Device-only accounts don't sync</h3>
-            <p>
-              A username and password here works with no internet and no setup,
-              but the log stays on this phone. ${
-                cloudConfigured()
-                  ? 'Sign in with Google if you want it on more than one device.'
-                  : 'Google sign-in is planned and will sync.'
-              }
-            </p>
-            <h3 style="margin-top:10px">Read this before you pick a password</h3>
-            <p>
-              There's no server yet — accounts live only in this browser. This keeps
-              logs separate between people sharing a phone; it is <strong>not</strong>
-              security, and anyone with the unlocked device can get past it.
-              <strong>Don't reuse a password from anywhere else.</strong>
-            </p>
-          </div>
-        </div>
+      <div class="wrap" style="max-width:440px">
+        <div class="card" id="authCard">${signingUp ? signUpHtml() : signInHtml()}</div>
       </div>
     </section>`;
 }
@@ -387,97 +436,95 @@ export function render(ctx) {
     </section>`;
 }
 
-/** Wires the sign-in / sign-up form. Returns true if it handled the mount. */
+/** Wires whichever gate screen is showing. Returns true if it handled the mount. */
 function mountGate(root, ctx) {
-  const form = root.querySelector('#authForm');
-  if (!form) return false;
+  const card = root.querySelector('#authCard');
+  if (!card) return false;
 
-  const tabs = root.querySelector('#authTabs');
-  const confirmField = root.querySelector('[data-confirm]');
-  const errorLine = root.querySelector('#authError');
-  const submit = root.querySelector('#authSubmit');
-  const userHint = root.querySelector('[data-user-hint]');
-
-  let mode = listUsers().length ? 'signin' : 'signup';
-
-  const applyMode = () => {
-    confirmField.hidden = mode !== 'signup';
-    submit.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
-    userHint.textContent = mode === 'signup' ? USERNAME_RULES.describe : '';
-    errorLine.textContent = '';
-    for (const b of tabs.querySelectorAll('[data-mode]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
-    }
+  // Re-render the card in place rather than the whole route: switching between
+  // sign in and sign up shouldn't scroll the page or touch the router.
+  const swapTo = (view) => {
+    gateView = view;
+    card.innerHTML = view === 'signup' ? signUpHtml() : signInHtml();
+    // The heading belongs to the band above the card, so refresh the route.
+    ctx.navigate('/log');
   };
-  applyMode();
+
+  card.addEventListener('click', (e) => {
+    const goto = e.target.closest('[data-goto]');
+    if (goto) swapTo(goto.dataset.goto);
+  });
+
+  const errorLine = card.querySelector('#authError');
 
   // A failed redirect from a previous page load leaves a reason behind.
   const priorError = lastAuthError();
-  if (priorError) {
+  if (priorError && errorLine) {
     errorLine.textContent =
-      `Google sign-in failed (${priorError.code || priorError.stage}). ${priorError.message}`;
+      `Sign-in failed (${priorError.code || priorError.stage}). ${priorError.message}`;
     clearAuthError();
   }
 
-  root.querySelector('#googleBtn')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const label = btn.innerHTML;
-    btn.disabled = true;
-    btn.textContent = 'Opening Google…';
-    try {
-      const profile = await signInWithGoogle();
-      if (profile) {
-        // Popup path: we're signed in without ever leaving the page.
-        toast(`Signed in as ${profile.username}`);
-        ctx.navigate('/log');
-        return;
+  // --- Google / Facebook ---
+  for (const btn of card.querySelectorAll('[data-provider]')) {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.provider;
+      const label = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = `Opening ${name === 'google' ? 'Google' : 'Facebook'}…`;
+      try {
+        const profile = name === 'google' ? await signInWithGoogle() : await signInWithFacebook();
+        if (profile) {
+          toast(`Signed in as ${profile.username}`);
+          ctx.navigate('/log');
+          return;
+        }
+        // Redirect path, or the popup was dismissed.
+        btn.disabled = false;
+        btn.innerHTML = label;
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = label;
+        if (errorLine) {
+          errorLine.textContent = err.code ? `${err.message} (${err.code})` : err.message;
+        }
       }
-      // Redirect path, or the popup was closed. Restore the button either way.
-      btn.disabled = false;
-      btn.innerHTML = label;
-    } catch (err) {
-      btn.disabled = false;
-      btn.innerHTML = label;
-      errorLine.textContent = err.code ? `${err.message} (${err.code})` : err.message;
-    }
-  });
+    });
+  }
 
-  tabs.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-mode]');
-    if (!btn || btn.dataset.mode === mode) return;
-    mode = btn.dataset.mode;
-    applyMode();
-  });
+  // --- username + password ---
+  const form = card.querySelector('#authForm');
+  if (!form) return true;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    errorLine.textContent = '';
+    if (errorLine) errorLine.textContent = '';
     const fd = new FormData(form);
     const username = String(fd.get('username') || '').trim();
     const password = String(fd.get('password') || '');
 
     try {
-      if (mode === 'signup') {
+      if (gateView === 'signup') {
         if (password !== String(fd.get('password2') || '')) {
           throw new Error("Passwords don't match.");
         }
         const isFirstAccount = listUsers().length === 0;
-        const user = await signUp(username, password);
-        // Entries logged before profiles existed would otherwise vanish.
-        if (isFirstAccount) {
-          const adopted = await store.adoptOrphans(user.id);
-          if (adopted) toast(`Welcome, ${user.username} — ${adopted} earlier catches are yours`);
-          else toast(`Welcome, ${user.username}`);
-        } else {
-          toast(`Welcome, ${user.username}`);
-        }
+        const user = await signUp(username, password, String(fd.get('email') || ''));
+        // Entries logged before profiles existed would otherwise appear lost.
+        const adopted = isFirstAccount ? await store.adoptOrphans(user.id) : 0;
+        toast(
+          adopted
+            ? `Welcome, ${user.username} — ${adopted} earlier catches are yours`
+            : `Welcome, ${user.username}`
+        );
       } else {
         const user = await signIn(username, password);
         toast(`Signed in as ${user.username}`);
       }
+      gateView = 'signin'; // so signing out later lands on the right screen
       ctx.navigate('/log');
     } catch (err) {
-      errorLine.textContent = err.message;
+      if (errorLine) errorLine.textContent = err.message;
     }
   });
 
