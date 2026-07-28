@@ -29,6 +29,7 @@ export const {
   USERNAME_RULES,
   validateUsername,
   validatePassword,
+  validateEmail,
   usernameTaken,
   listUsers,
   changePassword,
@@ -88,8 +89,8 @@ export function isSignedIn() {
 
 // --- local ------------------------------------------------------------------
 
-export async function signUp(username, password) {
-  const user = await local.signUp(username, password);
+export async function signUp(username, password, email = '') {
+  const user = await local.signUp(username, password, email);
   writeSession({ kind: 'local', id: user.id });
   return { ...user, syncs: false };
 }

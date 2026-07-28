@@ -47,6 +47,13 @@ SHOTS = [
      "document.querySelector('[data-zone]').click()"),
     ("6-conditions", "#/conditions", ".now-card__temp",              None),
     ("7-log",        "#/log",        ".kpi__v, #authForm",           None),
+    ("7b-signin",    "#/log",        ".kpi__v, #authForm",
+     "const a = await import('./js/auth.js'); await a.signOut(); location.hash='#/tips';"
+     "await new Promise(r=>setTimeout(r,300)); location.hash='#/log';"
+     "await new Promise(r=>setTimeout(r,900))"),
+    ("7c-signup",    "#/log",        "#authForm",
+     "document.querySelector('[data-goto=signup]').click();"
+     "await new Promise(r=>setTimeout(r,900))"),
     ("8-tips",       "#/tips",       ".tip-card",                    None),
     ("9-settings",   "#/settings",   "#saveTides",                   None),
     # Dark theme sweep — set once, then walk the same screens.
@@ -57,7 +64,7 @@ SHOTS = [
     ("d3-conditions", "#/conditions", ".now-card__temp",             None),
     ("d4-map",       "#/map",        "#fishMap .leaflet-tile-pane",  None),
     ("d5-settings",  "#/settings",   "#themePicker",                 None),
-    ("d6-log",       "#/log",        ".kpi__v, #authForm",           None),
+    ("d6-signin",    "#/log",        "#authForm",                    None),
 ]
 
 

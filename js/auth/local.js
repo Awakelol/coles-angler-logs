@@ -18,6 +18,8 @@
 // them readable would be careless for no reason.
 // ---------------------------------------------------------------------------
 
+import { findProfanity } from '../moderation.js';
+
 const USERS_KEY = 'angler.users';
 
 export const USERNAME_RULES = {
@@ -63,6 +65,18 @@ export function validateUsername(name) {
   if (n.length < USERNAME_RULES.min) return `Username needs at least ${USERNAME_RULES.min} characters.`;
   if (n.length > USERNAME_RULES.max) return `Username can be at most ${USERNAME_RULES.max} characters.`;
   if (!USERNAME_RULES.pattern.test(n)) return USERNAME_RULES.describe;
+  // Light-touch: see js/moderation.js for why the list is short.
+  if (findProfanity(n)) return 'Please choose a different username.';
+  return null;
+}
+
+/** Optional on sign-up, so an empty value is valid. */
+export function validateEmail(email) {
+  const e = String(email || '').trim();
+  if (!e) return null;
+  if (e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) {
+    return "That doesn't look like an email address.";
+  }
   return null;
 }
 
@@ -84,11 +98,13 @@ export function listUsers() {
   }));
 }
 
-export async function signUp(name, password) {
+export async function signUp(name, password, email = '') {
   const nameError = validateUsername(name);
   if (nameError) throw new Error(nameError);
   const pwError = validatePassword(password);
   if (pwError) throw new Error(pwError);
+  const emailError = validateEmail(email);
+  if (emailError) throw new Error(emailError);
   if (usernameTaken(name)) throw new Error('That username is already taken on this device.');
 
   const salt = randomSalt();
@@ -99,6 +115,9 @@ export async function signUp(name, password) {
     salt,
     hash: await hash(password, salt),
     provider: 'local',
+    // Optional for now: nothing is sent to it, but it gives a way to link a
+    // device-only account to a real one later.
+    email: String(email || '').trim() || null,
     createdAt: new Date().toISOString(),
   };
 

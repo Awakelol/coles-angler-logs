@@ -453,11 +453,44 @@ async def main():
             gated = await page.eval("""
                 return { form: !!document.querySelector('#authForm'),
                          addBtn: !!document.getElementById('addCatch'),
-                         stats: !!document.querySelector('.kpi__v') };
+                         stats: !!document.querySelector('.kpi__v'),
+                         google: !!document.querySelector('[data-provider=google]'),
+                         facebook: !!document.querySelector('[data-provider=facebook]'),
+                         signupBtn: !!document.querySelector('[data-goto=signup]'),
+                         // Providers must come before the username field.
+                         order: (() => {
+                             const g = document.querySelector('[data-provider=google]');
+                             const u = document.getElementById('a-user');
+                             if (!g || !u) return false;
+                             return !!(g.compareDocumentPosition(u) &
+                                       Node.DOCUMENT_POSITION_FOLLOWING);
+                         })(),
+                         hasEmail: !!document.getElementById('a-email') };
             """)
             check("log is gated when signed out", gated["form"], str(gated))
             check("no catch entry while signed out",
                   not gated["addBtn"] and not gated["stats"], str(gated))
+            check("both providers are offered",
+                  gated["google"] and gated["facebook"], str(gated))
+            check("providers sit above the username field", gated["order"], str(gated))
+            check("sign-up is a separate action, not a tab", gated["signupBtn"], str(gated))
+            check("sign-in screen has no email field", not gated["hasEmail"], str(gated))
+
+            signup = await page.eval("""
+                document.querySelector('[data-goto=signup]').click();
+                await new Promise(r => setTimeout(r, 600));
+                return { email: !!document.getElementById('a-email'),
+                         confirm: !!document.getElementById('a-pass2'),
+                         back: !!document.querySelector('[data-goto=signin]'),
+                         emailRequired: document.getElementById('a-email')?.required,
+                         heading: document.querySelector('.display')?.textContent.trim() };
+            """)
+            check("sign-up screen asks for email and confirmation",
+                  signup["email"] and signup["confirm"], str(signup))
+            check("email is optional", signup["emailRequired"] is False, str(signup))
+            check("sign-up screen can go back", signup["back"], str(signup))
+            check("sign-up screen has its own heading",
+                  signup["heading"] == "Create account", str(signup["heading"]))
 
             rules = await page.eval("""
                 const a = await import('./js/auth.js');
@@ -545,6 +578,32 @@ async def main():
                 await a.signUp('tester', 'abcd');
                 return 1;
             """)
+
+            mod = await page.eval("""
+                const m = await import('./js/moderation.js');
+                const a = await import('./js/auth.js');
+                const blocked = ['fuck', 'f_u_c_k', 'sh1t', 'n1gger', 'FUCKer'];
+                const fine = ['cole', 'wrasse', 'assassin', 'class_act', 'bass-man',
+                              'scunthorpe', 'cockle', 'analyst', 'Dickens'];
+                return {
+                    caught: blocked.filter(n => !m.isClean(n)).length,
+                    total: blocked.length,
+                    falsePositives: fine.filter(n => !m.isClean(n)),
+                    viaValidate: a.validateUsername('fuckwit'),
+                    emailBad: a.validateEmail('not-an-email'),
+                    emailEmpty: a.validateEmail(''),
+                    emailOk: a.validateEmail('cole@example.com'),
+                };
+            """)
+            check("obvious profanity is caught",
+                  mod["caught"] == mod["total"], f"{mod['caught']}/{mod['total']}")
+            check("ordinary words are not flagged",
+                  mod["falsePositives"] == [], str(mod["falsePositives"]))
+            check("moderation runs during username validation",
+                  bool(mod["viaValidate"]), str(mod["viaValidate"]))
+            check("email is optional but validated when given",
+                  mod["emailEmpty"] is None and mod["emailOk"] is None
+                  and bool(mod["emailBad"]), str(mod))
 
             # --- provider facade ---
             facade = await page.eval("""
