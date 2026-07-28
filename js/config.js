@@ -17,12 +17,14 @@ export const CONFIG = {
   // for convenience alongside the tide key.
   //   console.firebase.google.com → Project settings → Your apps → Web
   firebase: {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    appId: '',
-    storageBucket: '',
-    messagingSenderId: '',
+    apiKey: 'AIzaSyCyCe9mt3mMBPC7TagWz66FhR7MMzLUuB8',
+    authDomain: 'coles-angler-logs.firebaseapp.com',
+    projectId: 'coles-angler-logs',
+    appId: '1:97558361469:web:0a513147d8053ce1da4814',
+    storageBucket: 'coles-angler-logs.firebasestorage.app',
+    messagingSenderId: '97558361469',
+    // measurementId is deliberately omitted — that's Google Analytics, which
+    // the app doesn't load and doesn't need.
   },
 
   tides: {

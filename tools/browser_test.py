@@ -547,11 +547,9 @@ async def main():
                 out.configured = a.cloudConfigured();
                 out.hasSteps = Array.isArray(a.CLOUD_SETUP_STEPS) && a.CLOUD_SETUP_STEPS.length >= 3;
 
-                // Google must refuse cleanly, not throw something cryptic,
-                // while no Firebase config exists.
-                out.googleErr = null;
-                try { await a.signInWithGoogle(); }
-                catch (e) { out.googleErr = { msg: e.message, code: e.code }; }
+                // NOT called for real: with a live config this performs an
+                // actual redirect to Google and destroys the test session.
+                out.googleIsFn = typeof a.signInWithGoogle === 'function';
 
                 // Local accounts still work with no cloud config at all.
                 const u = await a.signUp('localonly', 'abcd');
@@ -566,12 +564,11 @@ async def main():
                 out.signedOut = !a.isSignedIn();
                 return out;
             """)
-            check("cloud is reported unconfigured without a Firebase config",
-                  facade["configured"] is False, str(facade["configured"]))
+            check("cloud reports configured with a firebase config",
+                  facade["configured"] is True, str(facade["configured"]))
             check("setup steps are documented in code", facade["hasSteps"])
-            check("Google sign-in refuses cleanly when unconfigured",
-                  facade["googleErr"] and facade["googleErr"]["code"] == "unconfigured",
-                  str(facade["googleErr"]))
+            check("Google sign-in is exposed", facade["googleIsFn"] is True,
+                  str(facade["googleIsFn"]))
             check("local accounts still work with no cloud setup", facade["localWorks"])
             check("local accounts are marked as not syncing",
                   facade["syncs"] is False and facade["provider"] == "local", str(facade))
@@ -589,6 +586,52 @@ async def main():
                 return who && who.username;
             """)
             check("legacy sessions still resolve", legacy == "legacyuser", str(legacy))
+
+            # --- account linking seam ---
+            # No UI yet by design, but the model must support one person with
+            # several sign-in methods BEFORE anyone signs up — retrofitting it
+            # later means merging real catch logs.
+            linking = await page.eval("""
+                const a = await import('./js/auth.js');
+                const out = {};
+                out.configured = a.cloudConfigured();
+                out.hasLink = typeof a.linkProvider === 'function';
+                out.hasUnlink = typeof a.unlinkProvider === 'function';
+                out.hasFacebook = typeof a.signInWithFacebook === 'function';
+                out.hasPending = typeof a.pendingLink === 'function';
+
+                // No cloud account signed in -> linking must refuse clearly.
+                const u = await a.signUp('linktest', 'abcd');
+                out.localProviders = a.linkedProviders();
+                out.localRefused = null;
+                try { await a.linkProvider('facebook'); }
+                catch (e) { out.localRefused = e.message; }
+                await a.signOut();
+
+                // Safe to call: no cloud account is signed in, so this throws
+                // before it can reach signInWithRedirect.
+                out.signedOutRefused = null;
+                try { await a.linkProvider('google'); }
+                catch (e) { out.signedOutRefused = e.message; }
+
+                out.noPending = a.pendingLink();
+                return out;
+            """)
+            check("firebase config is present", linking["configured"] is True,
+                  str(linking["configured"]))
+            check("linking functions exist",
+                  linking["hasLink"] and linking["hasUnlink"] and linking["hasPending"],
+                  str(linking))
+            check("facebook path exists alongside google", linking["hasFacebook"])
+            check("local accounts report no linked providers",
+                  linking["localProviders"] == [], str(linking["localProviders"]))
+            check("device-only accounts cannot be linked",
+                  bool(linking["localRefused"]) and "Device-only" in linking["localRefused"],
+                  str(linking["localRefused"]))
+            check("linking refuses when signed out",
+                  bool(linking["signedOutRefused"]), str(linking["signedOutRefused"]))
+            check("no pending link on a clean session", linking["noPending"] is None,
+                  str(linking["noPending"]))
 
             # -------------------------------------------------- routes
             routes = {
