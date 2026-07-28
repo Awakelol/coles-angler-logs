@@ -6,41 +6,10 @@ import {
 } from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
 import { speciesSprite, icon, SPRITES } from '../pixel.js';
+import { prepareMedia, ACCEPT_ATTR, LIMITS, fmtMB } from '../media.js';
 import { esc, el, openSheet, toast, fmtDate, todayISO, round } from '../ui.js';
 
 const METHODS = ['Hand line', 'Rod & reel', 'Jigging', 'Casting lure', 'Trolling', 'Fly', 'Spearfishing', 'Net', 'Trap / pot', 'Other'];
-
-// Photos are downscaled before storage — a modern phone photo is 3–8 MB and
-// would fill the origin's storage quota within a couple of dozen catches.
-const PHOTO_MAX_PX = 1280;
-const PHOTO_QUALITY = 0.8;
-
-function resizePhoto(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, PHOTO_MAX_PX / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error('Could not process that image'))),
-        'image/jpeg',
-        PHOTO_QUALITY
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('That file is not a readable image'));
-    };
-    img.src = url;
-  });
-}
 
 function speciesLabel(speciesId) {
   return getSpecies(speciesId)?.common || speciesId || 'Unknown species';
@@ -50,6 +19,14 @@ function thumbFor(entry) {
   if (entry.photo) {
     const url = URL.createObjectURL(entry.photo);
     return `<img src="${url}" alt="" data-objurl="${url}">`;
+  }
+  if (entry.video) {
+    // Poster frame, not a <video> — a list of decoding clips is brutal on a phone.
+    if (entry.poster) {
+      const url = URL.createObjectURL(entry.poster);
+      return `<img src="${url}" alt="" data-objurl="${url}" class="is-video">`;
+    }
+    return icon('boat', { size: 40, palette: 'ocean' });
   }
   const species = getSpecies(entry.speciesId);
   return species ? speciesSprite(species, { size: 52 }) : icon('hook', { size: 40, palette: 'slate' });
@@ -138,9 +115,16 @@ function formHtml(ctx, entry) {
       </div>
 
       <div class="field">
-        <label for="f-photo">Photo</label>
-        <input type="file" id="f-photo" name="photo" accept="image/*">
-        <p class="field__hint">Optional. Stored only on this device and resized to ${PHOTO_MAX_PX}px.</p>
+        <label for="f-photo">Photo or clip</label>
+        <label class="btn btn--sm" style="cursor:pointer;align-self:flex-start">
+          Choose a file
+          <input type="file" id="f-photo" name="photo" accept="${ACCEPT_ATTR}" hidden>
+        </label>
+        <p class="field__hint">
+          Optional, kept on this device only. Photos are resized to ${LIMITS.imageMaxPx}px.
+          Clips must be ${LIMITS.videoSeconds}s or shorter and under ${fmtMB(LIMITS.videoBytes)} —
+          video can't be compressed in a browser, so longer ones have to be trimmed first.
+        </p>
         <div id="photoPreview"></div>
       </div>
 
@@ -159,8 +143,13 @@ function openCatchForm(ctx, entry, onDone) {
     const photoInput = form.querySelector('#f-photo');
     const preview = form.querySelector('#photoPreview');
 
-    let photoBlob = entry?.photo || null;
-    let removePhoto = false;
+    // Existing entries may carry a photo, a clip, or neither.
+    let media = entry?.video
+      ? { kind: 'video', blob: entry.video, poster: entry.poster || null }
+      : entry?.photo
+        ? { kind: 'image', blob: entry.photo, poster: null }
+        : null;
+    let removeMedia = false;
 
     const syncOther = () => {
       otherWrap.hidden = speciesSel.value !== '__other';
@@ -169,21 +158,32 @@ function openCatchForm(ctx, entry, onDone) {
     syncOther();
 
     function drawPreview() {
-      if (!photoBlob) {
-        preview.innerHTML = '';
-        return;
-      }
-      const url = URL.createObjectURL(photoBlob);
-      preview.innerHTML = `
+      preview.innerHTML = '';
+      if (!media) return;
+
+      // Video shows its poster frame rather than a live <video>, which keeps
+      // the form light; the clip itself plays from the saved entry.
+      const shown = media.kind === 'video' ? media.poster : media.blob;
+      const url = shown ? URL.createObjectURL(shown) : null;
+
+      const box = el(`
         <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
-          <img src="${url}" alt="Catch photo preview"
-               style="width:84px;height:84px;object-fit:cover;border:3px solid var(--line);border-radius:14px">
-          <button type="button" class="btn btn--sm" data-drop-photo>Remove photo</button>
-        </div>`;
-      preview.querySelector('[data-drop-photo]').addEventListener('click', () => {
-        URL.revokeObjectURL(url);
-        photoBlob = null;
-        removePhoto = true;
+          <div class="media-thumb${media.kind === 'video' ? ' media-thumb--video' : ''}">
+            ${url ? `<img src="${url}" alt="Attached ${media.kind}">` : ''}
+          </div>
+          <div>
+            <p class="card__sub" style="margin-bottom:6px">
+              ${media.kind === 'video' ? 'Clip' : 'Photo'} · ${fmtMB(media.blob.size)}
+            </p>
+            <button type="button" class="btn btn--sm" data-drop-photo>Remove</button>
+          </div>
+        </div>`);
+
+      preview.appendChild(box);
+      box.querySelector('[data-drop-photo]').addEventListener('click', () => {
+        if (url) URL.revokeObjectURL(url);
+        media = null;
+        removeMedia = true;
         photoInput.value = '';
         drawPreview();
       });
@@ -194,8 +194,8 @@ function openCatchForm(ctx, entry, onDone) {
       const file = photoInput.files?.[0];
       if (!file) return;
       try {
-        photoBlob = await resizePhoto(file);
-        removePhoto = false;
+        media = await prepareMedia(file);
+        removeMedia = false;
         drawPreview();
       } catch (err) {
         toast(err.message);
@@ -229,8 +229,20 @@ function openCatchForm(ctx, entry, onDone) {
         notes: String(fd.get('notes') || '').trim(),
       };
 
-      if (photoBlob) record.photo = photoBlob;
-      else if (removePhoto) delete record.photo;
+      // Only one attachment per catch, so switching kinds clears the other.
+      if (media?.kind === 'image') {
+        record.photo = media.blob;
+        delete record.video;
+        delete record.poster;
+      } else if (media?.kind === 'video') {
+        record.video = media.blob;
+        record.poster = media.poster || null;
+        delete record.photo;
+      } else if (removeMedia) {
+        delete record.photo;
+        delete record.video;
+        delete record.poster;
+      }
 
       try {
         await store.saveCatch(record);
