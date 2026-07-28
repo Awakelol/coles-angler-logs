@@ -4,6 +4,7 @@ import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
 import { REGIONS } from '../data/index.js';
 import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
+import { currentUser, signOut } from '../auth.js';
 import { esc, toast } from '../ui.js';
 
 export function render() {
@@ -16,6 +17,39 @@ export function render() {
         <p class="eyebrow">Configuration</p>
         <h1 class="display">Settings</h1>
         <p class="subtitle">Keys are stored only in this browser and are never sent anywhere except the provider you choose.</p>
+      </div>
+    </section>
+
+    <section class="band band--green">
+      <div class="wrap">
+        <div class="section-head"><h2>Account</h2><p>Who this device's log belongs to</p></div>
+        <div class="card">
+          ${
+            currentUser()
+              ? `<div class="row-between">
+                   <div>
+                     <p class="card__sub">Signed in as</p>
+                     <h3 class="card__title" style="font-size:20px">${esc(currentUser().username)}</h3>
+                   </div>
+                   <button class="btn btn--sm" id="signOutBtn">Sign out</button>
+                 </div>
+                 <p class="field__hint">
+                   Catches are kept per account, so signing out hides yours rather than deleting them.
+                 </p>`
+              : `<p class="card__body">Not signed in. The catch log asks you to sign in or create an account.</p>
+                 <a class="btn btn--sm btn--primary" href="#/log" style="align-self:flex-start">Go to the log</a>`
+          }
+          <div class="notice" style="margin-top:14px">
+            <h3>Not real security</h3>
+            <p>
+              Accounts live only in this browser — there is no server yet, so nothing
+              is verified and anyone with the unlocked device can get past this. It
+              keeps logs separate between people, nothing more.
+              <strong>Don't reuse a password from elsewhere.</strong>
+              Google and Facebook sign-in are planned.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -140,6 +174,13 @@ export function render() {
 }
 
 export function mount(root) {
+  // --- account ---
+  root.querySelector('#signOutBtn')?.addEventListener('click', () => {
+    signOut();
+    toast('Signed out');
+    location.hash = '#/log';
+  });
+
   // --- theme ---
   const themePicker = root.querySelector('#themePicker');
   const themeHint = root.querySelector('#themeHint');

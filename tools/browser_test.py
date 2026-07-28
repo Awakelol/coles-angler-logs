@@ -430,12 +430,122 @@ async def main():
             check("Cancabato Bay has a full species list", data["cancabatoCount"] >= 15,
                   str(data["cancabatoCount"]))
 
+            # -------------------------------------------------- accounts
+            print("\nAccounts")
+            await page.goto(f"{BASE}/index.html#/log")
+            await asyncio.sleep(1.0)
+            await page.eval("""
+                const a = await import('./js/auth.js');
+                a.signOut();
+                localStorage.removeItem('angler.users');
+                return 1;
+            """)
+            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/log")
+            await page.wait_for("document.querySelector('#authForm')", label="auth gate")
+
+            gated = await page.eval("""
+                return { form: !!document.querySelector('#authForm'),
+                         addBtn: !!document.getElementById('addCatch'),
+                         stats: !!document.querySelector('.kpi__v') };
+            """)
+            check("log is gated when signed out", gated["form"], str(gated))
+            check("no catch entry while signed out",
+                  not gated["addBtn"] and not gated["stats"], str(gated))
+
+            rules = await page.eval("""
+                const a = await import('./js/auth.js');
+                const out = {};
+                out.shortName = a.validateUsername('ab');
+                out.badChars  = a.validateUsername('co le!');
+                out.okName    = a.validateUsername('cole_1');
+                out.shortPw   = a.validatePassword('abc');
+                try { await a.signUp('cole', 'abcd'); out.made = true; } catch (e) { out.made = e.message; }
+                out.dupe = null;
+                try { await a.signUp('COLE', 'abcd'); } catch (e) { out.dupe = e.message; }
+                out.wrongPw = null;
+                try { await a.signIn('cole', 'nope'); } catch (e) { out.wrongPw = e.message; }
+                out.noUser = null;
+                try { await a.signIn('ghost', 'abcd'); } catch (e) { out.noUser = e.message; }
+                const me = a.currentUser();
+                return { ...out, user: me && me.username, provider: me && me.provider };
+            """)
+            check("rejects a short username", bool(rules["shortName"]), str(rules["shortName"]))
+            check("rejects bad characters", bool(rules["badChars"]), str(rules["badChars"]))
+            check("accepts a valid username", rules["okName"] is None, str(rules["okName"]))
+            check("rejects a short password", bool(rules["shortPw"]), str(rules["shortPw"]))
+            check("sign-up creates and signs in", rules["user"] == "cole", str(rules))
+            check("usernames are case-insensitively unique", bool(rules["dupe"]), str(rules["dupe"]))
+            check("wrong password is refused", bool(rules["wrongPw"]), str(rules["wrongPw"]))
+            # Same wording for both, so a shared device doesn't leak which
+            # usernames exist.
+            check("unknown user and wrong password read the same",
+                  rules["wrongPw"] == rules["noUser"], f"{rules['wrongPw']} vs {rules['noUser']}")
+            check("accounts carry a provider for future OAuth",
+                  rules["provider"] == "local", str(rules["provider"]))
+
+            stored = await page.eval("""
+                const raw = localStorage.getItem('angler.users');
+                return { plaintext: raw.includes('abcd'), hashed: /"hash":"[0-9a-f]{64}"/.test(raw),
+                         salted: /"salt":"[0-9a-f]{32}"/.test(raw) };
+            """)
+            check("passwords are not stored in plain text", not stored["plaintext"], str(stored))
+            check("passwords are salted and hashed",
+                  stored["hashed"] and stored["salted"], str(stored))
+
+            # Two accounts must not see each other's catches.
+            scoped = await page.eval("""
+                const a = await import('./js/auth.js');
+                const m = await import('./js/store.js');
+                const me = a.currentUser();
+                await m.store.saveCatch({ userId: me.id, speciesId: 'caranx-ignobilis',
+                    regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 5 });
+                const mineBefore = (await m.store.allCatches(me.id)).length;
+
+                const other = await a.signUp('friend', 'abcd');
+                await m.store.saveCatch({ userId: other.id, speciesId: 'chanos-chanos',
+                    regionId: 'leyte-gulf', date: '2026-07-21', weightKg: 2 });
+
+                return {
+                    mine: mineBefore,
+                    theirs: (await m.store.allCatches(other.id)).length,
+                    mineStill: (await m.store.allCatches(me.id)).length,
+                    everything: (await m.store.allCatches()).length,
+                };
+            """)
+            check("each account sees only its own catches",
+                  scoped["mine"] == 1 and scoped["theirs"] == 1 and scoped["mineStill"] == 1,
+                  str(scoped))
+            check("both catches exist in storage", scoped["everything"] >= 2, str(scoped))
+
+            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/log")
+            await page.wait_for("document.querySelector('.kpi__v')", label="log after sign-in")
+            signed = await page.eval("""
+                return { add: !!document.getElementById('addCatch'),
+                         who: document.querySelector('.eyebrow')?.textContent || '' };
+            """)
+            check("signed-in log is usable", signed["add"], str(signed))
+            check("log names the signed-in user", "friend" in signed["who"], signed["who"])
+
+            # Everything after this exercises the (now gated) log, so leave a
+            # known account signed in and start it from an empty log.
+            await page.eval("""
+                const a = await import('./js/auth.js');
+                const m = await import('./js/store.js');
+                await m.store.clearCatches();
+                a.signOut();
+                localStorage.removeItem('angler.users');
+                await a.signUp('tester', 'abcd');
+                return 1;
+            """)
+
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
                 "species": ("#/species", ".species-card"),
                 "conditions": ("#/conditions", ".now-card__temp, .notice--error"),
-                "log": ("#/log", ".kpi__v"),
+                "log": ("#/log", ".kpi__v, #authForm"),
                 "tips": ("#/tips", ".tip-card"),
                 "settings": ("#/settings", "#saveTides"),
             }
@@ -460,13 +570,16 @@ async def main():
             await page.wait_for("document.querySelector('.kpi__v')", label="log stats")
 
             seeded = await page.eval("""
+                const a = await import('./js/auth.js');
                 const m = await import('./js/store.js');
+                const me = a.currentUser();
                 await m.store.clearCatches();
-                await m.store.saveCatch({speciesId:'lutjanus-argentimaculatus', regionId:'leyte-gulf',
-                    date:'2026-07-21', weightKg:4.2, lengthCm:61, method:'Casting lure', bait:'live tamban'});
-                await m.store.saveCatch({speciesId:'photopectoralis-bindus', regionId:'leyte-gulf',
-                    date:'2026-07-24', weightKg:0.11, lengthCm:9});
-                return (await m.store.allCatches()).length;
+                await m.store.saveCatch({userId: me.id, speciesId:'lutjanus-argentimaculatus',
+                    regionId:'leyte-gulf', date:'2026-07-21', weightKg:4.2, lengthCm:61,
+                    method:'Casting lure', bait:'live tamban'});
+                await m.store.saveCatch({userId: me.id, speciesId:'photopectoralis-bindus',
+                    regionId:'leyte-gulf', date:'2026-07-24', weightKg:0.11, lengthCm:9});
+                return (await m.store.allCatches(me.id)).length;
             """)
             check("seed two catches", seeded == 2, f"got {seeded}")
 
