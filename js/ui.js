@@ -61,11 +61,30 @@ export function round(n, places = 1) {
   return String(Math.round(Number(n) * f) / f);
 }
 
-/** Show a modal sheet. `render(close)` returns the sheet's inner HTML. */
+const reducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// How far the sheet must be dragged before releasing closes it. Deliberately
+// well past a casual flick: the grab handle is small and the whole point is
+// that an accidental downward swipe should snap back, not dismiss the page
+// you were reading.
+const DRAG_CLOSE_PX = 130;
+const DRAG_CLOSE_VELOCITY = 0.75; // px/ms — a fast flick closes sooner
+
+/**
+ * Show a modal sheet. `render()` returns the sheet's inner HTML.
+ *
+ * Slides up over a dimming backdrop, and can be dragged back down to close —
+ * but only by its handle. Making the whole sheet draggable would fight every
+ * attempt to scroll a long species card.
+ */
 export function openSheet(title, render, onMount) {
   const backdrop = el(`
     <div class="sheet-backdrop">
       <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+        <button class="sheet__grip" data-grip aria-label="Drag down to close, or press to close">
+          <span></span>
+        </button>
         <div class="sheet__head">
           <h2>${esc(title)}</h2>
           <button class="icon-btn" data-close aria-label="Close">
@@ -76,21 +95,105 @@ export function openSheet(title, render, onMount) {
       </div>
     </div>`);
 
+  const sheet = backdrop.querySelector('.sheet');
   backdrop.querySelector('[data-sheet-body]').innerHTML = render();
-  const close = () => backdrop.remove();
+
+  // Keep the page behind from scrolling under the sheet.
+  const scrollY = window.scrollY;
+  document.body.style.top = `-${scrollY}px`;
+  document.body.classList.add('is-sheet-open');
+
+  let closing = false;
+  const close = () => {
+    if (closing) return;
+    closing = true;
+
+    document.body.classList.remove('is-sheet-open');
+    document.body.style.top = '';
+    window.scrollTo({ top: scrollY, behavior: 'instant' in window ? 'instant' : 'auto' });
+    document.removeEventListener('keydown', onKey);
+
+    if (reducedMotion()) {
+      backdrop.remove();
+      return;
+    }
+    backdrop.classList.remove('is-open');
+    backdrop.classList.add('is-closing');
+    // Don't rely on transitionend alone — if the element is hidden mid-flight
+    // it never fires and the sheet would linger in the DOM forever.
+    const done = () => backdrop.remove();
+    sheet.addEventListener('transitionend', done, { once: true });
+    setTimeout(done, 400);
+  };
+
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+  }
 
   backdrop.querySelector('[data-close]').addEventListener('click', close);
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });
-  document.addEventListener('keydown', function onKey(e) {
-    if (e.key === 'Escape') {
-      close();
-      document.removeEventListener('keydown', onKey);
+  document.addEventListener('keydown', onKey);
+
+  // --- drag to dismiss, from the grip only ---------------------------------
+  const grip = backdrop.querySelector('[data-grip]');
+  let dragging = false;
+  let startY = 0;
+  let startTime = 0;
+  let dy = 0;
+
+  grip.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startTime = performance.now();
+    dy = 0;
+    grip.setPointerCapture(e.pointerId);
+    sheet.style.transition = 'none';
+  });
+
+  grip.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    // Downward only; resisting upward drag stops the sheet detaching from the
+    // bottom of the screen.
+    dy = Math.max(0, e.clientY - startY);
+    sheet.style.transform = `translateY(${dy}px)`;
+    // Backdrop lightens as it goes, so the gesture feels connected.
+    backdrop.style.setProperty('--sheet-progress', String(Math.min(1, dy / 260)));
+  });
+
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try {
+      grip.releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer already gone */
     }
+    sheet.style.transition = '';
+    const velocity = dy / Math.max(1, performance.now() - startTime);
+
+    if (dy > DRAG_CLOSE_PX || velocity > DRAG_CLOSE_VELOCITY) {
+      close();
+    } else {
+      // Snap back.
+      sheet.style.transform = '';
+      backdrop.style.removeProperty('--sheet-progress');
+    }
+  };
+  grip.addEventListener('pointerup', endDrag);
+  grip.addEventListener('pointercancel', endDrag);
+
+  // Tapping the grip closes too — a drag target that does nothing when
+  // tapped is a small trap.
+  grip.addEventListener('click', () => {
+    if (dy < 4) close();
   });
 
   document.body.appendChild(backdrop);
+  // Next frame, so the browser has a start state to animate from.
+  requestAnimationFrame(() => backdrop.classList.add('is-open'));
+
   if (onMount) onMount(backdrop, close);
   return close;
 }

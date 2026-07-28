@@ -316,8 +316,41 @@ a.card, button.card {
   text-align: left; font: inherit; color: inherit;
   text-decoration: none; cursor: pointer; width: 100%;
 }
+
+/* Micro-interactions. Everything animated here is transform/opacity only, so
+   it stays on the compositor — important on the species grid, where 40 cards
+   are on screen and anything triggering layout would stutter while scrolling. */
+@media (prefers-reduced-motion: no-preference) {
+  a.card, button.card, .btn, .chip, .icon-btn, .gallery__item, .zone-pin {
+    transition: transform .14s ease, box-shadow .14s ease,
+                background-color .14s ease, border-color .14s ease;
+  }
+
+  /* Pointer devices only — :hover on touch sticks after a tap. */
+  @media (hover: hover) {
+    a.card:hover, button.card:hover {
+      transform: translate(-1px, -2px);
+      box-shadow: 6px 7px 0 var(--line);
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .chip:hover { transform: translateY(-1px); }
+    .species-card:hover .species-card__art svg { transform: scale(1.05); }
+  }
+
+  .species-card__art svg { transition: transform .18s ease; }
+
+  /* Freshly rendered lists ease in rather than snapping. One animation on the
+     container, not per card, so a 40-item grid costs the same as a 4-item one. */
+  .grid { animation: list-in .22s ease both; }
+}
+
 a.card:active, button.card:active {
   transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line);
+}
+
+@keyframes list-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .card__title { font-size: 17px; font-weight: 900; letter-spacing: -.02em; margin: 0; }
@@ -828,18 +861,91 @@ img.is-video ~ .play-badge { content: ''; }
 
 /* --- modal --------------------------------------------------------------- */
 
+/* Sheet slides up from the bottom over a dimming backdrop. --sheet-progress
+   is set live while dragging so the dim eases off as the sheet is pulled
+   away, which is what makes the gesture feel attached to your finger. */
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 70;
-  background: rgba(16, 20, 28, .5);
+  --sheet-progress: 0;
+  background: rgba(16, 20, 28, calc(.55 * (1 - var(--sheet-progress))));
   display: grid; place-items: end center;
   padding: 0;
+  opacity: 0;
+  transition: opacity .22s ease, background .1s linear;
 }
+.sheet-backdrop.is-open { opacity: 1; }
+.sheet-backdrop.is-closing { opacity: 0; }
+
 .sheet {
   background: var(--cream); width: 100%; max-width: 620px;
   border: var(--border-w) solid var(--line); border-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   max-height: 92vh; overflow-y: auto;
-  padding: 20px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+  /* Momentum scrolling, and stop a scroll from chaining to the page behind. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  /* Keep the browser's default scrollbar from cutting across the rounded
+     corners. A slim, inset, rounded thumb sits inside the shape instead. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-30) transparent;
+  scrollbar-gutter: stable;
+}
+.sheet-backdrop.is-open .sheet { transform: translateY(0); }
+.sheet-backdrop.is-closing .sheet { transform: translateY(100%); }
+
+.sheet::-webkit-scrollbar { width: 10px; }
+.sheet::-webkit-scrollbar-track { background: transparent; }
+.sheet::-webkit-scrollbar-thumb {
+  background: var(--ink-30);
+  border-radius: 999px;
+  /* Transparent border + background-clip keeps the thumb narrow and away from
+     the sheet's edge, so it never touches the rounded corner. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.sheet::-webkit-scrollbar-thumb:hover { background: var(--ink-60); background-clip: content-box; }
+
+/* Grab handle — the ONLY drag target. Making the whole sheet draggable would
+   fight every attempt to scroll a long species card. */
+.sheet__grip {
+  display: block;
+  width: 100%;
+  padding: 10px 0 6px;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none; /* let the pointer handlers own the gesture */
+  position: sticky; top: 0; z-index: 2;
+}
+.sheet__grip:active { cursor: grabbing; }
+.sheet__grip span {
+  display: block;
+  width: 44px; height: 5px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--ink-30);
+  transition: background .15s ease, width .15s ease;
+}
+.sheet__grip:hover span, .sheet__grip:active span {
+  background: var(--ink-60);
+  width: 56px;
+}
+
+/* Page behind must not scroll while a sheet is up. */
+body.is-sheet-open {
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-backdrop, .sheet { transition: none; }
+  .sheet { transform: none; }
+  .sheet-backdrop { opacity: 1; }
 }
 .sheet__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .sheet__head h2 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -.03em; }

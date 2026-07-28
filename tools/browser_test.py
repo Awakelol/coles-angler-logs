@@ -1315,6 +1315,73 @@ async def main():
             """)
             check("choosing the region stops the prompting", quiet is False, str(quiet))
 
+            # -------------------------------------------------- sheet gestures
+            print()
+            print("Sheet")
+            await page.goto(f"{BASE}/index.html#/species")
+            await page.wait_for("document.querySelector('.species-card')", label="species")
+
+            sheet = await page.eval("""
+                document.querySelector('.species-card').click();
+                await new Promise(r => setTimeout(r, 500));
+                const bd = document.querySelector('.sheet-backdrop');
+                const sh = document.querySelector('.sheet');
+                const cs = getComputedStyle(sh);
+                return {
+                    open: bd.classList.contains('is-open'),
+                    grip: !!sh.querySelector('[data-grip]'),
+                    // Slid fully up, not left mid-transform.
+                    settled: cs.transform === 'none' || cs.transform.endsWith(', 0)'),
+                    dimmed: getComputedStyle(bd).backgroundColor !== 'rgba(0, 0, 0, 0)',
+                    bodyLocked: document.body.classList.contains('is-sheet-open'),
+                    scrollbarThin: cs.scrollbarWidth === 'thin',
+                    contained: cs.overscrollBehaviorY === 'contain',
+                };
+            """)
+            check("sheet opens and settles", sheet["open"] and sheet["settled"], str(sheet))
+            check("sheet has a drag grip", sheet["grip"])
+            check("background is dimmed", sheet["dimmed"], str(sheet["dimmed"]))
+            check("page behind is locked from scrolling", sheet["bodyLocked"])
+            check("scrollbar is slim, not the default bar", sheet["scrollbarThin"],
+                  str(sheet["scrollbarThin"]))
+            check("sheet scroll does not chain to the page", sheet["contained"],
+                  str(sheet["contained"]))
+
+            # A short drag must SNAP BACK — the whole point of the threshold.
+            short = await page.eval("""
+                const grip = document.querySelector('[data-grip]');
+                const box = grip.getBoundingClientRect();
+                const x = box.left + box.width / 2, y = box.top + box.height / 2;
+                const opts = (cy) => ({ clientX: x, clientY: cy, pointerId: 1,
+                                        bubbles: true, pointerType: 'touch' });
+                grip.dispatchEvent(new PointerEvent('pointerdown', opts(y)));
+                grip.dispatchEvent(new PointerEvent('pointermove', opts(y + 40)));
+                await new Promise(r => setTimeout(r, 260));  // slow: low velocity
+                grip.dispatchEvent(new PointerEvent('pointerup', opts(y + 40)));
+                await new Promise(r => setTimeout(r, 450));
+                return { stillOpen: !!document.querySelector('.sheet-backdrop') };
+            """)
+            check("a short drag snaps back instead of closing",
+                  short["stillOpen"], str(short))
+
+            # A long drag closes.
+            long_drag = await page.eval("""
+                const grip = document.querySelector('[data-grip]');
+                const box = grip.getBoundingClientRect();
+                const x = box.left + box.width / 2, y = box.top + box.height / 2;
+                const opts = (cy) => ({ clientX: x, clientY: cy, pointerId: 2,
+                                        bubbles: true, pointerType: 'touch' });
+                grip.dispatchEvent(new PointerEvent('pointerdown', opts(y)));
+                grip.dispatchEvent(new PointerEvent('pointermove', opts(y + 200)));
+                await new Promise(r => setTimeout(r, 300));
+                grip.dispatchEvent(new PointerEvent('pointerup', opts(y + 200)));
+                await new Promise(r => setTimeout(r, 700));
+                return { gone: !document.querySelector('.sheet-backdrop'),
+                         unlocked: !document.body.classList.contains('is-sheet-open') };
+            """)
+            check("a long drag closes the sheet", long_drag["gone"], str(long_drag))
+            check("closing unlocks the page behind", long_drag["unlocked"], str(long_drag))
+
             # -------------------------------------------------- map
             print("\nFishing map")
             await page.goto(f"{BASE}/index.html#/map")
