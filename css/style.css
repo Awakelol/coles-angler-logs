@@ -521,8 +521,13 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
 .field > label { font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-60); }
 .field__hint { font-size: 12px; font-weight: 600; color: var(--ink-60); }
 
-input[type="text"], input[type="number"], input[type="date"], input[type="password"],
-input[type="search"], select, textarea {
+/* Every text-like input, by exclusion rather than by listing types.
+   The previous version enumerated text/number/date/password/search — and
+   type="email" was simply missing, so it rendered unstyled: no border, no
+   padding, and dark because color-scheme applies to native controls. Opting
+   out the few non-text types means the next one added is styled by default. */
+input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]),
+select, textarea {
   font-family: inherit; font-size: 15px; font-weight: 700;
   padding: 12px 14px; width: 100%;
   border: var(--border-w) solid var(--line); border-radius: var(--radius-sm);

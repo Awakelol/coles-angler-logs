@@ -542,6 +542,29 @@ async def main():
             check("sign-up screen has its own heading",
                   signup["heading"] == "Create account", str(signup["heading"]))
 
+            # Every input on the form must actually be styled. The type-based
+            # selector silently skipped type="email", which rendered as a thin
+            # unstyled strip — a whole class of bug that only shows up visually.
+            styling = await page.eval("""
+                const bad = [];
+                const floats = [...document.querySelectorAll('.float')];
+                for (const wrap of floats) {
+                    const input = wrap.querySelector('input');
+                    const cs = getComputedStyle(input);
+                    const borderPx = parseFloat(cs.borderTopWidth) || 0;
+                    const height = input.getBoundingClientRect().height;
+                    if (borderPx < 1 || height < 40 || cs.borderTopStyle === 'none') {
+                        bad.push(`${input.type}: border=${cs.borderTopWidth} h=${Math.round(height)}`);
+                    }
+                }
+                return { bad, count: floats.length,
+                         labelled: floats.every(w => !!w.querySelector('label')) };
+            """)
+            check("every sign-up field is styled", not styling["bad"], "; ".join(styling["bad"]))
+            check("sign-up has four floating fields", styling["count"] == 4,
+                  str(styling["count"]))
+            check("every floating field has its label", styling["labelled"])
+
             rules = await page.eval("""
                 const a = await import('./js/auth.js');
                 const out = {};
