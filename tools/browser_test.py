@@ -540,6 +540,56 @@ async def main():
                 return 1;
             """)
 
+            # --- provider facade ---
+            facade = await page.eval("""
+                const a = await import('./js/auth.js');
+                const out = {};
+                out.configured = a.cloudConfigured();
+                out.hasSteps = Array.isArray(a.CLOUD_SETUP_STEPS) && a.CLOUD_SETUP_STEPS.length >= 3;
+
+                // Google must refuse cleanly, not throw something cryptic,
+                // while no Firebase config exists.
+                out.googleErr = null;
+                try { await a.signInWithGoogle(); }
+                catch (e) { out.googleErr = { msg: e.message, code: e.code }; }
+
+                // Local accounts still work with no cloud config at all.
+                const u = await a.signUp('localonly', 'abcd');
+                out.localWorks = a.isSignedIn() && a.currentUser().username === 'localonly';
+                out.syncs = a.currentUser().syncs;
+                out.provider = a.currentUser().provider;
+
+                // init() must be safe to call unconfigured.
+                out.initOk = !!(await a.init());
+
+                await a.signOut();
+                out.signedOut = !a.isSignedIn();
+                return out;
+            """)
+            check("cloud is reported unconfigured without a Firebase config",
+                  facade["configured"] is False, str(facade["configured"]))
+            check("setup steps are documented in code", facade["hasSteps"])
+            check("Google sign-in refuses cleanly when unconfigured",
+                  facade["googleErr"] and facade["googleErr"]["code"] == "unconfigured",
+                  str(facade["googleErr"]))
+            check("local accounts still work with no cloud setup", facade["localWorks"])
+            check("local accounts are marked as not syncing",
+                  facade["syncs"] is False and facade["provider"] == "local", str(facade))
+            check("startup init is safe when unconfigured", facade["initOk"])
+            check("sign out clears the session", facade["signedOut"])
+
+            # A session written by the pre-facade version must still resolve.
+            legacy = await page.eval("""
+                const a = await import('./js/auth.js');
+                const u = await a.signUp('legacyuser', 'abcd');
+                // Old format: a bare user id string, not the {kind,id} object.
+                localStorage.setItem('angler.session', u.id);
+                const who = a.currentUser();
+                await a.signOut();
+                return who && who.username;
+            """)
+            check("legacy sessions still resolve", legacy == "legacyuser", str(legacy))
+
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
@@ -566,6 +616,17 @@ async def main():
 
             # -------------------------------------------------- log flow
             print("\nCatch log flow")
+            await page.goto(f"{BASE}/index.html#/log")
+            # The log is gated now, so sign in before exercising it.
+            await page.eval("""
+                const a = await import('./js/auth.js');
+                if (!a.isSignedIn()) {
+                    try { await a.signIn('tester', 'abcd'); }
+                    catch { await a.signUp('tester', 'abcd'); }
+                }
+                return 1;
+            """)
+            await page.goto(f"{BASE}/index.html#/tips")
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log stats")
 

@@ -2,7 +2,8 @@
 
 import { store, computeStats } from '../store.js';
 import {
-  isSignedIn, currentUser, listUsers, signUp, signIn, USERNAME_RULES,
+  isSignedIn, currentUser, listUsers, signUp, signIn, signInWithGoogle,
+  cloudConfigured, USERNAME_RULES,
 } from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
 import { speciesSprite, icon, SPRITES } from '../pixel.js';
@@ -280,6 +281,23 @@ function gateHtml() {
     <section class="band band--cream">
       <div class="wrap" style="max-width:460px">
         <div class="card">
+          ${
+            cloudConfigured()
+              ? `<button class="btn btn--block" id="googleBtn" style="margin-bottom:6px">
+                   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                     <path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7C21.7 18.9 23 15.9 23 12.3z"/>
+                     <path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3C3.7 21.4 7.6 24 12 24z"/>
+                     <path fill="#FBBC05" d="M5.6 14.7a7.2 7.2 0 0 1 0-4.6v-3H1.8a12 12 0 0 0 0 10.6l3.8-3z"/>
+                     <path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.2 15.1 0 12 0 7.6 0 3.7 2.6 1.8 6.1l3.8 3c.9-2.7 3.4-4.3 6.4-4.3z"/>
+                   </svg>
+                   Continue with Google
+                 </button>
+                 <p class="field__hint" style="text-align:center;margin-bottom:10px">
+                   Syncs across your devices. Or use a device-only account below.
+                 </p>
+                 <hr style="border:0;border-top:var(--border-w-sm) solid var(--line);margin:0 0 14px">`
+              : ''
+          }
           <div class="chips" id="authTabs" style="margin-bottom:6px">
             <button class="chip" data-mode="signin" aria-pressed="${hasAccounts}">Sign in</button>
             <button class="chip" data-mode="signup" aria-pressed="${!hasAccounts}">Create account</button>
@@ -310,7 +328,16 @@ function gateHtml() {
           </form>
 
           <div class="notice" style="margin-top:16px">
-            <h3>Read this before you pick a password</h3>
+            <h3>Device-only accounts don't sync</h3>
+            <p>
+              A username and password here works with no internet and no setup,
+              but the log stays on this phone. ${
+                cloudConfigured()
+                  ? 'Sign in with Google if you want it on more than one device.'
+                  : 'Google sign-in is planned and will sync.'
+              }
+            </p>
+            <h3 style="margin-top:10px">Read this before you pick a password</h3>
             <p>
               There's no server yet — accounts live only in this browser. This keeps
               logs separate between people sharing a phone; it is <strong>not</strong>
@@ -383,6 +410,20 @@ function mountGate(root, ctx) {
     }
   };
   applyMode();
+
+  root.querySelector('#googleBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Opening Google…';
+    try {
+      // Redirects away; app.js finishes the sign-in when the browser returns.
+      await signInWithGoogle();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Continue with Google';
+      errorLine.textContent = err.message;
+    }
+  });
 
   tabs.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-mode]');

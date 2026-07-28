@@ -29,6 +29,8 @@ const SHELL = [
   './js/theme.js',
   './js/search.js',
   './js/auth.js',
+  './js/auth/local.js',
+  './js/auth/cloud.js',
   './js/media.js',
   './js/store.js',
   './js/pixel.js',
