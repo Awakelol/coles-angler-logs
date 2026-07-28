@@ -110,16 +110,24 @@ function requireCloud(what) {
   }
 }
 
-export async function signInWithGoogle() {
-  requireCloud('Google sign-in');
-  // Leaves the page; init() finishes the job when the browser comes back.
-  await cloud.signInWithGoogle();
+/**
+ * Returns the profile when a popup completed, or null when the browser was
+ * sent away on a redirect (init() finishes that on the way back) or the user
+ * closed the popup.
+ */
+async function cloudSignIn(name, label) {
+  requireCloud(label);
+  const profile = await cloud.signInWith(name);
+  if (profile) writeSession({ kind: 'cloud', id: profile.id });
+  return profile;
 }
 
-export async function signInWithFacebook() {
-  requireCloud('Facebook sign-in');
-  await cloud.signInWithFacebook();
-}
+export const signInWithGoogle = () => cloudSignIn('google', 'Google sign-in');
+export const signInWithFacebook = () => cloudSignIn('facebook', 'Facebook sign-in');
+
+/** The last sign-in failure, so the UI can show something concrete. */
+export const lastAuthError = cloud.lastAuthError;
+export const clearAuthError = cloud.clearAuthError;
 
 // --- account linking --------------------------------------------------------
 //

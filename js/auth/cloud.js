@@ -117,10 +117,75 @@ function providerFor(sdk, name) {
   throw new Error(`Unknown sign-in provider: ${name}`);
 }
 
+/** Last auth failure, surfaced to the UI. Silent failure is worse than ugly. */
+const LAST_ERROR_KEY = 'angler.authError';
+
+export function lastAuthError() {
+  try {
+    return JSON.parse(sessionStorage.getItem(LAST_ERROR_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function clearAuthError() {
+  sessionStorage.removeItem(LAST_ERROR_KEY);
+}
+
+function recordError(stage, err) {
+  const detail = { stage, code: err?.code || null, message: err?.message || String(err) };
+  try {
+    sessionStorage.setItem(LAST_ERROR_KEY, JSON.stringify(detail));
+  } catch {
+    /* ignore */
+  }
+  console.error(`[auth:${stage}]`, err);
+  return detail;
+}
+
+/**
+ * Sign in with a provider.
+ *
+ * POPUP FIRST, redirect as fallback — and this order matters more than it
+ * looks. signInWithRedirect relies on cross-origin storage between the app and
+ * the `*.firebaseapp.com` auth handler. Chrome's storage partitioning and
+ * Safari's ITP now block exactly that, so the user completes sign-in at Google,
+ * gets sent back, and getRedirectResult() returns null — landing them on the
+ * login screen as though nothing happened. Popup keeps the flow in one
+ * browsing context and is unaffected.
+ *
+ * Redirect stays as the fallback for the case popup was originally chosen for:
+ * iOS standalone PWAs, where popups may be blocked outright.
+ */
 export async function signInWith(name) {
+  clearAuthError();
   const { auth, sdk } = await firebase();
-  // Leaves the page and comes back; completeRedirect() picks it up on return.
-  await sdk.signInWithRedirect(auth, providerFor(sdk, name));
+  const provider = providerFor(sdk, name);
+
+  try {
+    const result = await sdk.signInWithPopup(auth, provider);
+    const profile = toProfile(result.user);
+    cache(profile);
+    return profile;
+  } catch (err) {
+    const popupFailed = [
+      'auth/popup-blocked',
+      'auth/operation-not-supported-in-this-environment',
+      'auth/cancelled-popup-request',
+    ].includes(err?.code);
+
+    if (err?.code === 'auth/popup-closed-by-user') {
+      // Deliberate cancellation — not an error worth shouting about.
+      return null;
+    }
+    if (!popupFailed) {
+      recordError('popup', err);
+      throw err;
+    }
+    // Popup unavailable (usually an installed iOS PWA): fall back.
+    await sdk.signInWithRedirect(auth, provider);
+    return null; // navigating away
+  }
 }
 
 export const signInWithGoogle = () => signInWith('google');
@@ -228,8 +293,14 @@ export async function completeRedirect() {
       } catch {
         // Non-fatal: worst case the user just signs in normally.
       }
+      recordError('redirect-collision', err);
+      return null;
     }
-    // Any other failed or cancelled redirect shouldn't break start-up.
+
+    // Everything else gets recorded. Returning null silently here is what made
+    // a failed sign-in look like "nothing happened" — the UI now has something
+    // to show instead.
+    recordError('redirect', err);
     return null;
   }
 }

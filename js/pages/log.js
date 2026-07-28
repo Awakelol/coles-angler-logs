@@ -3,7 +3,7 @@
 import { store, computeStats } from '../store.js';
 import {
   isSignedIn, currentUser, listUsers, signUp, signIn, signInWithGoogle,
-  cloudConfigured, USERNAME_RULES,
+  cloudConfigured, lastAuthError, clearAuthError, USERNAME_RULES,
 } from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
 import { speciesSprite, icon, SPRITES } from '../pixel.js';
@@ -411,17 +411,34 @@ function mountGate(root, ctx) {
   };
   applyMode();
 
+  // A failed redirect from a previous page load leaves a reason behind.
+  const priorError = lastAuthError();
+  if (priorError) {
+    errorLine.textContent =
+      `Google sign-in failed (${priorError.code || priorError.stage}). ${priorError.message}`;
+    clearAuthError();
+  }
+
   root.querySelector('#googleBtn')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
+    const label = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Opening Google…';
     try {
-      // Redirects away; app.js finishes the sign-in when the browser returns.
-      await signInWithGoogle();
+      const profile = await signInWithGoogle();
+      if (profile) {
+        // Popup path: we're signed in without ever leaving the page.
+        toast(`Signed in as ${profile.username}`);
+        ctx.navigate('/log');
+        return;
+      }
+      // Redirect path, or the popup was closed. Restore the button either way.
+      btn.disabled = false;
+      btn.innerHTML = label;
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Continue with Google';
-      errorLine.textContent = err.message;
+      btn.innerHTML = label;
+      errorLine.textContent = err.code ? `${err.message} (${err.code})` : err.message;
     }
   });
 
