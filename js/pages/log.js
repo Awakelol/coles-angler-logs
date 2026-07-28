@@ -1,6 +1,9 @@
 // Catch log + personal records.
 
 import { store, computeStats } from '../store.js';
+import {
+  isSignedIn, currentUser, listUsers, signUp, signIn, USERNAME_RULES,
+} from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
 import { speciesSprite, icon, SPRITES } from '../pixel.js';
 import { esc, el, openSheet, toast, fmtDate, todayISO, round } from '../ui.js';
@@ -212,6 +215,8 @@ function openCatchForm(ctx, entry, onDone) {
 
       const record = {
         ...(entry || {}),
+        // Stamped on write so a catch always belongs to whoever logged it.
+        userId: entry?.userId || currentUser()?.id || null,
         regionId: entry?.regionId || ctx.regionId,
         speciesId,
         speciesOther: speciesId === '__other' ? String(fd.get('speciesOther') || '').trim() : '',
@@ -248,11 +253,72 @@ function openCatchForm(ctx, entry, onDone) {
   });
 }
 
-export function render(ctx) {
+/** The sign-in / sign-up gate shown when nobody is signed in. */
+function gateHtml() {
+  const hasAccounts = listUsers().length > 0;
   return `
     <section class="band band--green">
       <div class="wrap">
-        <p class="eyebrow">Personal records</p>
+        <p class="eyebrow">Your logbook</p>
+        <h1 class="display">Catch log</h1>
+        <p class="subtitle">Sign in so your catches stay yours. Several people can share this device, each with their own log.</p>
+      </div>
+    </section>
+
+    <section class="band band--cream">
+      <div class="wrap" style="max-width:460px">
+        <div class="card">
+          <div class="chips" id="authTabs" style="margin-bottom:6px">
+            <button class="chip" data-mode="signin" aria-pressed="${hasAccounts}">Sign in</button>
+            <button class="chip" data-mode="signup" aria-pressed="${!hasAccounts}">Create account</button>
+          </div>
+
+          <form id="authForm" autocomplete="off">
+            <div class="field">
+              <label for="a-user">Username</label>
+              <input type="text" id="a-user" name="username" required
+                     autocapitalize="none" autocorrect="off" spellcheck="false"
+                     placeholder="e.g. cole">
+              <p class="field__hint" data-user-hint></p>
+            </div>
+
+            <div class="field">
+              <label for="a-pass">Password</label>
+              <input type="password" id="a-pass" name="password" required
+                     placeholder="at least 4 characters">
+            </div>
+
+            <div class="field" data-confirm hidden>
+              <label for="a-pass2">Confirm password</label>
+              <input type="password" id="a-pass2" name="password2" placeholder="type it again">
+            </div>
+
+            <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
+            <button type="submit" class="btn btn--primary btn--block" id="authSubmit">Sign in</button>
+          </form>
+
+          <div class="notice" style="margin-top:16px">
+            <h3>Read this before you pick a password</h3>
+            <p>
+              There's no server yet — accounts live only in this browser. This keeps
+              logs separate between people sharing a phone; it is <strong>not</strong>
+              security, and anyone with the unlocked device can get past it.
+              <strong>Don't reuse a password from anywhere else.</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>`;
+}
+
+export function render(ctx) {
+  if (!isSignedIn()) return gateHtml();
+
+  const user = currentUser();
+  return `
+    <section class="band band--green">
+      <div class="wrap">
+        <p class="eyebrow">Signed in as ${esc(user.username)}</p>
         <h1 class="display">Catch log</h1>
         <p class="subtitle">Every fish you log sharpens the pattern for the next trip.</p>
         <div class="center"><button class="btn btn--dark" id="addCatch">+ Log a catch</button></div>
@@ -282,7 +348,76 @@ export function render(ctx) {
     </section>`;
 }
 
+/** Wires the sign-in / sign-up form. Returns true if it handled the mount. */
+function mountGate(root, ctx) {
+  const form = root.querySelector('#authForm');
+  if (!form) return false;
+
+  const tabs = root.querySelector('#authTabs');
+  const confirmField = root.querySelector('[data-confirm]');
+  const errorLine = root.querySelector('#authError');
+  const submit = root.querySelector('#authSubmit');
+  const userHint = root.querySelector('[data-user-hint]');
+
+  let mode = listUsers().length ? 'signin' : 'signup';
+
+  const applyMode = () => {
+    confirmField.hidden = mode !== 'signup';
+    submit.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+    userHint.textContent = mode === 'signup' ? USERNAME_RULES.describe : '';
+    errorLine.textContent = '';
+    for (const b of tabs.querySelectorAll('[data-mode]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+    }
+  };
+  applyMode();
+
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-mode]');
+    if (!btn || btn.dataset.mode === mode) return;
+    mode = btn.dataset.mode;
+    applyMode();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorLine.textContent = '';
+    const fd = new FormData(form);
+    const username = String(fd.get('username') || '').trim();
+    const password = String(fd.get('password') || '');
+
+    try {
+      if (mode === 'signup') {
+        if (password !== String(fd.get('password2') || '')) {
+          throw new Error("Passwords don't match.");
+        }
+        const isFirstAccount = listUsers().length === 0;
+        const user = await signUp(username, password);
+        // Entries logged before profiles existed would otherwise vanish.
+        if (isFirstAccount) {
+          const adopted = await store.adoptOrphans(user.id);
+          if (adopted) toast(`Welcome, ${user.username} — ${adopted} earlier catches are yours`);
+          else toast(`Welcome, ${user.username}`);
+        } else {
+          toast(`Welcome, ${user.username}`);
+        }
+      } else {
+        const user = await signIn(username, password);
+        toast(`Signed in as ${user.username}`);
+      }
+      ctx.navigate('/log');
+    } catch (err) {
+      errorLine.textContent = err.message;
+    }
+  });
+
+  return true;
+}
+
 export async function mount(root, ctx) {
+  if (mountGate(root, ctx)) return;
+
+  const user = currentUser();
   const statsPane = root.querySelector('#statsPane');
   const listPane = root.querySelector('#catchList');
   const recordsPane = root.querySelector('#recordsPane');
@@ -297,7 +432,7 @@ export async function mount(root, ctx) {
 
   async function refresh() {
     releaseUrls();
-    const catches = await store.allCatches();
+    const catches = await store.allCatches(user.id);
     const stats = computeStats(catches);
 
     statsPane.innerHTML = `

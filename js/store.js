@@ -61,10 +61,37 @@ function tx(mode, fn) {
 const wrap = (req) => ({ __req: req });
 
 export const store = {
-  async allCatches() {
-    const rows = await tx('readonly', (s) => wrap(s.getAll()));
-    // Newest first.
-    return (rows || []).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  /**
+   * Catches belonging to the signed-in user, newest first.
+   *
+   * Records are scoped by `userId` so several people can share a device and
+   * keep separate logs. Entries written before profiles existed have no
+   * userId; they're adopted by the first account created (see adoptOrphans).
+   */
+  async allCatches(userId = null) {
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    const mine = userId === null ? rows : rows.filter((r) => r.userId === userId);
+    return mine.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  },
+
+  /**
+   * Hand pre-profile entries to a user. Called once when the first account is
+   * created, so switching on profiles doesn't appear to delete the log.
+   */
+  async adoptOrphans(userId) {
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    const orphans = rows.filter((r) => !r.userId);
+    for (const row of orphans) {
+      await tx('readwrite', (s) => s.put({ ...row, userId }));
+    }
+    return orphans.length;
+  },
+
+  async deleteAllFor(userId) {
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    for (const row of rows.filter((r) => r.userId === userId)) {
+      await tx('readwrite', (s) => s.delete(row.id));
+    }
   },
 
   async getCatch(id) {

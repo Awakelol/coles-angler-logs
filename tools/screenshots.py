@@ -46,7 +46,7 @@ SHOTS = [
     ("5-map-zone",   "#/map",        "#fishMap .leaflet-tile-pane",
      "document.querySelector('[data-zone]').click()"),
     ("6-conditions", "#/conditions", ".now-card__temp",              None),
-    ("7-log",        "#/log",        ".kpi__v",                      None),
+    ("7-log",        "#/log",        ".kpi__v, #authForm",           None),
     ("8-tips",       "#/tips",       ".tip-card",                    None),
     ("9-settings",   "#/settings",   "#saveTides",                   None),
     # Dark theme sweep — set once, then walk the same screens.
@@ -57,7 +57,7 @@ SHOTS = [
     ("d3-conditions", "#/conditions", ".now-card__temp",             None),
     ("d4-map",       "#/map",        "#fishMap .leaflet-tile-pane",  None),
     ("d5-settings",  "#/settings",   "#themePicker",                 None),
-    ("d6-log",       "#/log",        ".kpi__v",                      None),
+    ("d6-log",       "#/log",        ".kpi__v, #authForm",           None),
 ]
 
 
@@ -135,14 +135,19 @@ async def main():
             await page.send("Page.navigate", url=f"{BASE}/index.html#/log")
             await asyncio.sleep(1.2)
             await page.eval("""
+                const a = await import('./js/auth.js');
                 const m = await import('./js/store.js');
+                // Tour shows a populated log, so make sure someone is signed in.
+                a.signOut();
+                localStorage.removeItem('angler.users');
+                const me = await a.signUp('cole', 'demo1234');
                 await m.store.clearCatches();
-                await m.store.saveCatch({speciesId:'lutjanus-argentimaculatus', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'lutjanus-argentimaculatus', regionId:'leyte-gulf',
                     date:'2026-07-21', weightKg:4.2, lengthCm:61, method:'Casting lure',
                     bait:'live tamban', notes:'Run-out tide at the creek mouth.'});
-                await m.store.saveCatch({speciesId:'caranx-ignobilis', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'caranx-ignobilis', regionId:'leyte-gulf',
                     date:'2026-07-24', weightKg:7.8, lengthCm:83, method:'Casting lure', bait:'popper'});
-                await m.store.saveCatch({speciesId:'photopectoralis-bindus', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'photopectoralis-bindus', regionId:'leyte-gulf',
                     date:'2026-07-26', weightKg:0.11, lengthCm:9, method:'Hand line', bait:'cut shrimp'});
                 return 1;
             """)

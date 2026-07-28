@@ -28,6 +28,7 @@ const SHELL = [
   './js/updates.js',
   './js/theme.js',
   './js/search.js',
+  './js/auth.js',
   './js/store.js',
   './js/pixel.js',
   './js/config.js',
