@@ -476,6 +476,56 @@ async def main():
             check("sign-up is a separate action, not a tab", gated["signupBtn"], str(gated))
             check("sign-in screen has no email field", not gated["hasEmail"], str(gated))
 
+            # Floating labels: the name sits inside the empty field, then lifts
+            # and STAYS above once there's content — it must never vanish.
+            floating = await page.eval("""
+                const wrap = document.querySelector('.float');
+                const input = wrap.querySelector('input');
+                const label = wrap.querySelector('label');
+                const box = () => label.getBoundingClientRect();
+
+                const restingTop = box().top;
+                const restingSize = parseFloat(getComputedStyle(label).fontSize);
+
+                input.focus();
+                input.value = 'cole';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 350));
+
+                const liftedTop = box().top;
+                const liftedSize = parseFloat(getComputedStyle(label).fontSize);
+                const style = getComputedStyle(label);
+
+                // Blur with content still present — the label must stay lifted.
+                input.blur();
+                await new Promise(r => setTimeout(r, 350));
+                const afterBlurTop = box().top;
+                const stillVisible = style.display !== 'none' &&
+                                     parseFloat(style.opacity) > 0.5;
+
+                // A real <label for>, not a placeholder attribute.
+                const properLabel = label.tagName === 'LABEL' &&
+                                    label.htmlFor === input.id;
+                // The placeholder is only a space, used to detect emptiness.
+                const placeholderBlank = input.getAttribute('placeholder').trim() === '';
+
+                input.value = '';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                return { restingTop, liftedTop, afterBlurTop, restingSize,
+                         liftedSize, stillVisible, properLabel, placeholderBlank };
+            """)
+            check("label starts inside the field",
+                  floating["restingSize"] >= 14, str(floating["restingSize"]))
+            check("label lifts when typing",
+                  floating["liftedTop"] < floating["restingTop"] - 10, str(floating))
+            check("label shrinks as it lifts",
+                  floating["liftedSize"] < floating["restingSize"], str(floating))
+            check("label stays up after blur with content",
+                  abs(floating["afterBlurTop"] - floating["liftedTop"]) < 2, str(floating))
+            check("label remains visible, never hidden", floating["stillVisible"], str(floating))
+            check("uses a real <label for>, not a placeholder",
+                  floating["properLabel"] and floating["placeholderBlank"], str(floating))
+
             signup = await page.eval("""
                 document.querySelector('[data-goto=signup]').click();
                 await new Promise(r => setTimeout(r, 600));

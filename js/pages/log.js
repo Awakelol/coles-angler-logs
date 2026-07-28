@@ -299,16 +299,16 @@ function signInHtml() {
     ${cloudConfigured() ? '<div class="rule"><span>or</span></div>' : ''}
 
     <form id="authForm" autocomplete="on">
-      <div class="field">
-        <label for="a-user">Username</label>
-        <input type="text" id="a-user" name="username" required
+      <div class="float">
+        <input type="text" id="a-user" name="username" required placeholder=" "
                autocapitalize="none" autocorrect="off" spellcheck="false"
-               autocomplete="username" placeholder="e.g. cole">
+               autocomplete="username">
+        <label for="a-user">Username</label>
       </div>
-      <div class="field">
+      <div class="float">
+        <input type="password" id="a-pass" name="password" required placeholder=" "
+               autocomplete="current-password">
         <label for="a-pass">Password</label>
-        <input type="password" id="a-pass" name="password" required
-               autocomplete="current-password" placeholder="your password">
       </div>
       <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
       <button type="submit" class="btn btn--primary btn--block">Log in</button>
@@ -325,35 +325,35 @@ function signUpHtml() {
     </button>
 
     <form id="authForm" autocomplete="on">
-      <div class="field">
+      <div class="float">
+        <input type="text" id="a-user" name="username" required placeholder=" "
+               autocapitalize="none" autocorrect="off" spellcheck="false"
+               autocomplete="username">
         <label for="a-user">Username</label>
-        <input type="text" id="a-user" name="username" required
-               autocapitalize="none" autocorrect="off" spellcheck="false"
-               autocomplete="username" placeholder="e.g. cole">
-        <p class="field__hint">${esc(USERNAME_RULES.describe)}</p>
       </div>
+      <p class="field__hint" style="margin:-8px 0 14px">${esc(USERNAME_RULES.describe)}</p>
 
-      <div class="field">
-        <label for="a-email">Email <span style="text-transform:none;font-weight:700">(optional)</span></label>
-        <input type="email" id="a-email" name="email"
+      <div class="float">
+        <input type="email" id="a-email" name="email" placeholder=" "
                autocapitalize="none" autocorrect="off" spellcheck="false"
-               autocomplete="email" placeholder="you@example.com">
-        <p class="field__hint">
-          Nothing is sent to it. It only gives you a way to link this account
-          to a real one later.
-        </p>
+               autocomplete="email">
+        <label for="a-email">Email (optional)</label>
       </div>
+      <p class="field__hint" style="margin:-8px 0 14px">
+        Nothing is sent to it. It only gives you a way to link this account to a
+        real one later.
+      </p>
 
-      <div class="field">
+      <div class="float">
+        <input type="password" id="a-pass" name="password" required placeholder=" "
+               autocomplete="new-password">
         <label for="a-pass">Password</label>
-        <input type="password" id="a-pass" name="password" required
-               autocomplete="new-password" placeholder="at least 4 characters">
       </div>
 
-      <div class="field">
+      <div class="float">
+        <input type="password" id="a-pass2" name="password2" required placeholder=" "
+               autocomplete="new-password">
         <label for="a-pass2">Confirm password</label>
-        <input type="password" id="a-pass2" name="password2" required
-               autocomplete="new-password" placeholder="type it again">
       </div>
 
       <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>

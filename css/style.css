@@ -456,6 +456,51 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
   color: var(--on-accent);
 }
 
+/* Floating labels.
+   The label starts inside the input, acting as the placeholder, and lifts to
+   the top of the box once the field is focused or has content. Uses a real
+   <label for> rather than a placeholder attribute, so it stays announced to
+   screen readers and survives autofill — a placeholder-only field is
+   invisible to assistive tech and to anyone who has already started typing.
+
+   The input carries placeholder=" " (one space) purely so :placeholder-shown
+   can be used to detect emptiness; there is no CSS selector for "input is
+   empty" otherwise. */
+.float {
+  position: relative;
+  margin-bottom: 14px;
+}
+.float input {
+  width: 100%;
+  height: 58px;
+  padding: 22px 14px 6px;
+}
+.float label {
+  position: absolute;
+  left: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  transform-origin: left top;
+  color: var(--ink-60);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  pointer-events: none;
+  transition: transform .14s ease, font-size .14s ease, color .14s ease;
+}
+.float input:focus ~ label,
+.float input:not(:placeholder-shown) ~ label {
+  transform: translateY(-24px);
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+.float input:focus ~ label { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .float label { transition: none; } }
+
 /* Divider with centred text: "or", "Don't have an account?" */
 .rule {
   display: flex; align-items: center; gap: 12px;
