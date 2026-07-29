@@ -136,54 +136,31 @@ export function render(ctx) {
   }
 
   return `
-    <section class="band band--sky" style="padding-bottom:20px">
-      <div class="wrap">
-        <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
+    <div class="map-screen">
+      <div class="map-screen__info">
+        <div class="map-screen__bar">
+          <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
+          <a class="map-screen__link" href="#/conditions">Tides &amp; forecast &rarr;</a>
+        </div>
         <div id="mapWeather">${loadingBlock('Fetching weather…')}</div>
-        <div id="mapForecast" style="margin-top:14px"></div>
-        <div class="center" style="margin-top:16px">
-          <a class="btn btn--dark" href="#/conditions">Tides &amp; full forecast &rarr;</a>
-        </div>
+        <div id="mapForecast"></div>
       </div>
-    </section>
 
-    <div id="mapWrap">
-      <div id="fishMap" role="application" aria-label="Fishing zone map"></div>
-      <div id="mapHint" class="map-hint"></div>
-      ${
-        geolocationSupported()
-          ? `<button class="map-locate" id="locateBtn" title="Centre on my location"
-                     aria-label="Centre the map on my location">
-               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                 <path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 3a9 9 0 0 0-8-8V1h-2v2a9 9 0 0 0-8 8H1v2h2a9 9 0 0 0 8 8v2h2v-2a9 9 0 0 0 8-8h2v-2h-2Zm-9 8a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/>
-               </svg>
-             </button>`
-          : ''
-      }
-    </div>
-
-    <section class="band band--cream">
-      <div class="wrap">
-        <div class="section-head"><h2>All zones</h2><p>Same pins, as a list</p></div>
-        <div class="grid grid--3" id="zoneList">
-          ${zones
-            .map(
-              (z) => `
-            <button class="card" data-zone="${esc(z.id)}">
-              <div class="row-between">
-                <div>
-                  <h3 class="card__title">${esc(z.name)}</h3>
-                  <p class="card__sub">${esc(habitatTactics(z.type)?.label || z.type)} &middot; ${esc(z.depth || '')}</p>
-                </div>
-                ${renderSprite(SPRITES.perch, ZONE_PALETTE[z.type] || 'ocean', { size: 54 })}
-              </div>
-              <p class="card__sub">${(z.species || []).length} species</p>
-            </button>`
-            )
-            .join('')}
-        </div>
+      <div id="mapWrap">
+        <div id="fishMap" role="application" aria-label="Fishing zone map"></div>
+        <div id="mapHint" class="map-hint"></div>
+        ${
+          geolocationSupported()
+            ? `<button class="map-locate" id="locateBtn" title="Centre on my location"
+                       aria-label="Centre the map on my location">
+                 <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                   <path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 3a9 9 0 0 0-8-8V1h-2v2a9 9 0 0 0-8 8H1v2h2a9 9 0 0 0 8 8v2h2v-2a9 9 0 0 0 8-8h2v-2h-2Zm-9 8a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/>
+                 </svg>
+               </button>`
+            : ''
+        }
       </div>
-    </section>`;
+    </div>`;
 }
 
 /** Weather panel above the map. Independent of Leaflet — if tiles fail to
@@ -203,7 +180,7 @@ async function mountWeather(root, ctx) {
   try {
     const w = await fetchWeather(coords, tz);
     pane.innerHTML = weatherHtml(w, tz);
-    if (strip) strip.innerHTML = forecastHtml(w, tz);
+    if (strip) strip.innerHTML = forecastHtml(w, tz, { compact: true });
   } catch (err) {
     console.error('[map weather]', err);
     pane.innerHTML = errorBlock('Could not load weather', err.message, 'Try again');
@@ -303,10 +280,20 @@ export async function mount(root, ctx) {
    * whenever the device won't give one, so the map always shows something
    * useful rather than an arbitrary point of empty water.
    */
+  // The shallowest zone threshold. Fitting the whole region can land below
+  // it — especially in a short, wide map pane — and then NOTHING qualifies to
+  // show, leaving a map with no pins and no explanation.
+  const shallowestZoom = Math.min(...zones.map((z) => z.minZoom ?? 0));
+
   function showWholeRegion() {
     const b = cfg.bounds;
     if (b) {
-      map.fitBounds(L.latLngBounds([b.south, b.west], [b.north, b.east]), { padding: [20, 20] });
+      const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+      // Work out the zoom first rather than fitting and correcting afterwards:
+      // fitBounds may animate, so getZoom() straight after still reports the
+      // old value and the clamp silently does nothing.
+      const fitZoom = map.getBoundsZoom(bounds, false, L.point(20, 20));
+      map.setView(bounds.getCenter(), Math.max(fitZoom, shallowestZoom), { animate: false });
     } else {
       const visible = markers.filter(({ zone }) => map.getZoom() >= (zone.minZoom ?? 0));
       if (visible.length) {
@@ -321,8 +308,14 @@ export async function mount(root, ctx) {
 
   showWholeRegion();
 
-  // The container is sized by CSS after render; Leaflet needs telling.
+  // The container is sized by CSS after render, and again whenever the split
+  // changes — rotating the phone, or the window crossing the desktop
+  // breakpoint. Leaflet caches its size and renders half a map otherwise.
   setTimeout(() => map.invalidateSize(), 60);
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(container);
+  }
 
   // --- follow the angler ---------------------------------------------------
 

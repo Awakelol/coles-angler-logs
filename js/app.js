@@ -171,6 +171,27 @@ function buildRegionPicker() {
   });
 }
 
+/**
+ * Publish the top bar's real height as --topbar-h.
+ *
+ * The map screen sizes itself to fill exactly what's left of the viewport, so
+ * it needs this precisely. Hardcoding it breaks the moment the brand text
+ * wraps at a narrow width — the map would either fall short or push the page
+ * into scrolling, which is the one thing that layout is trying to avoid.
+ */
+function trackTopbarHeight() {
+  const bar = document.querySelector('.topbar');
+  if (!bar) return;
+  const publish = () =>
+    document.documentElement.style.setProperty('--topbar-h', `${bar.offsetHeight}px`);
+  publish();
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(publish).observe(bar);
+  } else {
+    window.addEventListener('resize', publish);
+  }
+}
+
 function buildBrandMark() {
   const mark = document.getElementById('brandMark');
   if (mark) mark.innerHTML = icon('hook', { size: 40, palette: 'sunset' });
@@ -183,6 +204,7 @@ window.addEventListener('hashchange', render);
 applyTheme();
 watchSystemTheme();
 
+trackTopbarHeight();
 buildBrandMark();
 buildRegionPicker();
 render();

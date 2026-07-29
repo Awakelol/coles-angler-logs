@@ -42,11 +42,17 @@ export function weatherHtml(w, tz) {
     </p>`;
 }
 
-export function forecastHtml(w, tz) {
+/**
+ * Five-day strip.
+ * @param {boolean} compact drops the condition label and wind row and shrinks
+ *        the icon — the map screen splits the viewport with the map itself and
+ *        cannot afford the full-height version.
+ */
+export function forecastHtml(w, tz, { compact = false } = {}) {
   if (!w.daily?.length) return '<p class="card__sub">No forecast available.</p>';
   return `
-    <div class="card">
-      <div class="forecast">
+    <div class="card${compact ? ' card--tight' : ''}">
+      <div class="forecast${compact ? ' forecast--compact' : ''}">
         ${w.daily
           .map((d) => {
             const [desc, iconKey] = describeCode(d.code);
@@ -54,12 +60,12 @@ export function forecastHtml(w, tz) {
             <div class="fc-day">
               <div class="fc-day__d">${esc(fmtWeekday(d.date, tz))}</div>
               <div style="display:grid;place-items:center;margin:6px 0">
-                ${icon(iconKey, { size: 46, palette: 'weather' })}
+                ${icon(iconKey, { size: compact ? 28 : 46, palette: 'weather' })}
               </div>
-              <div class="fc-day__c">${esc(desc)}</div>
+              ${compact ? '' : `<div class="fc-day__c">${esc(desc)}</div>`}
               <div class="fc-day__t">${round(d.maxC, 0)}&deg;<small> / ${round(d.minC, 0)}&deg;</small></div>
               <div class="fc-day__p">${d.pop != null ? `${round(d.pop, 0)}% rain` : `${round(d.precipMm, 1)} mm`}</div>
-              <div class="fc-day__p" style="color:var(--ink-30)">${round(d.windKph, 0)} km/h</div>
+              ${compact ? '' : `<div class="fc-day__p" style="color:var(--ink-30)">${round(d.windKph, 0)} km/h</div>`}
               <div class="sr-only">${esc(desc)}</div>
             </div>`;
           })

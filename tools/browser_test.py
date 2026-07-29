@@ -1380,6 +1380,66 @@ async def main():
             """)
             check("weather UI is shared, not duplicated", shared["exports"], str(shared))
 
+            # --- single-screen layout ---
+            layout = await page.eval("""
+                const screen = document.querySelector('.map-screen');
+                const info = document.querySelector('.map-screen__info');
+                const wrap = document.getElementById('mapWrap');
+                const r = screen.getBoundingClientRect();
+                const ir = info.getBoundingClientRect();
+                const wr = wrap.getBoundingClientRect();
+                return {
+                    exists: !!screen,
+                    noZoneList: !document.querySelector('[data-zone]'),
+                    // Stacked on a phone: info above, map below.
+                    stacked: ir.bottom <= wr.top + 2,
+                    mapShare: wr.height / r.height,
+                    // The whole thing must fit the viewport, not push a scroll.
+                    fitsViewport: r.height <= window.innerHeight + 2,
+                    topbarVar: getComputedStyle(document.documentElement)
+                                 .getPropertyValue('--topbar-h').trim(),
+                };
+            """)
+            check("map screen is a single layout", layout["exists"] and layout["noZoneList"],
+                  str(layout))
+            check("phone layout stacks info above map", layout["stacked"], str(layout))
+            check("map takes the larger share",
+                  0.5 <= layout["mapShare"] <= 0.75, f"{layout['mapShare']:.2f}")
+            check("screen fits the viewport", layout["fitsViewport"], str(layout))
+            check("topbar height is measured, not guessed",
+                  layout["topbarVar"].endswith("px"), str(layout["topbarVar"]))
+
+            wide = await page.eval("""
+                const screen = document.querySelector('.map-screen');
+                const cols = getComputedStyle(screen).gridTemplateColumns.split(' ').length;
+                return { cols };
+            """)
+            check("phone layout is a single column", wide["cols"] == 1, str(wide))
+
+            # Everything asked for must be visible without scrolling the panel:
+            # conditions, the five-day strip, and the link through to tides.
+            visible = await page.eval("""
+                const info = document.querySelector('.map-screen__info');
+                const box = info.getBoundingClientRect();
+                const within = (el) => {
+                    if (!el) return false;
+                    const r = el.getBoundingClientRect();
+                    return r.bottom <= box.bottom + 1 && r.top >= box.top - 1;
+                };
+                return {
+                    now: within(document.querySelector('.now-card')),
+                    strip: within(document.querySelector('.forecast')),
+                    link: within(document.querySelector('a[href="#/conditions"]')),
+                    scrollNeeded: info.scrollHeight > info.clientHeight + 2,
+                    panel: Math.round(info.clientHeight),
+                    content: Math.round(info.scrollHeight),
+                    viewport: window.innerHeight,
+                };
+            """)
+            check("conditions visible without scrolling", visible["now"], str(visible))
+            check("forecast visible without scrolling", visible["strip"], str(visible))
+            check("tides link visible without scrolling", visible["link"], str(visible))
+
             # -------------------------------------------------- sheet gestures
             print()
             print("Sheet")
@@ -1503,8 +1563,6 @@ async def main():
                   f"{zoomed_out} at z9 -> {zoomed_in} at z12")
             await page.shot("map")
 
-            listed = await page.eval("return document.querySelectorAll('[data-zone]').length;")
-            check("zone list rendered", listed == 10, f"got {listed}")
 
             # --- centre-on-me ---
             has_btn = await page.eval("return !!document.getElementById('locateBtn');")
@@ -1586,7 +1644,8 @@ async def main():
             check("map pins use the horizontal sprite",
                   pin and pin["pin"] == pin["sprite"], str(pin))
 
-            await page.eval("return document.querySelector('[data-zone]').click(), 1;")
+            # The zone list is gone; zones open from their map pin.
+            await page.eval("return document.querySelector('.zone-pin').click(), 1;")
             await asyncio.sleep(0.5)
             sheet_txt = await page.eval("""
                 const s = document.querySelector('.sheet');

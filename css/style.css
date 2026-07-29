@@ -718,6 +718,116 @@ img.is-video ~ .play-badge { content: ''; }
 @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
+/* --- map screen ----------------------------------------------------------
+   One screenful, no page scroll: conditions above, map below on a phone;
+   side by side on a wide window, the way a maps app lays out.
+
+   --topbar-h is measured in JS rather than guessed, because the brand text
+   wraps at narrow widths and a hardcoded value would leave the map either
+   short or overflowing. See app.js.
+*/
+.map-screen {
+  display: grid;
+  /* A fixed 40/60 split, not `auto` for the info row. With `auto` the panel
+     sized to its content and left the map a sliver — and Leaflet initialising
+     into a near-zero-height box renders no tiles at all. The panel scrolls
+     internally instead. */
+  /* The panel takes the height it actually needs; the map is guaranteed at
+     least 55%. A fixed ratio was brittle — tuned to fit one phone height, it
+     clipped the forecast on anything shorter. This lands near 40/60 on a
+     typical phone and simply gives the map more when the panel needs less. */
+  grid-template-rows: minmax(0, auto) minmax(52%, 1fr);
+  height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-h) - env(safe-area-inset-bottom, 0px));
+  min-height: 460px;
+}
+
+.map-screen__info {
+  padding: 10px 12px 8px;
+  background: var(--band-sky);
+  border-bottom: var(--border-w) solid var(--line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* Location on the left, the link through to tides on the right. Inline rather
+   than a full-width button below the forecast: on a 780px viewport that button
+   was the row that pushed the strip out of sight, and a text link costs nothing
+   vertically. */
+.map-screen__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.map-screen__info .eyebrow { margin: 0; text-align: left; }
+.map-screen__link {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--sky-deep);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.map-screen__link:hover { text-decoration: underline; }
+
+/* The provider/updated line is useful on the Conditions page but is pure
+   overhead here, where every pixel is contested. */
+.map-screen__info #mapWeather .field__hint { display: none; }
+
+/* The full-size conditions card fills the whole 40% on a phone, pushing the
+   forecast and the tides button below the fold — so on this screen it is
+   condensed: smaller temperature, stats on ONE row of four rather than a
+   2x2 block, and a tighter advice pill. That reclaims roughly 100px, which
+   is what the compact forecast strip and the button need. */
+.map-screen__info .now-card { padding: 10px; }
+.map-screen__info .now-card__temp { font-size: 28px; }
+.map-screen__info .now-card__desc { font-size: 13px; }
+.map-screen__info .now-card svg { width: 52px; height: auto; }
+.map-screen__info .stat-grid {
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 8px;
+  gap: 6px;
+}
+.map-screen__info .stat { padding: 4px 7px; }
+.map-screen__info .stat__k { font-size: 8.5px; letter-spacing: .06em; }
+.map-screen__info .stat__v { font-size: 13px; }
+.map-screen__info .advice { margin-top: 8px; padding: 5px 11px; font-size: 11.5px; }
+.map-screen__info .field__hint { margin: 0; font-size: 10.5px; }
+
+/* Compact five-day strip — no condition label, no wind row, smaller icon. */
+.forecast--compact { gap: 3px; }
+.forecast--compact .fc-day { padding: 3px 2px; }
+.map-screen__info #mapForecast .card { padding: 6px; }
+.forecast--compact .fc-day__d { font-size: 10px; }
+.forecast--compact .fc-day__t { font-size: 13px; margin-top: 2px; }
+.forecast--compact .fc-day__p { font-size: 10px; }
+
+@media (min-width: 900px) {
+  /* Sidebar + map, like a maps app. 34/66 rather than a strict 40/60 — the
+     panel only needs to fit its cards; the map benefits from the rest. */
+  .map-screen {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 34%) minmax(0, 1fr);
+  }
+  .map-screen__info {
+    border-bottom: 0;
+    border-right: var(--border-w) solid var(--line);
+    padding: 18px 16px;
+    gap: 12px;
+  }
+  .map-screen__info .now-card { padding: 16px; }
+  .map-screen__info .now-card__temp { font-size: 48px; }
+  .map-screen__info .now-card__desc { font-size: 15px; }
+  .map-screen__info .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .map-screen__info .stat { padding: 8px 10px; }
+  .map-screen__info .stat__k { font-size: 10px; }
+  .map-screen__info .stat__v { font-size: 17px; }
+}
+
 /* --- map ----------------------------------------------------------------- */
 
 /* Leaflet's panes and controls run to z-index 1000. `isolation` traps them in
@@ -726,11 +836,11 @@ img.is-video ~ .play-badge { content: ''; }
   position: relative;
   isolation: isolate;
   z-index: 0;
-  border-bottom: var(--border-w) solid var(--line);
+  min-height: 0; /* let the grid row actually shrink it */
 }
 
 #fishMap {
-  height: min(62vh, 560px);
+  height: 100%;
   width: 100%;
   background: var(--art-bg);
 }
