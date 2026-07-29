@@ -700,7 +700,13 @@ async def main():
 
             stored = await page.eval("""
                 const raw = localStorage.getItem('angler.users');
-                return { plaintext: raw.includes('abcd'), hashed: /"hash":"[0-9a-f]{64}"/.test(raw),
+                // Check FIELD VALUES, not the raw blob. 'abcd' is four hex
+                // characters, so scanning the whole string finds it inside a
+                // random salt or SHA-256 digest every so often — a false
+                // failure on a security assertion, which is the worst kind.
+                const plaintext = JSON.parse(raw).some(
+                    (u) => Object.values(u).some((v) => v === 'abcd'));
+                return { plaintext, hashed: /"hash":"[0-9a-f]{64}"/.test(raw),
                          salted: /"salt":"[0-9a-f]{32}"/.test(raw) };
             """)
             check("passwords are not stored in plain text", not stored["plaintext"], str(stored))
@@ -1082,9 +1088,87 @@ async def main():
                   status["state"] == "local" and "device" in status["text"].lower(),
                   str(status))
 
+            # -------------------------------------------------- identify
+            print("\nIdentify")
+            await page.goto(f"{BASE}/index.html#/identify")
+            await page.wait_for("document.querySelector('#takePhoto')", label="identify screen")
+
+            cam = await page.eval("""
+                const input = document.getElementById('fishPhoto');
+                const homeLink = () => {
+                    location.hash = '#/';
+                    return new Promise(r => setTimeout(() => r(
+                        document.querySelector('a.card[href="#/identify"]')), 700));
+                };
+                const card = await homeLink();
+                location.hash = '#/identify';
+                await new Promise(r => setTimeout(r, 700));
+
+                return {
+                    onHome: !!card,
+                    homeIcon: !!card && !!card.querySelector('svg'),
+                    // capture="environment" is what opens the rear camera
+                    // directly instead of a file browser on a phone.
+                    capture: input?.getAttribute('capture'),
+                    accept: input?.getAttribute('accept'),
+                    hiddenInput: input?.hidden === true,
+                    hasButton: !!document.getElementById('takePhoto'),
+                    // Nothing should claim to have identified anything yet.
+                    noFakeResult: document.getElementById('identifyResult')
+                        ?.textContent.trim() === '',
+                };
+            """)
+            check("home offers the camera", cam["onHome"] and cam["homeIcon"], str(cam))
+            check("the camera opens straight to the rear lens",
+                  cam["capture"] == "environment", str(cam))
+            check("it accepts any image", cam["accept"] == "image/*", str(cam))
+            check("the file input is hidden behind a real button",
+                  cam["hiddenInput"] and cam["hasButton"], str(cam))
+            check("no result is shown before a photo exists",
+                  cam["noFakeResult"], str(cam))
+
+            # A photo must produce a preview and an honest "not wired up" notice
+            # rather than a spinner that never resolves.
+            shot = await page.eval("""
+                const canvas = document.createElement('canvas');
+                canvas.width = 64; canvas.height = 48;
+                const g = canvas.getContext('2d');
+                g.fillStyle = '#3FA9C9'; g.fillRect(0, 0, 64, 48);
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+
+                const input = document.getElementById('fishPhoto');
+                const dt = new DataTransfer();
+                dt.items.add(new File([blob], 'fish.png', { type: 'image/png' }));
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 1500));
+
+                const result = document.getElementById('identifyResult');
+                return {
+                    preview: !!document.querySelector('#shot img'),
+                    altText: document.querySelector('#shot img')?.alt || '',
+                    clearShown: document.getElementById('clearPhoto')?.hidden === false,
+                    saysNotReady: /isn.t connected yet/i.test(result?.textContent || ''),
+                    offersAlternative: !!result?.querySelector('a[href="#/info"]'),
+                    buttonRestored: document.getElementById('takePhoto').textContent
+                        .includes('Take a photo'),
+                };
+            """)
+            check("a photo shows a preview", shot["preview"], str(shot))
+            check("the preview is described for screen readers",
+                  bool(shot["altText"]), str(shot))
+            check("the photo can be cleared", shot["clearShown"], str(shot))
+            # Honesty check: the screen must not imply it identified anything.
+            check("it says recognition is not connected yet",
+                  shot["saysNotReady"], str(shot))
+            check("and points somewhere useful instead",
+                  shot["offersAlternative"], str(shot))
+            check("the button recovers after preparing", shot["buttonRestored"], str(shot))
+
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
+                "identify": ("#/identify", "#takePhoto"),
                 "info-fishes": ("#/info", ".species-card"),
                 "info-gear": ("#/info?tab=gear", ".gear-card"),
                 "info-zones": ("#/info?tab=zones", ".zone-card"),

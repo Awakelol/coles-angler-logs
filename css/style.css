@@ -652,6 +652,25 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .tip-card { border-left: 10px solid var(--yellow); }
 .tip-card--general { border-left-color: var(--sky-deep); }
 
+/* --- identify ------------------------------------------------------------ */
+
+.identify__shot {
+  background: var(--art-bg);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  min-height: 220px;
+  display: grid; place-items: center; gap: 10px;
+  padding: 18px;
+  overflow: hidden;
+}
+.identify__shot svg { width: auto; height: 120px; }
+/* The photo replaces the placeholder entirely, so it owns the whole box. */
+.identify__shot img {
+  width: 100%; max-height: 420px;
+  object-fit: contain;
+  border-radius: calc(var(--radius-sm) - 4px);
+}
+
 /* --- sync & connected accounts ------------------------------------------- */
 
 /* One line under the log heading. Quiet by default — it only earns attention

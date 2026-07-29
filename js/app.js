@@ -19,6 +19,7 @@ import * as mapPage from './pages/map.js';
 import * as conditions from './pages/conditions.js';
 import * as log from './pages/log.js';
 import * as info from './pages/info.js';
+import * as identify from './pages/identify.js';
 import * as settings from './pages/settings.js';
 
 // Untracked local keys first, then anything entered in Settings wins.
@@ -36,6 +37,7 @@ const ROUTES = [
   { path: '/conditions', page: conditions },
   { path: '/log', page: log },
   { path: '/info', page: info },
+  { path: '/identify', page: identify },
   { path: '/settings', page: settings },
 ];
 

@@ -717,6 +717,25 @@ ICONS = {
 '  OOOOOOOOOOOOOO    ',
 ],
 
+# Body in B so it recolours per palette; the lens is the only fixed-value
+# part, because a lens that changes colour stops reading as glass.
+'camera': [
+'     OOOO           ',
+'    OBBBBO          ',
+'  OOOOOOOOOOOOOOOO  ',
+' OBBBBBBBBBBBBBBBBO ',
+' OBBBOOOOOOBBBBAABO ',
+' OBBOLLLLLLOBBBBBBO ',
+' OBOLLHHHHLLOBBBBBO ',
+' OBOLHHMMHHLOBBBBBO ',
+' OBOLHMMMMHLOBBBBBO ',
+' OBOLLHHHHLLOBBBBBO ',
+' OBBOLLLLLLOBBBBBBO ',
+' OBBBOOOOOOBBBBBBBO ',
+' OBBBBBBBBBBBBBBBBO ',
+'  OOOOOOOOOOOOOOOO  ',
+],
+
 'wave': [
 '',
 '             LLLLLLLL',
