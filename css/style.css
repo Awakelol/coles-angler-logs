@@ -726,6 +726,8 @@ img.is-video ~ .play-badge { content: ''; }
    wraps at narrow widths and a hardcoded value would leave the map either
    short or overflowing. See app.js.
 */
+body:has(.map-screen) { padding-bottom: 0; }
+
 .map-screen {
   display: grid;
   /* A fixed 40/60 split, not `auto` for the info row. With `auto` the panel
@@ -739,6 +741,7 @@ img.is-video ~ .play-badge { content: ''; }
   grid-template-rows: minmax(0, auto) minmax(52%, 1fr);
   height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-h) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
+  margin-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
 }
 
 .map-screen__info {
@@ -761,7 +764,16 @@ img.is-video ~ .play-badge { content: ''; }
   justify-content: space-between;
   gap: 10px;
 }
-.map-screen__info .eyebrow { margin: 0; text-align: left; }
+.map-screen__info .eyebrow {
+  margin: 0;
+  text-align: left;
+  /* One line always: a wrapped place name grew the panel and pushed the map
+     out of alignment with the tab bar. */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .map-screen__link {
   flex: none;
   font-size: 11.5px;
@@ -798,6 +810,59 @@ img.is-video ~ .play-badge { content: ''; }
 .map-screen__info .advice { margin-top: 8px; padding: 5px 11px; font-size: 11.5px; }
 .map-screen__info .field__hint { margin: 0; font-size: 10.5px; }
 
+/* Swipeable weather deck: conditions and forecast side by side, one page
+   wide each. Scroll-snap gives the gesture, the momentum and the keyboard
+   behaviour for free — a JS drag implementation would have to reproduce all
+   three and would fight the panel's own scrolling. */
+.wx-deck {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  gap: 8px;
+  /* The native bar would sit across the cards; the dots below say the same. */
+  scrollbar-width: none;
+}
+.wx-deck::-webkit-scrollbar { display: none; }
+.wx-deck__page {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.wx-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 0 0;
+}
+.wx-dots button {
+  width: 7px; height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink-30);
+  cursor: pointer;
+  transition: background .15s ease, width .15s ease;
+}
+.wx-dots button[aria-selected="true"] {
+  background: var(--sky-deep);
+  width: 18px;
+  border-radius: 999px;
+}
+
+/* Zone detail lives in the sidebar on desktop, so it needs to scroll. */
+.zone-panel__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 4px 0 10px;
+}
+.zone-panel__head h2 {
+  margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -.03em;
+}
+#zonePanel { padding-top: 6px; border-top: var(--border-w) solid var(--line); }
+
 /* Compact five-day strip — no condition label, no wind row, smaller icon. */
 .forecast--compact { gap: 3px; }
 .forecast--compact .fc-day { padding: 3px 2px; }
@@ -819,6 +884,15 @@ img.is-video ~ .play-badge { content: ''; }
     padding: 18px 16px;
     gap: 12px;
   }
+  /* Room to stack on a wide window, so the deck stops being a carousel. */
+  .wx-deck {
+    display: block;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .wx-deck__page { margin-bottom: 12px; }
+  .wx-dots { display: none; }
+
   .map-screen__info .now-card { padding: 16px; }
   .map-screen__info .now-card__temp { font-size: 48px; }
   .map-screen__info .now-card__desc { font-size: 15px; }

@@ -1437,8 +1437,83 @@ async def main():
                 };
             """)
             check("conditions visible without scrolling", visible["now"], str(visible))
-            check("forecast visible without scrolling", visible["strip"], str(visible))
+            check("forecast reachable in the deck", visible["strip"] is not None, str(visible))
             check("tides link visible without scrolling", visible["link"], str(visible))
+
+            # --- swipeable weather deck ---
+            deck = await page.eval("""
+                const deck = document.getElementById('wxDeck');
+                const dots = document.getElementById('wxDots');
+                const cs = getComputedStyle(deck);
+                const pages = deck.querySelectorAll('.wx-deck__page');
+                const before = deck.scrollLeft;
+
+                // Page 2, the way a swipe would.
+                deck.scrollTo({ left: deck.clientWidth, behavior: 'instant' });
+                deck.dispatchEvent(new Event('scroll'));
+                await new Promise(r => setTimeout(r, 250));
+                const second = dots.querySelector('[data-page="1"]').getAttribute('aria-selected');
+
+                // And back via the dots.
+                dots.querySelector('[data-page="0"]').click();
+                await new Promise(r => setTimeout(r, 500));
+                const backHome = deck.scrollLeft < deck.clientWidth / 2;
+
+                return {
+                    pages: pages.length,
+                    snaps: cs.scrollSnapType.includes('x'),
+                    scrollable: deck.scrollWidth > deck.clientWidth + 2,
+                    fullWidthPages: Math.abs(pages[0].getBoundingClientRect().width
+                                             - deck.clientWidth) < 12,
+                    dotFollowsSwipe: second === 'true',
+                    dotDrivesDeck: backHome,
+                    startedAtFirst: before < 5,
+                };
+            """)
+            check("weather deck has two pages", deck["pages"] == 2, str(deck))
+            check("deck snaps one page at a time",
+                  deck["snaps"] and deck["fullWidthPages"], str(deck))
+            check("deck is actually swipeable", deck["scrollable"], str(deck))
+            check("dots follow a swipe", deck["dotFollowsSwipe"], str(deck))
+            check("dots can drive the deck", deck["dotDrivesDeck"], str(deck))
+            check("deck opens on conditions", deck["startedAtFirst"], str(deck))
+
+            # --- location reads as a place, not coordinates ---
+            place = await page.eval("""
+                const p = await import('./js/api/place.js');
+                const name = await p.placeName({ lat: 11.238, lon: 125.004 });
+                const label = document.getElementById('mapSource')?.textContent || '';
+                return { name, label,
+                         hasDegrees: /°/.test(label),
+                         hasCoords: /\d+\.\d+/.test(label) };
+            """)
+            check("coordinates resolve to a place name",
+                  bool(place["name"]), str(place["name"]))
+            oneline = await page.eval("""
+                const el = document.getElementById('mapSource');
+                const cs = getComputedStyle(el);
+                // line-height computes to "normal" here, so derive the
+                // single-line height from the font size instead of parsing it.
+                const fs = parseFloat(cs.fontSize) || 12;
+                const h = el.getBoundingClientRect().height;
+                return { height: Math.round(h), fontSize: fs,
+                         wrapped: h > fs * 1.9,
+                         nowrap: cs.whiteSpace === 'nowrap',
+                         text: el.textContent };
+            """)
+            check("place label stays on one line",
+                  oneline["nowrap"] and not oneline["wrapped"], str(oneline))
+
+            gap = await page.eval("""
+                const m = document.getElementById('mapWrap').getBoundingClientRect();
+                const bar = document.querySelector('.tabbar').getBoundingClientRect();
+                return { gap: Math.round(bar.top - m.bottom) };
+            """)
+            check("no dead space between map and tab bar",
+                  abs(gap["gap"]) <= 2, f"{gap['gap']}px")
+
+            check("label shows no coordinates",
+                  not place["hasDegrees"] and not place["hasCoords"], str(place["label"]))
 
             # -------------------------------------------------- sheet gestures
             print()

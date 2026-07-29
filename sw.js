@@ -46,6 +46,7 @@ const SHELL = [
   './js/api/tides.js',
   './js/api/photos.js',
   './js/api/geo.js',
+  './js/api/place.js',
   './js/pages/home.js',
   './js/pages/species.js',
   './js/pages/map.js',

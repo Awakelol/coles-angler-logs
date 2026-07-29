@@ -135,8 +135,12 @@ async def main():
             page = Page(ws)
             await page.send("Page.enable")
             await page.send("Runtime.enable")
-            await page.send("Emulation.setDeviceMetricsOverride",
-                            width=420, height=900, deviceScaleFactor=2, mobile=True)
+            # NOT setting Emulation.setDeviceMetricsOverride on purpose. It
+            # changes the layout viewport but not the visual viewport that
+            # 100dvh resolves against, so anything sized in dvh — the map
+            # screen — comes out short and the shot shows a false gap above
+            # the tab bar. --window-size plus --force-device-scale-factor
+            # gives a consistent viewport.
 
             # Seed a couple of catches so the log and stats aren't empty.
             await page.send("Page.navigate", url=f"{BASE}/index.html#/log")

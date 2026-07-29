@@ -11,6 +11,7 @@ import { tacticsFor, lureSummary, habitatTactics } from '../data/tactics.js';
 import { getLocation, distanceKm, nearestPlace, geolocationSupported } from '../api/geo.js';
 import { speciesSprite, icon, renderSprite, SPRITES } from '../pixel.js';
 import { fetchWeather } from '../api/weather.js';
+import { placeName } from '../api/place.js';
 import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
 import { esc, openSheet, toast, loadingBlock, errorBlock, round } from '../ui.js';
 
@@ -142,8 +143,22 @@ export function render(ctx) {
           <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
           <a class="map-screen__link" href="#/conditions">Tides &amp; forecast &rarr;</a>
         </div>
-        <div id="mapWeather">${loadingBlock('Fetching weather…')}</div>
-        <div id="mapForecast"></div>
+        <!-- Two pages side by side: conditions, then the five-day strip.
+             Swiping between them costs no vertical space, which is what the
+             stacked version was fighting for on a phone. Scroll-snap does the
+             gesture natively — no drag handling, and it keeps momentum. -->
+        <div class="wx-deck" id="wxDeck">
+          <section class="wx-deck__page" id="mapWeather"
+                   aria-label="Current conditions">${loadingBlock('Fetching weather…')}</section>
+          <section class="wx-deck__page" id="mapForecast" aria-label="Five day forecast"></section>
+        </div>
+        <div class="wx-dots" id="wxDots" role="tablist" aria-label="Weather pages">
+          <button role="tab" data-page="0" aria-label="Current conditions" aria-selected="true"></button>
+          <button role="tab" data-page="1" aria-label="Five day forecast" aria-selected="false"></button>
+        </div>
+
+        <!-- Desktop only: a tapped zone renders here instead of in a modal. -->
+        <div id="zonePanel" hidden></div>
       </div>
 
       <div id="mapWrap">
@@ -172,9 +187,17 @@ async function mountWeather(root, ctx) {
   if (!pane) return;
 
   const tz = ctx.region.timezone;
-  const { coords, label } = await resolveCoords(ctx);
+  const { coords, source: kind } = await resolveCoords(ctx);
+
+  // Where the person actually is, not a bearing and not the region name.
+  // Coordinates are meaningless to read, and naming the region is wrong when
+  // they're somewhere else entirely.
   if (source) {
-    source.textContent = `${label} · ${round(coords.lat, 2)}°, ${round(coords.lon, 2)}°`;
+    source.textContent = kind === 'device' ? 'Locating…' : ctx.region.name;
+    placeName(coords).then((name) => {
+      if (name) source.textContent = name;
+      else if (kind === 'device') source.textContent = 'Your location';
+    });
   }
 
   try {
@@ -195,7 +218,32 @@ export async function mount(root, ctx) {
   mountWeather(root, ctx);
   if (!zones.length) return;
 
-  const openZone = (zone) => openSheet(zone.name, () => zoneSheetHtml(zone));
+  const panel = root.querySelector('#zonePanel');
+  const wideScreen = () => matchMedia('(min-width: 900px)').matches;
+
+  // On a wide window the zone belongs in the sidebar under the weather —
+  // a modal over a map you're still reading is the wrong shape there. On a
+  // phone there's no sidebar to put it in, so it stays a sheet.
+  const openZone = (zone) => {
+    if (!wideScreen() || !panel) {
+      openSheet(zone.name, () => zoneSheetHtml(zone));
+      return;
+    }
+    panel.innerHTML = `
+      <div class="zone-panel__head">
+        <h2>${esc(zone.name)}</h2>
+        <button class="icon-btn" data-close-zone aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+        </button>
+      </div>
+      ${zoneSheetHtml(zone)}`;
+    panel.hidden = false;
+    panel.scrollTop = 0;
+    panel.querySelector('[data-close-zone]').addEventListener('click', () => {
+      panel.hidden = true;
+      panel.innerHTML = '';
+    });
+  };
 
   for (const btn of root.querySelectorAll('[data-zone]')) {
     btn.addEventListener('click', () => {
@@ -372,6 +420,26 @@ export async function mount(root, ctx) {
   }
 
   root.querySelector('#locateBtn')?.addEventListener('click', () => locate());
+
+  // --- weather deck paging -------------------------------------------------
+  const deck = root.querySelector('#wxDeck');
+  const dots = root.querySelector('#wxDots');
+  if (deck && dots) {
+    const syncDots = () => {
+      // Round rather than floor: a snap can settle a pixel short of exact.
+      const page = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
+      for (const b of dots.querySelectorAll('[data-page]')) {
+        b.setAttribute('aria-selected', String(Number(b.dataset.page) === page));
+      }
+    };
+    deck.addEventListener('scroll', syncDots, { passive: true });
+    dots.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-page]');
+      if (!btn) return;
+      deck.scrollTo({ left: Number(btn.dataset.page) * deck.clientWidth, behavior: 'smooth' });
+    });
+    syncDots();
+  }
 
   // Ask on open. A browser only shows the prompt once — after that it answers
   // from the stored decision — so this is not a repeated interruption, and a
