@@ -1,5 +1,6 @@
 // Catch log + personal records.
 
+import { CONFIG } from '../config.js';
 import { store, computeStats } from '../store.js';
 import {
   isSignedIn, currentUser, listUsers, signUp, signIn,
@@ -276,7 +277,12 @@ function openCatchForm(ctx, entry, onDone) {
 
 let gateView = 'signin';
 
-const PROVIDER_BUTTONS = `
+// Only providers that are actually usable, in CONFIG.auth order. A button
+// that cannot succeed is worse than no button: Facebook's is coded and
+// working, but Meta will not grant the permissions to an individual, so it
+// stays off rather than greeting people with a dead end.
+const PROVIDER_MARKUP = {
+  google: `
   <button class="btn btn--block btn--provider" data-provider="google">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
       <path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7C21.7 18.9 23 15.9 23 12.3z"/>
@@ -285,18 +291,36 @@ const PROVIDER_BUTTONS = `
       <path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.2 15.1 0 12 0 7.6 0 3.7 2.6 1.8 6.1l3.8 3c.9-2.7 3.4-4.3 6.4-4.3z"/>
     </svg>
     Continue with Google
-  </button>
+  </button>`,
+  facebook: `
   <button class="btn btn--block btn--provider" data-provider="facebook">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
       <path fill="#1877F2" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7v-3.5h3.1V9.4c0-3 1.8-4.7 4.6-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9v2.2h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/>
     </svg>
     Continue with Facebook
-  </button>`;
+  </button>`,
+};
+
+const enabledProviders = () =>
+  Object.keys(PROVIDER_MARKUP).filter((name) => CONFIG.auth?.[name]);
+
+const providerButtons = () => enabledProviders().map((n) => PROVIDER_MARKUP[n]).join('');
+
+const PROVIDER_LABELS = { google: 'Google', facebook: 'Facebook' };
+
+/** "Google" / "Google or Facebook" — never a provider we aren't showing. */
+const providerNames = () => {
+  const names = enabledProviders().map((n) => PROVIDER_LABELS[n]);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] || '';
+};
+
+/** Cloud sign-in is offered only when it's configured AND has a live provider. */
+const cloudSignInAvailable = () => cloudConfigured() && enabledProviders().length > 0;
 
 function signInHtml() {
   return `
-    ${cloudConfigured() ? PROVIDER_BUTTONS : ''}
-    ${cloudConfigured() ? '<div class="rule"><span>or</span></div>' : ''}
+    ${cloudSignInAvailable() ? providerButtons() : ''}
+    ${cloudSignInAvailable() ? '<div class="rule"><span>or</span></div>' : ''}
 
     <form id="authForm" autocomplete="on">
       <div class="float">
@@ -365,8 +389,8 @@ function signUpHtml() {
       <p>
         A username and password works with no internet and no setup, but the log
         stays on this phone. ${
-          cloudConfigured()
-            ? 'Use Google or Facebook if you want it on more than one device.'
+          cloudSignInAvailable()
+            ? `Use ${providerNames()} if you want it on more than one device.`
             : 'Cloud sign-in will sync when it is set up.'
         }
         There is no server behind this yet, so
@@ -471,7 +495,7 @@ function mountGate(root, ctx) {
       const name = btn.dataset.provider;
       const label = btn.innerHTML;
       btn.disabled = true;
-      btn.textContent = `Opening ${name === 'google' ? 'Google' : 'Facebook'}…`;
+      btn.textContent = `Opening ${PROVIDER_LABELS[name] || name}…`;
       try {
         const profile = name === 'google' ? await signInWithGoogle() : await signInWithFacebook();
         if (profile) {

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CLOUD SIGN-IN  (provider: 'google', later 'facebook')
+// CLOUD SIGN-IN  (providers: 'google' live, 'facebook' coded but disabled)
 //
 // Real authentication, via Firebase Auth. Unlike js/auth/local.js this is
 // genuinely verified — the token is checked by Google, not by us — which is

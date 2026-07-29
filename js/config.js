@@ -27,6 +27,20 @@ export const CONFIG = {
     // the app doesn't load and doesn't need.
   },
 
+  // Which cloud providers the sign-in screen offers. A provider being coded
+  // is not the same as it being usable: it also has to be enabled in the
+  // Firebase console AND set up with the provider itself.
+  //
+  // FACEBOOK IS OFF. The code path is complete and tested — see
+  // js/auth/cloud.js — but Meta gates the permissions behind a Business
+  // Portfolio and, for public users, business verification with company
+  // documents. That's not available to an individual running a personal app.
+  // Flip this to true if that ever changes; nothing else needs editing.
+  auth: {
+    google: true,
+    facebook: false,
+  },
+
   tides: {
     // 'worldtides' (needs key) | 'stormglass' (needs key) | 'none'
     provider: 'worldtides',

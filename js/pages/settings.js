@@ -46,7 +46,7 @@ export function render() {
               is verified and anyone with the unlocked device can get past this. It
               keeps logs separate between people, nothing more.
               <strong>Don't reuse a password from elsewhere.</strong>
-              Google and Facebook sign-in are planned.
+              Google sign-in is verified for real and syncs between devices.
             </p>
           </div>
         </div>

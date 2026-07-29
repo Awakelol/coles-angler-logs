@@ -528,11 +528,55 @@ async def main():
             check("log is gated when signed out", gated["form"], str(gated))
             check("no catch entry while signed out",
                   not gated["addBtn"] and not gated["stats"], str(gated))
-            check("both providers are offered",
-                  gated["google"] and gated["facebook"], str(gated))
+            # Only providers CONFIG.auth marks live may appear. A button that
+            # cannot succeed reads as a broken app, which is exactly what
+            # Facebook's did — Meta refuses the permissions to an individual.
+            check("the live provider is offered", gated["google"], str(gated))
+            check("disabled providers are not advertised",
+                  not gated["facebook"], str(gated))
             check("providers sit above the username field", gated["order"], str(gated))
             check("sign-up is a separate action, not a tab", gated["signupBtn"], str(gated))
             check("sign-in screen has no email field", not gated["hasEmail"], str(gated))
+
+            # Disabled means "not offered", not "deleted". The code must stay
+            # whole so re-enabling is a config flip, not a rewrite.
+            provider_flag = await page.eval("""
+                const { CONFIG } = await import('./js/config.js');
+                const cloud = await import('./js/auth/cloud.js');
+                const before = CONFIG.auth.facebook;
+
+                CONFIG.auth.facebook = true;
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 250));
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 700));
+                const shownWhenOn = !!document.querySelector('[data-provider=facebook]');
+
+                CONFIG.auth.facebook = before;
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 250));
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 700));
+
+                return {
+                    defaultOff: before === false,
+                    googleOn: CONFIG.auth.google === true,
+                    shownWhenOn,
+                    hiddenAgain: !document.querySelector('[data-provider=facebook]'),
+                    stillCoded: typeof cloud.signInWithFacebook === 'function',
+                    copy: document.body.innerText.includes('Facebook'),
+                };
+            """)
+            check("facebook is off by default", provider_flag["defaultOff"], str(provider_flag))
+            check("google stays on", provider_flag["googleOn"], str(provider_flag))
+            check("the flag is all it takes to bring it back",
+                  provider_flag["shownWhenOn"] and provider_flag["hiddenAgain"],
+                  str(provider_flag))
+            check("the facebook code path survives being disabled",
+                  provider_flag["stillCoded"], str(provider_flag))
+            # Copy that names a provider with no button is the same dead end.
+            check("no screen text promises a hidden provider",
+                  not provider_flag["copy"], str(provider_flag))
 
             # Floating labels: the name sits inside the empty field, then lifts
             # and STAYS above once there's content — it must never vanish.
@@ -819,6 +863,7 @@ async def main():
                   linking["hasLink"] and linking["hasUnlink"] and linking["hasPending"],
                   str(linking))
             check("facebook path exists alongside google", linking["hasFacebook"])
+
             check("local accounts report no linked providers",
                   linking["localProviders"] == [], str(linking["localProviders"]))
             check("device-only accounts cannot be linked",
