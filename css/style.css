@@ -830,7 +830,20 @@ body:has(.map-screen) { padding-bottom: 0; }
   flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: start;
+  /* Both pages fill the deck's height so swiping doesn't resize the panel.
+     The deck is as tall as its tallest page — without this the forecast card
+     floated in a short box and the layout jumped between pages. */
+  display: flex;
+  flex-direction: column;
 }
+.wx-deck__page > * { flex: 1 1 auto; }
+
+/* The strip sits centred in the taller box rather than pinned to the top. */
+.wx-deck__page .forecast {
+  align-items: center;
+  height: 100%;
+}
+.wx-deck__page .fc-day { align-content: center; }
 
 .wx-dots {
   display: flex;

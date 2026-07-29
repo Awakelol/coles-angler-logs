@@ -43,6 +43,11 @@ SHOTS = [
     ("3-species-detail", "#/species", ".species-card",
      "document.querySelectorAll('.species-card')[4].click()"),
     ("4-map",        "#/map",        "#mapWeather .now-card__temp",  None),
+    ("4b-map-forecast", "#/map",     "#mapWeather .now-card__temp",
+     "const d=document.getElementById('wxDeck');"
+     "d.scrollTo({left:d.clientWidth,behavior:'instant'});"
+     "d.dispatchEvent(new Event('scroll'));"
+     "await new Promise(r=>setTimeout(r,500))"),
     ("5-map-zone",   "#/map",        "#fishMap .leaflet-tile-pane",
      "document.querySelector('.zone-pin').click()"),
     ("6-conditions", "#/conditions", ".now-card__temp",              None),

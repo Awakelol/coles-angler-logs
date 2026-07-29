@@ -281,20 +281,29 @@ async def main():
             trans = await page.eval("""
                 const supported = typeof document.startViewTransition === 'function';
 
-                // Navigating must still land on the right page, transition or not.
+                // Poll rather than sleep a fixed amount. A cold start can stall
+                // the first render past any constant you pick — the Firebase
+                // SDK fetch alone is ~200KB — and this test failed roughly one
+                // run in two purely on that timing.
+                const until = async (sel, ms = 4000) => {
+                    const end = Date.now() + ms;
+                    while (Date.now() < end) {
+                        if (document.querySelector(sel)) return true;
+                        await new Promise(r => setTimeout(r, 60));
+                    }
+                    return false;
+                };
+
                 location.hash = '#/tips';
-                await new Promise(r => setTimeout(r, 700));
-                const onTips = !!document.querySelector('.tip-card');
+                const onTips = await until('.tip-card');
                 location.hash = '#/species';
-                await new Promise(r => setTimeout(r, 900));
-                const onSpecies = !!document.querySelector('.species-card');
+                const onSpecies = await until('.species-card');
 
                 // Rapid navigation must not strand a half-finished transition.
                 location.hash = '#/tips';
                 location.hash = '#/species';
                 location.hash = '#/tips';
-                await new Promise(r => setTimeout(r, 1200));
-                const settled = !!document.querySelector('.tip-card');
+                const settled = await until('.tip-card');
 
                 return { supported, onTips, onSpecies, settled,
                          err: document.body.getAttribute('data-js-error') };
@@ -1477,6 +1486,22 @@ async def main():
             check("dots follow a swipe", deck["dotFollowsSwipe"], str(deck))
             check("dots can drive the deck", deck["dotDrivesDeck"], str(deck))
             check("deck opens on conditions", deck["startedAtFirst"], str(deck))
+
+            # Both pages must be the same height, or the panel resizes as you
+            # swipe and the map jumps with it.
+            even = await page.eval("""
+                const pages = [...document.querySelectorAll('.wx-deck__page')];
+                const h = pages.map(p => Math.round(p.getBoundingClientRect().height));
+                const cards = pages.map(p => {
+                    const c = p.querySelector('.now-card, .card');
+                    return c ? Math.round(c.getBoundingClientRect().height) : 0;
+                });
+                return { pageHeights: h, cardHeights: cards,
+                         pagesEqual: Math.abs(h[0] - h[1]) <= 1,
+                         cardsFill: cards.every((c, i) => Math.abs(c - h[i]) <= 2) };
+            """)
+            check("deck pages are the same height", even["pagesEqual"], str(even))
+            check("cards fill their page", even["cardsFill"], str(even))
 
             # --- location reads as a place, not coordinates ---
             place = await page.eval("""
