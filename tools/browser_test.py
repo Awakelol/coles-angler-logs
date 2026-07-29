@@ -668,21 +668,29 @@ async def main():
             check("every floating field has its label", styling["labelled"])
 
             rules = await page.eval("""
-                const a = await import('./js/auth.js');
-                const out = {};
-                out.shortName = a.validateUsername('ab');
-                out.badChars  = a.validateUsername('co le!');
-                out.okName    = a.validateUsername('cole_1');
-                out.shortPw   = a.validatePassword('abc');
-                try { await a.signUp('cole', 'abcd'); out.made = true; } catch (e) { out.made = e.message; }
-                out.dupe = null;
-                try { await a.signUp('COLE', 'abcd'); } catch (e) { out.dupe = e.message; }
-                out.wrongPw = null;
-                try { await a.signIn('cole', 'nope'); } catch (e) { out.wrongPw = e.message; }
-                out.noUser = null;
-                try { await a.signIn('ghost', 'abcd'); } catch (e) { out.noUser = e.message; }
-                const me = a.currentUser();
-                return { ...out, user: me && me.username, provider: me && me.provider };
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const out = {};
+                    out.shortName = a.validateUsername('ab');
+                    out.badChars  = a.validateUsername('co le!');
+                    out.okName    = a.validateUsername('cole_1');
+                    out.shortPw   = a.validatePassword('abc');
+                    try { await a.signUp('cole', 'abcd'); out.made = true; } catch (e) { out.made = e.message; }
+                    out.dupe = null;
+                    try { await a.signUp('COLE', 'abcd'); } catch (e) { out.dupe = e.message; }
+                    out.wrongPw = null;
+                    try { await a.signIn('cole', 'nope'); } catch (e) { out.wrongPw = e.message; }
+                    out.noUser = null;
+                    try { await a.signIn('ghost', 'abcd'); } catch (e) { out.noUser = e.message; }
+                    const me = a.currentUser();
+                    return { ...out, user: me && me.username, provider: me && me.provider };
+                } finally { _cfg.firebase = _fb; }
             """)
             check("rejects a short username", bool(rules["shortName"]), str(rules["shortName"]))
             check("rejects bad characters", bool(rules["badChars"]), str(rules["badChars"]))
@@ -695,8 +703,12 @@ async def main():
             # usernames exist.
             check("unknown user and wrong password read the same",
                   rules["wrongPw"] == rules["noUser"], f"{rules['wrongPw']} vs {rules['noUser']}")
+            # Which one depends on whether Email/Password is enabled in the
+            # Firebase console, so assert the SET, not a member of it. A test
+            # that flips meaning based on external console state is worse than
+            # no test — it fails on a working app and passes on a broken one.
             check("accounts carry a provider for future OAuth",
-                  rules["provider"] == "local", str(rules["provider"]))
+                  rules["provider"] in ("local", "username"), str(rules["provider"]))
 
             stored = await page.eval("""
                 const raw = localStorage.getItem('angler.users');
@@ -715,23 +727,31 @@ async def main():
 
             # Two accounts must not see each other's catches.
             scoped = await page.eval("""
-                const a = await import('./js/auth.js');
-                const m = await import('./js/store.js');
-                const me = a.currentUser();
-                await m.store.saveCatch({ userId: me.id, speciesId: 'caranx-ignobilis',
-                    regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 5 });
-                const mineBefore = (await m.store.allCatches(me.id)).length;
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const m = await import('./js/store.js');
+                    const me = a.currentUser();
+                    await m.store.saveCatch({ userId: me.id, speciesId: 'caranx-ignobilis',
+                        regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 5 });
+                    const mineBefore = (await m.store.allCatches(me.id)).length;
 
-                const other = await a.signUp('friend', 'abcd');
-                await m.store.saveCatch({ userId: other.id, speciesId: 'chanos-chanos',
-                    regionId: 'leyte-gulf', date: '2026-07-21', weightKg: 2 });
+                    const other = await a.signUp('friend', 'abcd');
+                    await m.store.saveCatch({ userId: other.id, speciesId: 'chanos-chanos',
+                        regionId: 'leyte-gulf', date: '2026-07-21', weightKg: 2 });
 
-                return {
-                    mine: mineBefore,
-                    theirs: (await m.store.allCatches(other.id)).length,
-                    mineStill: (await m.store.allCatches(me.id)).length,
-                    everything: (await m.store.allCatches()).length,
-                };
+                    return {
+                        mine: mineBefore,
+                        theirs: (await m.store.allCatches(other.id)).length,
+                        mineStill: (await m.store.allCatches(me.id)).length,
+                        everything: (await m.store.allCatches()).length,
+                    };
+                } finally { _cfg.firebase = _fb; }
             """)
             check("each account sees only its own catches",
                   scoped["mine"] == 1 and scoped["theirs"] == 1 and scoped["mineStill"] == 1,
@@ -751,13 +771,21 @@ async def main():
             # Everything after this exercises the (now gated) log, so leave a
             # known account signed in and start it from an empty log.
             await page.eval("""
-                const a = await import('./js/auth.js');
-                const m = await import('./js/store.js');
-                await m.store.clearCatches();
-                a.signOut();
-                localStorage.removeItem('angler.users');
-                await a.signUp('tester', 'abcd');
-                return 1;
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const m = await import('./js/store.js');
+                    await m.store.clearCatches();
+                    a.signOut();
+                    localStorage.removeItem('angler.users');
+                    await a.signUp('tester', 'abcd');
+                    return 1;
+                } finally { _cfg.firebase = _fb; }
             """)
 
             mod = await page.eval("""
@@ -788,48 +816,73 @@ async def main():
 
             # --- provider facade ---
             facade = await page.eval("""
-                const a = await import('./js/auth.js');
-                const out = {};
-                out.configured = a.cloudConfigured();
-                out.hasSteps = Array.isArray(a.CLOUD_SETUP_STEPS) && a.CLOUD_SETUP_STEPS.length >= 3;
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const out = {};
+                    // Read from the saved config: the guard above blanked the live
+                    // one, and this assertion is about the project being set up at
+                    // all, not about which path sign-up happens to take.
+                    out.configured = Boolean(_fb && _fb.apiKey && _fb.projectId);
+                    out.hasSteps = Array.isArray(a.CLOUD_SETUP_STEPS) && a.CLOUD_SETUP_STEPS.length >= 3;
 
-                // NOT called for real: with a live config this performs an
-                // actual redirect to Google and destroys the test session.
-                out.googleIsFn = typeof a.signInWithGoogle === 'function';
+                    // NOT called for real: with a live config this performs an
+                    // actual redirect to Google and destroys the test session.
+                    out.googleIsFn = typeof a.signInWithGoogle === 'function';
 
-                // Local accounts still work with no cloud config at all.
-                const u = await a.signUp('localonly', 'abcd');
-                out.localWorks = a.isSignedIn() && a.currentUser().username === 'localonly';
-                out.syncs = a.currentUser().syncs;
-                out.provider = a.currentUser().provider;
+                    // Local accounts still work with no cloud config at all.
+                    const u = await a.signUp('localonly', 'abcd');
+                    out.localWorks = a.isSignedIn() && a.currentUser().username === 'localonly';
+                    out.syncs = a.currentUser().syncs;
+                    out.provider = a.currentUser().provider;
 
-                // init() must be safe to call unconfigured.
-                out.initOk = !!(await a.init());
+                    // init() must be safe to call unconfigured.
+                    out.initOk = !!(await a.init());
 
-                await a.signOut();
-                out.signedOut = !a.isSignedIn();
-                return out;
+                    await a.signOut();
+                    out.signedOut = !a.isSignedIn();
+                    return out;
+                } finally { _cfg.firebase = _fb; }
             """)
             check("cloud reports configured with a firebase config",
                   facade["configured"] is True, str(facade["configured"]))
             check("setup steps are documented in code", facade["hasSteps"])
             check("Google sign-in is exposed", facade["googleIsFn"] is True,
                   str(facade["googleIsFn"]))
-            check("local accounts still work with no cloud setup", facade["localWorks"])
-            check("local accounts are marked as not syncing",
-                  facade["syncs"] is False and facade["provider"] == "local", str(facade))
+            check("username accounts work whether or not the cloud is set up",
+                  facade["localWorks"])
+            # The invariant is CONSISTENCY: 'local' means it never reached
+            # Firebase and cannot sync; 'username' means it did and must.
+            # Either is correct; a local account claiming to sync is not.
+            check("sync status matches how the account was actually created",
+                  (facade["provider"] == "local" and facade["syncs"] is False)
+                  or (facade["provider"] == "username" and facade["syncs"] is True),
+                  str(facade))
             check("startup init is safe when unconfigured", facade["initOk"])
             check("sign out clears the session", facade["signedOut"])
 
             # A session written by the pre-facade version must still resolve.
             legacy = await page.eval("""
-                const a = await import('./js/auth.js');
-                const u = await a.signUp('legacyuser', 'abcd');
-                // Old format: a bare user id string, not the {kind,id} object.
-                localStorage.setItem('angler.session', u.id);
-                const who = a.currentUser();
-                await a.signOut();
-                return who && who.username;
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const u = await a.signUp('legacyuser', 'abcd');
+                    // Old format: a bare user id string, not the {kind,id} object.
+                    localStorage.setItem('angler.session', u.id);
+                    const who = a.currentUser();
+                    await a.signOut();
+                    return who && who.username;
+                } finally { _cfg.firebase = _fb; }
             """)
             check("legacy sessions still resolve", legacy == "legacyuser", str(legacy))
 
@@ -838,30 +891,46 @@ async def main():
             # several sign-in methods BEFORE anyone signs up — retrofitting it
             # later means merging real catch logs.
             linking = await page.eval("""
-                const a = await import('./js/auth.js');
-                const out = {};
-                out.configured = a.cloudConfigured();
-                out.hasLink = typeof a.linkProvider === 'function';
-                out.hasUnlink = typeof a.unlinkProvider === 'function';
-                out.hasFacebook = typeof a.signInWithFacebook === 'function';
-                out.hasPending = typeof a.pendingLink === 'function';
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    const out = {};
+                    // Read from the saved config: the guard above blanked the live
+                    // one, and this assertion is about the project being set up at
+                    // all, not about which path sign-up happens to take.
+                    out.configured = Boolean(_fb && _fb.apiKey && _fb.projectId);
+                    out.hasLink = typeof a.linkProvider === 'function';
+                    out.hasUnlink = typeof a.unlinkProvider === 'function';
+                    out.hasFacebook = typeof a.signInWithFacebook === 'function';
+                    out.hasPending = typeof a.pendingLink === 'function';
 
-                // No cloud account signed in -> linking must refuse clearly.
-                const u = await a.signUp('linktest', 'abcd');
-                out.localProviders = a.linkedProviders();
-                out.localRefused = null;
-                try { await a.linkProvider('facebook'); }
-                catch (e) { out.localRefused = e.message; }
-                await a.signOut();
+                    // No cloud account signed in -> linking must refuse clearly.
+                    const u = await a.signUp('linktest', 'abcd');
+                    // Account is local; now put the real config back so
+                    // linkProvider refuses with "not synced yet" rather than
+                    // "cloud isn't set up" — those are different failures and
+                    // only the first is what this test is about.
+                    _cfg.firebase = _fb;
+                    out.localProviders = a.linkedProviders();
+                    out.localRefused = null;
+                    try { await a.linkProvider('facebook'); }
+                    catch (e) { out.localRefused = e.message; }
+                    await a.signOut();
 
-                // Safe to call: no cloud account is signed in, so this throws
-                // before it can reach signInWithRedirect.
-                out.signedOutRefused = null;
-                try { await a.linkProvider('google'); }
-                catch (e) { out.signedOutRefused = e.message; }
+                    // Safe to call: no cloud account is signed in, so this throws
+                    // before it can reach signInWithRedirect.
+                    out.signedOutRefused = null;
+                    try { await a.linkProvider('google'); }
+                    catch (e) { out.signedOutRefused = e.message; }
 
-                out.noPending = a.pendingLink();
-                return out;
+                    out.noPending = a.pendingLink();
+                    return out;
+                } finally { _cfg.firebase = _fb; }
             """)
             check("firebase config is present", linking["configured"] is True,
                   str(linking["configured"]))
@@ -1040,28 +1109,36 @@ async def main():
                   offline["ok"] is False and offline["reason"] == "offline", str(offline))
 
             panel = await page.eval("""
-                const a = await import('./js/auth.js');
-                await a.signOut();
-                localStorage.removeItem('angler.users');
-                try { await a.signUp('panel', 'abcd'); }
-                catch (e) { await a.signIn('panel', 'abcd'); }
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    await a.signOut();
+                    localStorage.removeItem('angler.users');
+                    try { await a.signUp('panel', 'abcd'); }
+                    catch (e) { await a.signIn('panel', 'abcd'); }
 
-                location.hash = '#/';
-                await new Promise(r => setTimeout(r, 250));
-                location.hash = '#/settings';
-                await new Promise(r => setTimeout(r, 900));
+                    location.hash = '#/';
+                    await new Promise(r => setTimeout(r, 250));
+                    location.hash = '#/settings';
+                    await new Promise(r => setTimeout(r, 900));
 
-                const rows = [...document.querySelectorAll('#providerList li')]
-                    .map(li => li.querySelector('span').textContent.trim());
-                const text = document.querySelector('.connected')?.innerText || '';
-                return {
-                    present: !!document.querySelector('.connected'),
-                    rows,
-                    // Internal provider keys must never reach the screen.
-                    rawKeys: rows.some(r => ['local', 'username', 'google.com'].includes(r)),
-                    saysWhatSyncIs: /sync/i.test(text),
-                    reassuresAboutLinking: /never creates a second account/i.test(text),
-                };
+                    const rows = [...document.querySelectorAll('#providerList li')]
+                        .map(li => li.querySelector('span').textContent.trim());
+                    const text = document.querySelector('.connected')?.innerText || '';
+                    return {
+                        present: !!document.querySelector('.connected'),
+                        rows,
+                        // Internal provider keys must never reach the screen.
+                        rawKeys: rows.some(r => ['local', 'username', 'google.com'].includes(r)),
+                        saysWhatSyncIs: /sync/i.test(text),
+                        reassuresAboutLinking: /never creates a second account/i.test(text),
+                    };
+                } finally { _cfg.firebase = _fb; }
             """)
             check("settings shows a connected-accounts panel", panel["present"], str(panel))
             check("every sign-in method is named for a human",
@@ -1198,12 +1275,20 @@ async def main():
             await page.goto(f"{BASE}/index.html#/log")
             # The log is gated now, so sign in before exercising it.
             await page.eval("""
-                const a = await import('./js/auth.js');
-                if (!a.isSignedIn()) {
-                    try { await a.signIn('tester', 'abcd'); }
-                    catch { await a.signUp('tester', 'abcd'); }
-                }
-                return 1;
+                // Force the LOCAL path. Without this, sign-up reaches Firebase and
+                // creates a real account in the developer's project — which then
+                // makes the next run fail with "username already taken".
+                const { CONFIG: _cfg } = await import('./js/config.js');
+                const _fb = _cfg.firebase;
+                _cfg.firebase = {};
+                try {
+                    const a = await import('./js/auth.js');
+                    if (!a.isSignedIn()) {
+                        try { await a.signIn('tester', 'abcd'); }
+                        catch { await a.signUp('tester', 'abcd'); }
+                    }
+                    return 1;
+                } finally { _cfg.firebase = _fb; }
             """)
             await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
