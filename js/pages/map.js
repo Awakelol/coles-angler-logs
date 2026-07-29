@@ -10,7 +10,9 @@ import { resolveSpecies } from '../data/index.js';
 import { tacticsFor, lureSummary, habitatTactics } from '../data/tactics.js';
 import { getLocation, distanceKm, nearestPlace, geolocationSupported } from '../api/geo.js';
 import { speciesSprite, icon, renderSprite, SPRITES } from '../pixel.js';
-import { esc, openSheet, toast } from '../ui.js';
+import { fetchWeather } from '../api/weather.js';
+import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
+import { esc, openSheet, toast, loadingBlock, errorBlock, round } from '../ui.js';
 
 let leafletPromise = null;
 
@@ -136,9 +138,12 @@ export function render(ctx) {
   return `
     <section class="band band--sky" style="padding-bottom:20px">
       <div class="wrap">
-        <p class="eyebrow">${esc(ctx.region.name)} &middot; ${zones.length} zones</p>
-        <h1 class="display">Fishing map</h1>
-        <p class="subtitle">Zoom in to reveal more water. Tap a fish to see what's there and how to catch it.</p>
+        <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
+        <div id="mapWeather">${loadingBlock('Fetching weather…')}</div>
+        <div id="mapForecast" style="margin-top:14px"></div>
+        <div class="center" style="margin-top:16px">
+          <a class="btn btn--dark" href="#/conditions">Tides &amp; full forecast &rarr;</a>
+        </div>
       </div>
     </section>
 
@@ -181,8 +186,36 @@ export function render(ctx) {
     </section>`;
 }
 
+/** Weather panel above the map. Independent of Leaflet — if tiles fail to
+ *  load the forecast should still be there, and vice versa. */
+async function mountWeather(root, ctx) {
+  const pane = root.querySelector('#mapWeather');
+  const strip = root.querySelector('#mapForecast');
+  const source = root.querySelector('#mapSource');
+  if (!pane) return;
+
+  const tz = ctx.region.timezone;
+  const { coords, label } = await resolveCoords(ctx);
+  if (source) {
+    source.textContent = `${label} · ${round(coords.lat, 2)}°, ${round(coords.lon, 2)}°`;
+  }
+
+  try {
+    const w = await fetchWeather(coords, tz);
+    pane.innerHTML = weatherHtml(w, tz);
+    if (strip) strip.innerHTML = forecastHtml(w, tz);
+  } catch (err) {
+    console.error('[map weather]', err);
+    pane.innerHTML = errorBlock('Could not load weather', err.message, 'Try again');
+    if (strip) strip.innerHTML = '';
+    pane.querySelector('[data-retry]')?.addEventListener('click', () => mountWeather(root, ctx));
+  }
+}
+
 export async function mount(root, ctx) {
   const zones = ctx.region.zones || [];
+  // Weather is not tied to zones — show it even for a region with none.
+  mountWeather(root, ctx);
   if (!zones.length) return;
 
   const openZone = (zone) => openSheet(zone.name, () => zoneSheetHtml(zone));
@@ -259,7 +292,7 @@ export async function mount(root, ctx) {
     const hidden = markers.length - visible;
     hint.textContent = hidden
       ? `${visible} of ${markers.length} zones shown — zoom in for ${hidden} more`
-      : `All ${markers.length} zones shown`;
+      : `All ${markers.length} zones shown — tap a fish`;
   }
 
   map.on('zoomend', syncMarkers);

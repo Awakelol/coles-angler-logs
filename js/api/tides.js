@@ -65,9 +65,26 @@ async function fetchWorldTides({ lat, lon }) {
     `&lat=${lat}&lon=${lon}&key=${key}`;
   const res = await fetch(url);
   if (res.status === 401 || res.status === 403) throw new Error('WorldTides rejected the key — check it in Settings.');
-  if (!res.ok) throw new Error(`WorldTides returned ${res.status}`);
-  const d = await res.json();
-  if (d.error) throw new Error(d.error);
+
+  // Read the body before deciding: WorldTides puts the real reason in JSON
+  // even on a 400, and "Not enough credits" needs a different answer from a
+  // malformed request. Reporting it as a generic 400 sends you looking for a
+  // bug that isn't there.
+  let d = null;
+  try {
+    d = await res.json();
+  } catch {
+    /* non-JSON body */
+  }
+  const apiError = d?.error || '';
+  if (/credit/i.test(apiError)) {
+    throw new Error(
+      'Tide credits used up for this billing period. The free tier is about ' +
+      '100 requests a month; it resets monthly, or you can add a different key in Settings.'
+    );
+  }
+  if (!res.ok) throw new Error(apiError || `WorldTides returned ${res.status}`);
+  if (apiError) throw new Error(apiError);
 
   return {
     provider: 'WorldTides',

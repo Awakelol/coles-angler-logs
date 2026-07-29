@@ -91,7 +91,16 @@ async function render() {
   syncTabs(route.path);
 
   // A sheet left open when the route changes would float over the new page.
-  for (const sheet of document.querySelectorAll('.sheet-backdrop')) sheet.remove();
+  // Removing it isn't enough: openSheet() locks the body with position:fixed
+  // and a negative top to stop the page scrolling underneath, and only its own
+  // close() undoes that. Navigating away bypassed it, leaving every subsequent
+  // page pinned and scrolled to a stale offset.
+  const stranded = document.querySelectorAll('.sheet-backdrop');
+  if (stranded.length) {
+    for (const sheet of stranded) sheet.remove();
+    document.body.classList.remove('is-sheet-open');
+    document.body.style.top = '';
+  }
 
   try {
     const swap = () => {

@@ -1186,6 +1186,31 @@ async def main():
             if not configured:
                 check("tide provider configured", False, "no key set — skipping live check")
             else:
+                # Seed the cache with a synthetic response rather than calling
+                # the API. The free tier is ~100 requests a MONTH, and a suite
+                # that runs dozens of times a day will exhaust it — which it
+                # did. This exercises the parsing and rendering, which is what
+                # the test is actually for; the network call is not the subject.
+                await page.eval("""
+                    const now = Date.now();
+                    const h = 3600e3;
+                    const extremes = [
+                        { time: new Date(now - 2 * h).toISOString(), type: 'high', heightM: 0.51 },
+                        { time: new Date(now + 4 * h).toISOString(), type: 'low',  heightM: -0.22 },
+                        { time: new Date(now + 10 * h).toISOString(), type: 'high', heightM: 0.44 },
+                        { time: new Date(now + 16 * h).toISOString(), type: 'low',  heightM: -0.18 },
+                    ];
+                    const d = await import('./js/data/index.js');
+                    const c = d.getRegion('leyte-gulf').coords;
+                    const key = `v2:worldtides:${c.lat},${c.lon}`;
+                    localStorage.setItem('angler.tidecache', JSON.stringify({
+                        [key]: { at: now, data: { provider: 'WorldTides (test)',
+                                                  station: 'Tacloban', extremes } },
+                    }));
+                    return 1;
+                """)
+                await page.goto(f"{BASE}/index.html#/tips")
+                await page.goto(f"{BASE}/index.html#/conditions")
                 await page.wait_for(
                     "document.querySelector('.tide-row, .notice--error, .notice--warn')",
                     timeout=30, label="tide panel")
@@ -1206,12 +1231,12 @@ async def main():
                     const d = await import('./js/data/index.js');
                     const data = await t.fetchTides(d.getRegion('leyte-gulf').coords);
                     const s = t.currentTideState(data.extremes);
-                    return { provider: data.provider, station: data.station,
-                             n: data.extremes.length, dir: s && s.direction };
+                    return { provider: data.provider, n: data.extremes.length,
+                             dir: s && s.direction, cached: !!data.cached };
                 """)
                 check("tide state interpolates", bool(state["dir"]), str(state))
-                print(f"    provider={state['provider']} station={state['station']} "
-                      f"extremes={state['n']} now={state['dir']}")
+                check("tide test served from cache, no credits spent",
+                      state["cached"] is True, str(state))
                 await page.shot("conditions-tides")
 
             # -------------------------------------------------- geolocation
@@ -1315,6 +1340,46 @@ async def main():
             """)
             check("choosing the region stops the prompting", quiet is False, str(quiet))
 
+            # --- weather on the map ---
+            await page.goto(f"{BASE}/index.html#/map")
+            # Weather is fetched without blocking the map, so wait for it.
+            await page.wait_for(
+                "document.querySelector('#mapWeather .now-card__temp, #mapWeather .notice--error')",
+                timeout=30, label="map weather")
+            mapwx = await page.eval("""
+                const pane = document.getElementById('mapWeather');
+                const strip = document.getElementById('mapForecast');
+                const link = document.querySelector('a[href="#/conditions"]');
+                return {
+                    hasNow: !!pane?.querySelector('.now-card__temp'),
+                    hasStrip: (strip?.querySelectorAll('.fc-day') || []).length,
+                    hasLink: !!link,
+                    // The old page heading should be gone.
+                    noHeading: !document.body.innerText.includes('Zoom in to reveal more water'),
+                    // Weather must sit ABOVE the map.
+                    order: (() => {
+                        const w = document.getElementById('mapWeather');
+                        const m = document.getElementById('mapWrap');
+                        if (!w || !m) return false;
+                        return !!(w.compareDocumentPosition(m) &
+                                  Node.DOCUMENT_POSITION_FOLLOWING);
+                    })(),
+                };
+            """)
+            check("map shows current weather", mapwx["hasNow"], str(mapwx))
+            check("map shows the 5-day strip", mapwx["hasStrip"] == 5, str(mapwx["hasStrip"]))
+            check("map links through to tides", mapwx["hasLink"], str(mapwx))
+            check("weather sits above the map", mapwx["order"], str(mapwx))
+            check("old map heading is gone", mapwx["noHeading"], str(mapwx))
+
+            # One implementation, used by both screens.
+            shared = await page.eval("""
+                const w = await import('./js/weather-ui.js');
+                return { exports: ['weatherHtml','forecastHtml','resolveCoords']
+                            .every(k => typeof w[k] === 'function') };
+            """)
+            check("weather UI is shared, not duplicated", shared["exports"], str(shared))
+
             # -------------------------------------------------- sheet gestures
             print()
             print("Sheet")
@@ -1381,6 +1446,28 @@ async def main():
             """)
             check("a long drag closes the sheet", long_drag["gone"], str(long_drag))
             check("closing unlocks the page behind", long_drag["unlocked"], str(long_drag))
+
+            # Navigating away with a sheet open bypasses close(), which is what
+            # unlocks the body. Left stranded, every later page stays pinned at
+            # position:fixed with a stale negative offset.
+            stranded = await page.eval("""
+                document.querySelector('.species-card').click();
+                await new Promise(r => setTimeout(r, 400));
+                const opened = document.body.classList.contains('is-sheet-open');
+                location.hash = '#/tips';
+                await new Promise(r => setTimeout(r, 700));
+                const cs = getComputedStyle(document.body);
+                return { opened,
+                         sheetGone: !document.querySelector('.sheet-backdrop'),
+                         unlocked: !document.body.classList.contains('is-sheet-open'),
+                         position: cs.position,
+                         top: document.body.style.top || '(none)' };
+            """)
+            check("route change clears a stranded sheet",
+                  stranded["opened"] and stranded["sheetGone"], str(stranded))
+            check("route change unlocks the body",
+                  stranded["unlocked"] and stranded["position"] != "fixed"
+                  and stranded["top"] == "(none)", str(stranded))
 
             # -------------------------------------------------- map
             print("\nFishing map")

@@ -29,6 +29,7 @@ const SHELL = [
   './js/theme.js',
   './js/search.js',
   './js/moderation.js',
+  './js/weather-ui.js',
   './js/auth.js',
   './js/auth/local.js',
   './js/auth/cloud.js',
