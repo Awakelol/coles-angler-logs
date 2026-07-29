@@ -5,13 +5,27 @@
 // strings-only and would blow its ~5 MB quota on the first photo). Small
 // preferences stay in localStorage where the synchronous read is convenient.
 //
-// Everything is local to the device — no server, no account. Use the JSON
-// export on the Settings screen to back up or move between phones.
+// IndexedDB is the source of truth even for accounts that sync: the app has to
+// work on the water with no signal, so every write lands here first and is
+// pushed later (js/sync.js).
+//
+// DELETES ARE SOFT. A removed catch becomes a tombstone — the record stays with
+// `deleted: true` and a fresh updatedAt — rather than vanishing. Hard deletion
+// cannot survive syncing: phone A deletes a catch, phone B still has it, the
+// next pull sees a row A doesn't have and helpfully restores it. The user
+// deletes it again. Forever. A tombstone is a fact that can be synced; an
+// absence is not. Tombstones are purged after TOMBSTONE_TTL_DAYS, by which
+// point every device has long since seen them.
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'anglerlog';
 const DB_VERSION = 1;
 const CATCHES = 'catches';
+
+// Long enough that a phone left in a drawer for a season still learns about
+// deletions when it comes back; short enough that the store doesn't grow
+// forever with rows nobody will ever look at.
+const TOMBSTONE_TTL_DAYS = 180;
 
 let dbPromise = null;
 
@@ -70,8 +84,18 @@ export const store = {
    */
   async allCatches(userId = null) {
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
-    const mine = userId === null ? rows : rows.filter((r) => r.userId === userId);
+    const mine = (userId === null ? rows : rows.filter((r) => r.userId === userId))
+      .filter((r) => !r.deleted);
     return mine.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  },
+
+  /**
+   * Everything including tombstones. Only js/sync.js wants this — every screen
+   * in the app should be calling allCatches() and seeing live records.
+   */
+  async allRecords(userId = null) {
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    return userId === null ? rows : rows.filter((r) => r.userId === userId);
   },
 
   /**
@@ -85,6 +109,25 @@ export const store = {
       await tx('readwrite', (s) => s.put({ ...row, userId }));
     }
     return orphans.length;
+  },
+
+  /**
+   * Move every record from one owner id to another.
+   *
+   * Called when a device-only account is upgraded to a synced one: the catches
+   * were written against a random local id and must be re-keyed to the Firebase
+   * uid before anything is pushed, or they would sync as nobody's.
+   */
+  async reassignOwner(fromUserId, toUserId) {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return 0;
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    const mine = rows.filter((r) => r.userId === fromUserId);
+    for (const row of mine) {
+      // updatedAt is deliberately NOT touched. These are the same catches, and
+      // bumping it would make them look newer than a copy already in the cloud.
+      await tx('readwrite', (s) => s.put({ ...row, userId: toUserId }));
+    }
+    return mine.length;
   },
 
   async deleteAllFor(userId) {
@@ -107,8 +150,50 @@ export const store = {
     return record;
   },
 
+  /**
+   * Write a record exactly as given, without touching updatedAt.
+   *
+   * saveCatch() stamps updatedAt because a local edit has just happened. A
+   * record arriving from the cloud has NOT just been edited — stamping it
+   * would make this device look like it held the newest copy, and the next
+   * sync would push it straight back, forever.
+   */
+  async putRaw(record) {
+    await tx('readwrite', (s) => s.put(record));
+    return record;
+  },
+
+  /**
+   * Soft delete. The row survives as a tombstone so the deletion can sync;
+   * see the note at the top of this file for why an absence cannot.
+   */
   async deleteCatch(id) {
+    const existing = await tx('readonly', (s) => wrap(s.get(id)));
+    if (!existing) return;
+    // Media is the bulk of the bytes and a tombstone has no use for it.
+    const { photo, video, poster, ...rest } = existing;
+    await tx('readwrite', (s) =>
+      s.put({ ...rest, deleted: true, updatedAt: new Date().toISOString() })
+    );
+  },
+
+  /** Really remove a row. Used by sync reconciliation and tombstone purging. */
+  async hardDelete(id) {
     await tx('readwrite', (s) => s.delete(id));
+  },
+
+  /** Drop tombstones old enough that every device has certainly seen them. */
+  async purgeTombstones(ttlDays = TOMBSTONE_TTL_DAYS) {
+    const cutoff = new Date(Date.now() - ttlDays * 86400000).toISOString();
+    const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
+    let purged = 0;
+    for (const row of rows) {
+      if (row.deleted && (row.updatedAt || '') < cutoff) {
+        await tx('readwrite', (s) => s.delete(row.id));
+        purged++;
+      }
+    }
+    return purged;
   },
 
   async clearCatches() {

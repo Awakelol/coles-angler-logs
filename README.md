@@ -91,6 +91,86 @@ returning 401 usually just means "wait".
 
 ---
 
+## Accounts and cloud sync
+
+The app runs with no account at all. Everything below is optional, free on
+Firebase's Spark plan, and enables one thing: a catch log that follows its
+owner between devices.
+
+### How an account works
+
+There are two sign-in methods and one kind of account.
+
+| | What it is |
+|---|---|
+| **Username & password** | An ordinary Firebase Email/Password account whose address and password are *derived* from what you type — see `js/auth/credentials.js`. The address is synthesised at the reserved `.invalid` domain and receives nothing; the password is a PBKDF2 digest, so your real password never reaches Google and Firebase's 6-character minimum stops being your problem. |
+| **Google** | Firebase's Google provider, unchanged. |
+
+Both produce a Firebase uid, and the log is keyed by uid. That is what makes
+**linking additive**: connecting Google to a username account keeps the same
+uid, so it is a second door into the same room, not a second room.
+
+An account created with no connection is local-only. It is **upgraded in place
+on the next sign-in with a connection** — same username, same password, same
+catches, no prompt. Nothing is lost and nothing is asked.
+
+### What syncs
+
+Catch **records** — species, date, weight, length, method, bait, notes,
+conditions. Stored at `users/{uid}/catches/{catchId}`, one document each.
+
+**Photos and clips do not sync.** They stay on the device that took them, and a
+synced catch remembers it had one. Firestore documents cap at 1 MiB and media
+belongs in Cloud Storage, which needs a billing account on projects created
+recently. The boundary is one function — `stripForCloud` in `js/sync.js` — so
+adding media later means writing an uploader, not unpicking the sync.
+
+Deletes propagate as tombstones rather than absences. See the note at the top
+of `js/store.js` for why an absence cannot work.
+
+### Setting it up
+
+1. **Firebase project** — <https://console.firebase.google.com>, create one.
+   No billing needed.
+2. **Web app** — Project settings → *Your apps* → *Web* → register. Copy the
+   config object into `js/config.local.js` (gitignored) or `js/config.js`. The
+   `apiKey` there is a project identifier, not a secret.
+3. **Sign-in methods** — Build → Authentication → *Get started*, then under
+   *Sign-in method* enable:
+   - **Email/Password** — required for username accounts. Leave *Email link*
+     off.
+   - **Google** — optional, for the Google button.
+4. **Authorised domains** — Authentication → Settings → *Authorised domains* →
+   add your live domain. `localhost` is already there.
+5. **Account linking** — Authentication → Settings → *User account linking* →
+   *Link accounts that use the same email address*.
+6. **Firestore** — Build → Firestore Database → *Create database* → start in
+   **production mode**, pick a region near you. Then Rules, replace with:
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       // A signed-in person can read and write their own catches, and nothing
+       // else exists. Scoping by uid in the path rather than a field means a
+       // device cannot even ask for someone else's data.
+       match /users/{uid}/catches/{catchId} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+       }
+     }
+   }
+   ```
+
+   **Publish.** Until you do, sync fails with `permission-denied` and Settings
+   says cloud storage isn't set up yet.
+
+### If you skip all of this
+
+The app works. Accounts are local, the log lives in IndexedDB, and Settings
+says *This device only*. Use the JSON export to move between phones.
+
+---
+
 ## Extending it
 
 Everything below is data. None of it requires touching app logic.

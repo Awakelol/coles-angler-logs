@@ -10,6 +10,7 @@ import {
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
 import { speciesSprite, icon, SPRITES } from '../pixel.js';
 import { prepareMedia, ACCEPT_ATTR, LIMITS, fmtMB } from '../media.js';
+import { syncNow, syncSoon, lastSyncedAt } from '../sync.js';
 import { esc, el, openSheet, toast, fmtDate, todayISO, round } from '../ui.js';
 
 const METHODS = ['Hand line', 'Rod & reel', 'Jigging', 'Casting lure', 'Trolling', 'Fly', 'Spearfishing', 'Net', 'Trap / pot', 'Other'];
@@ -252,6 +253,7 @@ function openCatchForm(ctx, entry, onDone) {
         close();
         toast(entry ? 'Catch updated' : 'Catch logged');
         onDone();
+        syncSoon();
       } catch (err) {
         console.error('[saveCatch]', err);
         toast('Could not save — storage may be full');
@@ -264,6 +266,7 @@ function openCatchForm(ctx, entry, onDone) {
       close();
       toast('Catch deleted');
       onDone();
+      syncSoon();
     });
   });
 }
@@ -434,6 +437,11 @@ export function render(ctx) {
         <h1 class="display">Catch log</h1>
         <p class="subtitle">Every fish you log sharpens the pattern for the next trip.</p>
         <div class="center"><button class="btn btn--dark" id="addCatch">+ Log a catch</button></div>
+        <p class="sync-line" id="syncLine" data-state="${user.syncs ? 'idle' : 'local'}">${
+          user.syncs
+            ? 'Backed up to your account'
+            : 'On this device only — sign in with a connection to back it up'
+        }</p>
       </div>
     </section>
 
@@ -563,6 +571,27 @@ export async function mount(root, ctx) {
   const listPane = root.querySelector('#catchList');
   const recordsPane = root.querySelector('#recordsPane');
   const countLabel = root.querySelector('#catchCount');
+  const syncLine = root.querySelector('#syncLine');
+
+  /**
+   * Say what sync is doing, in words about the log rather than the network.
+   * Silence is the wrong answer here: a person who signed in expecting their
+   * catches to follow them deserves to know when they haven't.
+   */
+  function showSync(state, text) {
+    if (!syncLine) return;
+    syncLine.dataset.state = state;
+    syncLine.textContent = text;
+  }
+
+  const SYNC_TROUBLE = {
+    offline: 'No connection — your catches are saved here and will upload later',
+    'permission-denied': 'Cloud storage is not set up yet — saved on this device',
+    'signed-out': 'Saved on this device',
+    unconfigured: 'Saved on this device',
+    'sdk-unavailable': 'Could not reach the cloud — saved here and will retry',
+    failed: 'Could not reach the cloud — saved here and will retry',
+  };
 
   // Object URLs created for thumbnails must be released on redraw.
   let liveUrls = [];
@@ -664,4 +693,26 @@ export async function mount(root, ctx) {
 
   // Deep link from a species card: #/log?species=<id>&new=1
   if (ctx.params.get('species')) openCatchForm(ctx, null, refresh);
+
+  // Pull anything logged on another device. After the first render, so the
+  // catches already here appear immediately rather than behind a round trip.
+  if (user.syncs) {
+    showSync('busy', 'Checking for catches from your other devices…');
+    const result = await syncNow();
+
+    if (!result.ok) {
+      showSync('warn', SYNC_TROUBLE[result.reason] || SYNC_TROUBLE.failed);
+      return;
+    }
+
+    if (result.pulled) await refresh();
+
+    const when = lastSyncedAt();
+    showSync(
+      'idle',
+      result.pulled
+        ? `Added ${result.pulled} catch${result.pulled === 1 ? '' : 'es'} from your other devices`
+        : `Backed up to your account${when ? ` · ${fmtDate(when.slice(0, 10))}` : ''}`
+    );
+  }
 }

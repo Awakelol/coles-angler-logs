@@ -4,8 +4,96 @@ import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
 import { REGIONS } from '../data/index.js';
 import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
-import { currentUser, signOut } from '../auth.js';
+import {
+  currentUser, signOut, cloudConfigured, linkProvider, unlinkProvider, linkedProviders,
+} from '../auth.js';
+import { syncNow, lastSyncedAt } from '../sync.js';
 import { esc, toast } from '../ui.js';
+
+
+// --- connected accounts ------------------------------------------------------
+
+const PROVIDER_LABEL = {
+  // 'local' and 'username' are the same thing to the person using it — one
+  // has met the network and the other hasn't. Both must have a label, or the
+  // internal name leaks onto the screen.
+  local: 'Username & password',
+  username: 'Username & password',
+  google: 'Google',
+  facebook: 'Facebook',
+};
+
+/**
+ * What this account is, what it syncs, and how else you can get into it.
+ *
+ * Linking is the part worth explaining on screen rather than in a tooltip:
+ * people reasonably assume connecting Google means starting again, and will
+ * not press a button they think might cost them their log.
+ */
+function connectedHtml() {
+  const user = currentUser();
+  const linked = linkedProviders();
+  const canLink = cloudConfigured() && user.syncs;
+  const when = lastSyncedAt();
+
+  return `
+    <div class="connected">
+      <div class="row-between" style="margin-bottom:10px">
+        <h3 class="card__title" style="font-size:16px">Sync</h3>
+        <span class="chip ${user.syncs ? 'chip--target' : 'chip--tag'}">
+          ${user.syncs ? 'On' : 'This device only'}
+        </span>
+      </div>
+      <p class="card__body" style="margin-bottom:12px">
+        ${
+          user.syncs
+            ? `Your catches are saved to your account, so signing in on another phone brings them with you.${
+                when ? ` Last checked ${esc(fmtWhen(when))}.` : ''
+              } Photos and clips stay on the device that took them.`
+            : 'This account was made without a connection, so it lives only on this phone. Sign in again while online and it will start syncing on its own — nothing to do, and no catches are lost.'
+        }
+      </p>
+      ${
+        user.syncs
+          ? '<button class="btn btn--sm" id="syncNowBtn" style="align-self:flex-start">Sync now</button>'
+          : ''
+      }
+
+      <h3 class="card__title" style="font-size:16px;margin:18px 0 6px">Ways to sign in</h3>
+      <p class="field__hint" style="margin-bottom:10px">
+        All of these open the same log. Connecting another one adds a way in — it
+        never creates a second account and never moves your catches.
+      </p>
+      <ul class="provider-list" id="providerList">
+        ${(linked.length ? linked : [user.provider])
+          .map(
+            (p) => `
+          <li>
+            <span>${esc(PROVIDER_LABEL[p] || p)}</span>
+            <span class="chip chip--target">Connected</span>
+          </li>`
+          )
+          .join('')}
+        ${
+          canLink && !linked.includes('google') && CONFIG.auth?.google
+            ? `<li>
+                 <span>${esc(PROVIDER_LABEL.google)}</span>
+                 <button class="btn btn--sm" data-link="google">Connect</button>
+               </li>`
+            : ''
+        }
+      </ul>
+      <p class="field__hint" id="linkStatus" role="status" style="margin-top:10px"></p>
+    </div>`;
+}
+
+/** "today", "yesterday", or a date — a timestamp to the second helps nobody. */
+function fmtWhen(iso) {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return new Date(iso).toLocaleDateString();
+}
 
 export function render() {
   const t = CONFIG.tides;
@@ -39,16 +127,7 @@ export function render() {
               : `<p class="card__body">Not signed in. The catch log asks you to sign in or create an account.</p>
                  <a class="btn btn--sm btn--primary" href="#/log" style="align-self:flex-start">Go to the log</a>`
           }
-          <div class="notice" style="margin-top:14px">
-            <h3>Not real security</h3>
-            <p>
-              Accounts live only in this browser — there is no server yet, so nothing
-              is verified and anyone with the unlocked device can get past this. It
-              keeps logs separate between people, nothing more.
-              <strong>Don't reuse a password from elsewhere.</strong>
-              Google sign-in is verified for real and syncs between devices.
-            </p>
-          </div>
+          ${currentUser() ? connectedHtml() : ''}
         </div>
       </div>
     </section>
@@ -180,6 +259,65 @@ export function mount(root) {
     toast('Signed out');
     location.hash = '#/log';
   });
+
+  // --- connected accounts ---
+  const linkStatus = root.querySelector('#linkStatus');
+  const say = (msg) => {
+    if (linkStatus) linkStatus.textContent = msg;
+  };
+
+  root.querySelector('#syncNowBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    const result = await syncNow();
+    btn.disabled = false;
+    btn.textContent = 'Sync now';
+
+    if (result.ok) {
+      const moved = (result.pushed || 0) + (result.pulled || 0);
+      toast(moved ? `Synced ${moved} catch${moved === 1 ? '' : 'es'}` : 'Already up to date');
+    } else if (result.reason === 'permission-denied') {
+      // Worth naming rather than shrugging: it means Firestore was never set
+      // up, which is a five-minute fix and not a bug in the app.
+      toast('Cloud storage is not set up on the Firebase project yet');
+    } else if (result.reason === 'offline') {
+      toast('No connection — will sync later');
+    } else {
+      toast('Could not reach the cloud — will retry');
+    }
+  });
+
+  for (const btn of root.querySelectorAll('[data-link]')) {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.link;
+      btn.disabled = true;
+      btn.textContent = 'Opening…';
+      say('');
+      try {
+        const profile = await linkProvider(name);
+        if (!profile) {
+          // Popup closed, or we've been sent off on a redirect.
+          btn.disabled = false;
+          btn.textContent = 'Connect';
+          return;
+        }
+        toast(`${PROVIDER_LABEL[name] || name} connected`);
+        location.hash = '#/settings';
+        location.reload();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Connect';
+        // credential-already-in-use is the one people actually hit: that
+        // Google account is already its own separate account here.
+        say(
+          err?.code === 'auth/credential-already-in-use'
+            ? 'That Google account already has its own log here. Sign in with it directly instead.'
+            : err?.message || 'Could not connect that account.'
+        );
+      }
+    });
+  }
 
   // --- theme ---
   const themePicker = root.querySelector('#themePicker');

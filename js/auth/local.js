@@ -11,7 +11,12 @@
 // anybody. Cloud sign-in (js/auth/cloud.js) sits alongside it, not instead of
 // it — see js/auth.js for how the two are chosen between.
 //
-// Local accounts DO NOT SYNC. That is the trade for needing nothing.
+// A local record is ALSO the offline mirror of a synced username account —
+// see adopt(). In that case the id is the Firebase uid rather than a random
+// one, so catches written with no signal are already keyed correctly and need
+// no rewriting when the connection comes back. The stored hash is then a lock
+// on this device, not the credential; the real one is derived at sign-in time
+// by js/auth/credentials.js.
 //
 // Passwords are salted and hashed with SHA-256 rather than stored in plain
 // text. That doesn't make this secure, but people reuse passwords and leaving
@@ -129,13 +134,50 @@ export async function signUp(name, password, email = '') {
 
 export async function signIn(name, password) {
   const user = readUsers().find((u) => u.key === key(name));
-  // Deliberately the same message for both cases — there's no reason to
-  // confirm which usernames exist on a shared device.
-  const wrong = new Error('Wrong username or password.');
-  if (!user) throw wrong;
-  if ((await hash(password, user.salt)) !== user.hash) throw wrong;
+  // Deliberately the same MESSAGE for both cases — there's no reason to
+  // confirm which usernames exist on a shared device. The `code` is for the
+  // facade, which must tell "not on this device, try the cloud" apart from
+  // "wrong password, stop here"; it is never shown.
+  if (!user) {
+    const missing = new Error('Wrong username or password.');
+    missing.code = 'no-such-user';
+    throw missing;
+  }
+  if ((await hash(password, user.salt)) !== user.hash) {
+    const wrong = new Error('Wrong username or password.');
+    wrong.code = 'wrong-password';
+    throw wrong;
+  }
 
   return { id: user.id, username: user.username, provider: user.provider || 'local' };
+}
+
+/**
+ * Write a local record with an id chosen by the caller.
+ *
+ * Used to mirror a cloud username account so it can still sign in with no
+ * signal. Replaces any existing record with the same id or username, because
+ * the cloud is authoritative for a synced account and a stale local copy with
+ * an old password would lock someone out of their own phone.
+ */
+export async function adopt({ id, username, password, provider = 'username' }) {
+  if (!id) throw new Error('adopt() needs the account id.');
+  const salt = randomSalt();
+  const record = {
+    id,
+    username: String(username).trim(),
+    key: key(username),
+    salt,
+    hash: await hash(password, salt),
+    provider,
+    email: null,
+    createdAt: new Date().toISOString(),
+  };
+
+  const users = readUsers().filter((u) => u.id !== id && u.key !== record.key);
+  users.push(record);
+  writeUsers(users);
+  return { id: record.id, username: record.username, provider };
 }
 
 /** Look up a stored local account by id. Used by the facade to resolve a session. */

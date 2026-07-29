@@ -22,6 +22,7 @@
 // ---------------------------------------------------------------------------
 
 import { CONFIG } from '../config.js';
+import { syntheticEmail, derivePassword, isSyntheticEmail } from './credentials.js';
 
 const SDK_VERSION = '10.12.2';
 const CDN = `https://www.gstatic.com/firebasejs/${SDK_VERSION}`;
@@ -37,10 +38,11 @@ export function cloudConfigured() {
 /** Everything the user must set up before any of this can work. */
 export const SETUP_STEPS = [
   'Create a project at console.firebase.google.com (no billing needed).',
-  'Build → Authentication → Get started → enable the Google provider.',
+  'Build → Authentication → Get started → enable Email/Password AND Google.',
   'Authentication → Settings → Authorised domains → add your site\'s domain.',
   'Project settings → General → Your apps → Web → register, then copy the config.',
   'Paste it into js/config.local.js (gitignored) or Settings in the app.',
+  'Build → Firestore Database → create it, then publish the rules from README.',
 ];
 
 let appPromise = null;
@@ -74,6 +76,9 @@ async function firebase() {
 const PROVIDER_NAMES = {
   'google.com': 'google',
   'facebook.com': 'facebook',
+  // Firebase calls email/password 'password'. The app calls it 'username',
+  // because that is what the person typed and what they will call it.
+  password: 'username',
 };
 
 function toProfile(user) {
@@ -83,13 +88,19 @@ function toProfile(user) {
     .map((p) => PROVIDER_NAMES[p.providerId])
     .filter(Boolean);
 
+  // A username account's address is minted by us and points nowhere, so it is
+  // an identifier rather than contact detail and has no business on screen.
+  const realEmail = user.email && !isSyntheticEmail(user.email) ? user.email : null;
+
   return {
     id: user.uid,
-    username: user.displayName || user.email?.split('@')[0] || 'angler',
-    email: user.email || null,
+    username: user.displayName || realEmail?.split('@')[0] || 'angler',
+    email: realEmail,
     photoURL: user.photoURL || null,
-    // The provider used for THIS session; `providers` is what's linked.
-    provider: providers[0] || 'google',
+    // How this account is chiefly identified. A username account that later
+    // connects Google is still a username account — that is the name the
+    // person signs in with — so it wins regardless of providerData order.
+    provider: providers.includes('username') ? 'username' : providers[0] || 'google',
     providers,
   };
 }
@@ -192,6 +203,79 @@ export const signInWithGoogle = () => signInWith('google');
 export const signInWithFacebook = () => signInWith('facebook');
 
 // ---------------------------------------------------------------------------
+// USERNAME ACCOUNTS IN THE CLOUD
+//
+// A username account is an ordinary Firebase Email/Password account whose
+// address and password are derived from what the person typed — see
+// js/auth/credentials.js for why, at length. From Firebase's point of view
+// there is nothing unusual about it, which is the point: it gets a real uid,
+// a real ID token, and Firestore rules can trust it.
+// ---------------------------------------------------------------------------
+
+/** Create the cloud half of a username account. */
+export async function signUpWithPassword(username, password) {
+  clearAuthError();
+  const { auth, sdk } = await firebase();
+  const email = syntheticEmail(username);
+  const derived = await derivePassword(username, password);
+
+  try {
+    const result = await sdk.createUserWithEmailAndPassword(auth, email, derived);
+    // Store the username as typed. The synthetic address is lower-cased, so
+    // without this the display name would silently change case on sign-in.
+    const displayName = String(username).trim();
+    await sdk.updateProfile(result.user, { displayName });
+    // Don't spread result.user — providerData and friends are prototype
+    // getters and a spread would quietly drop them, leaving the profile with
+    // no providers at all.
+    const profile = { ...toProfile(result.user), username: displayName };
+    cache(profile);
+    return profile;
+  } catch (err) {
+    recordError('signup-password', err);
+    throw err;
+  }
+}
+
+/** Sign in to an existing username account — the path a new device takes. */
+export async function signInWithPassword(username, password) {
+  clearAuthError();
+  const { auth, sdk } = await firebase();
+  const derived = await derivePassword(username, password);
+
+  try {
+    const result = await sdk.signInWithEmailAndPassword(auth, syntheticEmail(username), derived);
+    const profile = toProfile(result.user);
+    cache(profile);
+    return profile;
+  } catch (err) {
+    recordError('signin-password', err);
+    throw err;
+  }
+}
+
+/** The signed-in Firebase uid, or null. Used by the sync layer. */
+export async function currentUid() {
+  if (!cloudConfigured()) return null;
+  try {
+    const { auth } = await firebase();
+    return auth.currentUser?.uid || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The live Firebase handles, for js/sync.js. Null when unavailable. */
+export async function firebaseHandles() {
+  if (!cloudConfigured()) return null;
+  try {
+    return await firebase();
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ACCOUNT LINKING
 //
 // One person, one account, several ways in. Without this, signing in with
@@ -213,11 +297,42 @@ export const signInWithFacebook = () => signInWith('facebook');
 // will attach to.
 // ---------------------------------------------------------------------------
 
-/** Attach another provider to the account that is already signed in. */
+/**
+ * Attach another provider to the account that is already signed in.
+ *
+ * Popup first for the same reason sign-in is — see signInWith(). Linking by
+ * redirect would hit the identical storage-partitioning wall and come back
+ * looking as though nothing had happened.
+ *
+ * The uid does not change, so the catch log is untouched by this. That is the
+ * entire point: connecting Google to a username account gives a second way in,
+ * not a second account.
+ */
 export async function linkProvider(name) {
+  clearAuthError();
   const { auth, sdk } = await firebase();
   if (!auth.currentUser) throw new Error('Sign in before connecting another account.');
-  await sdk.linkWithRedirect(auth.currentUser, providerFor(sdk, name));
+  const provider = providerFor(sdk, name);
+
+  try {
+    const result = await sdk.linkWithPopup(auth.currentUser, provider);
+    const profile = toProfile(result.user);
+    cache(profile);
+    return profile;
+  } catch (err) {
+    if (err?.code === 'auth/popup-closed-by-user') return null;
+    const popupFailed = [
+      'auth/popup-blocked',
+      'auth/operation-not-supported-in-this-environment',
+      'auth/cancelled-popup-request',
+    ].includes(err?.code);
+    if (!popupFailed) {
+      recordError('link', err);
+      throw err;
+    }
+    await sdk.linkWithRedirect(auth.currentUser, provider);
+    return null; // navigating away
+  }
 }
 
 /** Detach a provider. Refuses to remove the last one, which would orphan the account. */

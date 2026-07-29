@@ -866,13 +866,221 @@ async def main():
 
             check("local accounts report no linked providers",
                   linking["localProviders"] == [], str(linking["localProviders"]))
-            check("device-only accounts cannot be linked",
-                  bool(linking["localRefused"]) and "Device-only" in linking["localRefused"],
+            # An account that has never been online has no uid to attach a
+            # provider to. It must refuse, and the refusal has to say the
+            # thing that fixes it, because "cannot be linked" reads permanent.
+            check("un-synced accounts cannot be linked",
+                  bool(linking["localRefused"]) and "not synced" in linking["localRefused"],
+                  str(linking["localRefused"]))
+            check("the refusal says how to fix it",
+                  "Sign in again" in (linking["localRefused"] or ""),
                   str(linking["localRefused"]))
             check("linking refuses when signed out",
                   bool(linking["signedOutRefused"]), str(linking["signedOutRefused"]))
             check("no pending link on a clean session", linking["noPending"] is None,
                   str(linking["noPending"]))
+
+            # -------------------------------------------------- sync
+            print("\nCloud sync")
+
+            creds = await page.eval("""
+                const c = await import('./js/auth/credentials.js');
+                const a = await c.derivePassword('cole', 'abcd');
+                const b = await c.derivePassword('cole', 'abcd');
+                const different = await c.derivePassword('cole', 'abcE');
+                const otherUser = await c.derivePassword('coleX', 'abcd');
+                const cased = await c.derivePassword('COLE', 'abcd');
+                return {
+                    email: c.syntheticEmail('Cole_1'),
+                    synthetic: c.isSyntheticEmail(c.syntheticEmail('cole')),
+                    realNotSynthetic: c.isSyntheticEmail('me@gmail.com'),
+                    back: c.usernameFromEmail(c.syntheticEmail('cole')),
+                    len: a.length,
+                    stable: a === b,
+                    caseInsensitive: a === cased,
+                    passwordMatters: a !== different,
+                    userMatters: a !== otherUser,
+                    leaksPassword: a.includes('abcd'),
+                };
+            """)
+            # Determinism is the whole feature: a second device has to arrive
+            # at the same credential from the same two things the person typed.
+            check("derived password is stable", creds["stable"], str(creds))
+            check("derivation is case-insensitive like the username",
+                  creds["caseInsensitive"], str(creds))
+            check("a different password derives differently",
+                  creds["passwordMatters"], str(creds))
+            check("a different username derives differently",
+                  creds["userMatters"], str(creds))
+            # Firebase demands 6+; the app allows 4. A digest sidesteps that.
+            check("derived password clears Firebase's minimum",
+                  creds["len"] >= 6, "length %s" % creds["len"])
+            check("the real password is not in the derived one",
+                  not creds["leaksPassword"], str(creds))
+            check("synthetic address is recognisable both ways",
+                  creds["synthetic"] and not creds["realNotSynthetic"]
+                  and creds["back"] == "cole", str(creds))
+            check("synthetic address uses a reserved domain",
+                  creds["email"].endswith("@angler.invalid"), creds["email"])
+
+            plan = await page.eval("""
+                const s = await import('./js/sync.js');
+                const L = (id, at, extra = {}) => ({ id, updatedAt: at, ...extra });
+
+                const onlyLocal = s.planSync([L('a', '2026-01-02')], []);
+                const onlyCloud = s.planSync([], [L('b', '2026-01-02')]);
+                const localNewer = s.planSync([L('c', '2026-02-01')], [L('c', '2026-01-01')]);
+                const cloudNewer = s.planSync([L('d', '2026-01-01')], [L('d', '2026-02-01')]);
+                const same = s.planSync([L('e', '2026-01-01')], [L('e', '2026-01-01')]);
+
+                // A delete on one phone must reach the other, and must not be
+                // read as 'the cloud is missing a row, push it back'.
+                const tombstone = s.planSync(
+                    [L('f', '2026-01-01')],
+                    [L('f', '2026-03-01', { deleted: true })]
+                );
+
+                return {
+                    onlyLocal: onlyLocal.push.length === 1 && onlyLocal.pull.length === 0,
+                    onlyCloud: onlyCloud.pull.length === 1 && onlyCloud.push.length === 0,
+                    localNewer: localNewer.push.length === 1,
+                    cloudNewer: cloudNewer.pull.length === 1,
+                    sameUnchanged: same.unchanged === 1
+                        && same.push.length === 0 && same.pull.length === 0,
+                    tombstonePulled: tombstone.pull.length === 1
+                        && tombstone.pull[0].deleted === true,
+                };
+            """)
+            check("a local-only catch is pushed", plan["onlyLocal"], str(plan))
+            check("a cloud-only catch is pulled", plan["onlyCloud"], str(plan))
+            check("the newer side wins",
+                  plan["localNewer"] and plan["cloudNewer"], str(plan))
+            check("identical records move nothing", plan["sameUnchanged"], str(plan))
+            check("a remote delete reaches this device", plan["tombstonePulled"], str(plan))
+
+            strip = await page.eval("""
+                const s = await import('./js/sync.js');
+                const blob = new Blob(['x'], { type: 'image/jpeg' });
+                const out = s.stripForCloud({
+                    id: 'x', speciesId: 'y', weightKg: 2, notes: undefined,
+                    photo: blob, video: blob, poster: blob,
+                });
+                const merged = s.mergeIncoming(
+                    { id: 'x', speciesId: 'y', weightKg: 3 },
+                    { id: 'x', speciesId: 'y', weightKg: 2, photo: blob }
+                );
+                return {
+                    noMedia: !out.photo && !out.video && !out.poster,
+                    noUndefined: !('notes' in out),
+                    flagged: out.hasPhotoElsewhere === true && out.hasVideoElsewhere === true,
+                    keptPhoto: merged.photo instanceof Blob,
+                    tookRemoteValue: merged.weightKg === 3,
+                };
+            """)
+            check("media never leaves the device", strip["noMedia"], str(strip))
+            # Firestore rejects undefined outright, and sending null instead
+            # would wipe a value another device had filled in.
+            check("undefined fields are dropped, not sent as null",
+                  strip["noUndefined"], str(strip))
+            check("a stripped catch remembers it had media",
+                  strip["flagged"], str(strip))
+            # Accepting a cloud record wholesale would delete the photo off
+            # the phone that took it, which looks like the app losing it.
+            check("pulling a catch keeps this device's photo",
+                  strip["keptPhoto"] and strip["tookRemoteValue"], str(strip))
+
+            tomb = await page.eval("""
+                const { store } = await import('./js/store.js');
+                await store.clearCatches();
+                const kept = await store.saveCatch({ userId: 'u1', date: '2026-01-01' });
+                const gone = await store.saveCatch({ userId: 'u1', date: '2026-01-02' });
+                await store.deleteCatch(gone.id);
+
+                const visible = await store.allCatches('u1');
+                const raw = await store.allRecords('u1');
+                const stone = raw.find(r => r.id === gone.id);
+
+                // Re-keying on upgrade must not look like an edit, or every
+                // catch would appear newer than the cloud's copy.
+                const before = kept.updatedAt;
+                await store.reassignOwner('u1', 'u2');
+                const moved = (await store.allRecords('u2')).find(r => r.id === kept.id);
+
+                await store.clearCatches();
+                return {
+                    hidden: visible.length === 1 && visible[0].id === kept.id,
+                    survives: !!stone && stone.deleted === true,
+                    reassigned: !!moved,
+                    keptStamp: !!moved && moved.updatedAt === before,
+                };
+            """)
+            check("a deleted catch disappears from the log", tomb["hidden"], str(tomb))
+            check("but survives as a tombstone so the delete can sync",
+                  tomb["survives"], str(tomb))
+            check("upgrading re-keys catches to the cloud id",
+                  tomb["reassigned"], str(tomb))
+            check("re-keying does not look like an edit", tomb["keptStamp"], str(tomb))
+
+            offline = await page.eval("""
+                const s = await import('./js/sync.js');
+                const real = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine');
+                Object.defineProperty(navigator, 'onLine', { get: () => false, configurable: true });
+                const r = await s.syncNow();
+                if (real) Object.defineProperty(Navigator.prototype, 'onLine', real);
+                return r;
+            """)
+            # Syncing must never throw at a screen that has already rendered.
+            check("sync reports offline instead of failing",
+                  offline["ok"] is False and offline["reason"] == "offline", str(offline))
+
+            panel = await page.eval("""
+                const a = await import('./js/auth.js');
+                await a.signOut();
+                localStorage.removeItem('angler.users');
+                try { await a.signUp('panel', 'abcd'); }
+                catch (e) { await a.signIn('panel', 'abcd'); }
+
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 250));
+                location.hash = '#/settings';
+                await new Promise(r => setTimeout(r, 900));
+
+                const rows = [...document.querySelectorAll('#providerList li')]
+                    .map(li => li.querySelector('span').textContent.trim());
+                const text = document.querySelector('.connected')?.innerText || '';
+                return {
+                    present: !!document.querySelector('.connected'),
+                    rows,
+                    // Internal provider keys must never reach the screen.
+                    rawKeys: rows.some(r => ['local', 'username', 'google.com'].includes(r)),
+                    saysWhatSyncIs: /sync/i.test(text),
+                    reassuresAboutLinking: /never creates a second account/i.test(text),
+                };
+            """)
+            check("settings shows a connected-accounts panel", panel["present"], str(panel))
+            check("every sign-in method is named for a human",
+                  panel["rows"] and not panel["rawKeys"], str(panel["rows"]))
+            check("the panel explains what sync does", panel["saysWhatSyncIs"], str(panel))
+            # People will not press a button they think might cost them
+            # their log, so the panel has to say that linking is additive.
+            check("linking says it will not split the account",
+                  panel["reassuresAboutLinking"], str(panel))
+
+            status = await page.eval("""
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 250));
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 1200));
+                const line = document.getElementById('syncLine');
+                return { present: !!line, state: line?.dataset.state,
+                         text: line?.textContent.trim() || '' };
+            """)
+            check("the log says where the catches live", status["present"], str(status))
+            # A device-only account must say so plainly. Someone who thinks
+            # they are backed up and is not has been actively misled.
+            check("a device-only log admits it is not backed up",
+                  status["state"] == "local" and "device" in status["text"].lower(),
+                  str(status))
 
             # -------------------------------------------------- routes
             routes = {

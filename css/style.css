@@ -652,6 +652,30 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .tip-card { border-left: 10px solid var(--yellow); }
 .tip-card--general { border-left-color: var(--sky-deep); }
 
+/* --- sync & connected accounts ------------------------------------------- */
+
+/* One line under the log heading. Quiet by default — it only earns attention
+   when something is wrong, so only the warn state gets a colour. */
+.sync-line {
+  margin: 12px 0 0;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--ink-60);
+  text-align: center;
+}
+.sync-line[data-state="busy"] { opacity: .75; }
+.sync-line[data-state="warn"] { color: var(--coral); }
+
+.connected { margin-top: 18px; border-top: var(--border-w-sm) solid var(--line); padding-top: 16px; }
+
+.provider-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.provider-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px;
+  border: var(--border-w-sm) solid var(--line); border-radius: var(--radius-sm);
+  background: var(--art-bg);
+  font-weight: 800; font-size: 14px;
+}
+
 /* --- info page ----------------------------------------------------------- */
 
 /* Three-way switch between Fishes, Gear and Zones. A segmented control rather
