@@ -91,6 +91,81 @@ returning 401 usually just means "wait".
 
 ---
 
+## Species identification (photo → name)
+
+Home → **What did I catch?** takes a photo and asks two services what it is,
+then cross-checks them.
+
+### Where the keys go — Cloudflare dashboard, never this repo
+
+The app is a static site: anything it ships is readable by anyone who opens
+devtools. So the keys live in a **Cloudflare Pages Function**
+(`functions/api/identify.js`), and the browser only ever talks to that.
+
+Cloudflare dashboard → your Pages project → **Settings → Variables and
+Secrets** → *Add*. Set all three as **Secret** (encrypted), not Plaintext, and
+add them to **Production** (repeat for Preview if you use preview branches):
+
+| Name | Value | Required |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | `sk-ant-...` from <https://console.anthropic.com> | yes |
+| `FISHIAL_API_KEY` | Fishial **api key** | no |
+| `FISHIAL_API_SECRET` | Fishial **secret key** | no |
+
+Fishial's pair comes from <https://portal.fishial.ai> → **About → for
+developers**. They map to `client_id` and `client_secret` on Fishial's token
+endpoint — the function does that exchange for you.
+
+**Redeploy after adding them.** Variables are baked in at deploy time; an
+existing deployment won't see them. Push any commit, or hit *Retry deployment*.
+
+Leave the Fishial pair out and the feature still works — it just runs on Claude
+alone and says so. Leave out `ANTHROPIC_API_KEY` and the screen reports that
+it isn't set up rather than failing silently.
+
+> **Never put these in `js/config.js` or `js/config.local.js`.** Those ship to
+> the browser. `config.local.js` is gitignored, which protects the repo but not
+> the deployed site — the WorldTides key is there because a leaked tide lookup
+> is harmless; an Anthropic key can spend real money.
+
+### How the two are cross-checked
+
+`js/identify-verdict.js` holds the rules, free of network calls so they're
+directly testable:
+
+| Situation | Result |
+|---|---|
+| Both name the same species | **agreed** — the strong case |
+| Fishial ranks another first but has Claude's pick lower down | **corroborated** — closer than the top line suggests |
+| They disagree, and only one species occurs in Leyte Gulf | **local-wins** — the catalogue breaks the tie |
+| They disagree and neither is local | **split** — both shown, low confidence, no pretending |
+| Only one service answered | **one-sided** — usable, flagged, never called high confidence |
+
+The tie-break is the point. Fishial is trained mostly on North American and
+European sportfish, so it can be confidently wrong about an Indo-Pacific fish;
+Claude is handed the Leyte Gulf catalogue and asked to pick from it, so it
+knows what is *plausible here*. A species that doesn't occur in these waters is
+wrong however high the classifier's score, and that is the judgement neither
+model makes alone.
+
+Cost is roughly 2–3¢ per identification on the Anthropic side. Fishial's
+developer tier is free for non-commercial use.
+
+### Testing it locally
+
+`python -m http.server` does not run Pages Functions, so the button will report
+that it couldn't identify anything — that's correct behaviour, not a bug. To
+exercise the real path:
+
+```sh
+npm install -g wrangler
+wrangler pages dev . --binding ANTHROPIC_API_KEY=sk-ant-... \
+                     --binding FISHIAL_API_KEY=... \
+                     --binding FISHIAL_API_SECRET=...
+```
+
+---
+
 ## Accounts and cloud sync
 
 The app runs with no account at all. Everything below is optional, free on

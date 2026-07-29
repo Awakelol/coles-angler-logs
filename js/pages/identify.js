@@ -18,14 +18,15 @@
 // capture-a-still flow costs the user nothing versus a live viewfinder, while
 // still allowing an existing photo to be picked on a desktop.
 //
-// The identification step is NOT built yet — see the notice this page renders.
-// Everything up to and including the photo is real, because that half is the
-// same whichever service ends up doing the recognising.
+// Recognition goes through /api/identify — a Cloudflare Pages Function, so the
+// API keys stay off this device. Two services look at the photo and are
+// cross-checked; see js/identify-verdict.js for the arbitration.
 // ---------------------------------------------------------------------------
 
 import { prepareMedia, LIMITS, fmtMB } from '../media.js';
-import { icon } from '../pixel.js';
-import { esc, toast } from '../ui.js';
+import { getSpecies, localNames } from '../data/index.js';
+import { speciesHero, icon } from '../pixel.js';
+import { esc, toast, loadingBlock } from '../ui.js';
 
 export function render() {
   return `
@@ -105,7 +106,7 @@ export function mount(root) {
 
       shot.innerHTML = `<img src="${objectUrl}" alt="The fish you photographed">`;
       clear.hidden = false;
-      result.innerHTML = pendingHtml();
+      await identify(media.blob, result);
     } catch (err) {
       console.error('[identify]', err);
       toast(err.message || 'Could not read that photo');
@@ -119,26 +120,127 @@ export function mount(root) {
   window.addEventListener('hashchange', release, { once: true });
 }
 
-/**
- * What the user sees once a photo is ready.
- *
- * Says plainly that recognition isn't wired up yet rather than spinning
- * forever or inventing an answer — a screen that pretends to identify a fish
- * and doesn't is worse than one that admits it can't.
- */
-function pendingHtml() {
+/** Blob -> base64, without the data: prefix the API doesn't want. */
+function toBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error('Could not read the photo.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function identify(blob, pane) {
+  pane.innerHTML = loadingBlock('Looking at your photo…');
+
+  let data;
+  try {
+    const res = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ image: await toBase64(blob), mime: blob.type || 'image/jpeg' }),
+    });
+    data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      pane.innerHTML = problemHtml(res.status, data);
+      return;
+    }
+  } catch {
+    // Offline is the normal case on the water, not an error worth shouting at.
+    pane.innerHTML = problemHtml(0, null);
+    return;
+  }
+
+  pane.innerHTML = verdictHtml(data);
+}
+
+/** Confidence drives the colour, so a low-confidence guess never looks certain. */
+const TONE = { high: 'notice', medium: 'notice notice--warn', low: 'notice notice--warn' };
+
+function verdictHtml(v) {
+  if (!v || !v.answer) {
+    return `
+      <div class="notice notice--warn" style="margin-top:18px">
+        <h3>No confident match</h3>
+        <p style="margin:0">
+          Nothing in the Leyte Gulf catalogue matched well. Try a side-on shot
+          with the whole fish in frame, or browse
+          <a href="#/info">Info &rsaquo; Fishes</a>.
+        </p>
+      </div>`;
+  }
+
+  const species = v.speciesId ? getSpecies(v.speciesId) : null;
+  const locals = species ? localNames(species).slice(0, 3) : [];
+
+  return `
+    <div class="verdict" style="margin-top:18px">
+      <div class="${TONE[v.confidence] || 'notice notice--warn'}">
+        <div class="verdict__head">
+          ${species ? `<div class="verdict__art">${speciesHero(species, { size: 150 })}</div>` : ''}
+          <div>
+            <p class="eyebrow">${esc(v.confidence)} confidence &middot; ${esc(v.verdict)}</p>
+            <h3 style="margin:2px 0 4px">${esc(species ? species.common : v.answer)}</h3>
+            <p class="card__sub species-card__sci">${esc(v.answer)}</p>
+            ${
+              locals.length
+                ? `<div class="chips" style="margin-top:8px">${locals
+                    .map((l) => `<span class="chip chip--local">${esc(l.name)}</span>`)
+                    .join('')}</div>`
+                : ''
+            }
+          </div>
+        </div>
+
+        ${v.note ? `<p class="card__body" style="margin:12px 0 0">${esc(v.note)}</p>` : ''}
+        ${v.reasoning ? `<p class="card__body" style="margin:8px 0 0">${esc(v.reasoning)}</p>` : ''}
+      </div>
+
+      ${
+        (v.alternatives || []).length
+          ? `<h3 class="card__title" style="font-size:15px;margin:18px 0 8px">Could also be</h3>
+             <ul class="provider-list">
+               ${v.alternatives
+                 .slice(0, 3)
+                 .map(
+                   (a) => `<li><span>${esc(a.scientific)}</span>
+                     <span class="card__sub" style="text-align:right;max-width:60%">${esc(a.why)}</span></li>`
+                 )
+                 .join('')}
+             </ul>`
+          : ''
+      }
+
+      <div class="btn-row" style="margin-top:16px">
+        ${
+          v.speciesId
+            ? `<a class="btn btn--primary" href="#/log?species=${esc(v.speciesId)}">Log this catch</a>
+               <a class="btn btn--sm" href="#/info?open=${esc(v.speciesId)}">Species detail</a>`
+            : '<a class="btn btn--sm" href="#/info">Browse the guide</a>'
+        }
+      </div>
+      <p class="field__hint" style="margin-top:10px">
+        A best guess from two models, not a determination. Check it against the
+        species page before you record it.
+      </p>
+    </div>`;
+}
+
+function problemHtml(status, data) {
+  const offline = status === 0;
+  const unconfigured = status === 503;
   return `
     <div class="notice notice--warn" style="margin-top:18px">
-      <h3>Recognition isn't connected yet</h3>
-      <p>
-        The photo is ready and the camera half works. What's missing is the
-        service that looks at it — that's the next piece of work, and it needs
-        a key kept off this device.
-      </p>
-      <p style="margin-bottom:0">
-        In the meantime you can search by eye in
-        <a href="#/info">Info &rsaquo; Fishes</a>, or attach this photo to a
-        catch in <a href="#/log">the log</a>.
+      <h3>${offline ? 'No connection' : unconfigured ? 'Not set up yet' : "Couldn't identify that"}</h3>
+      <p style="margin:0">
+        ${
+          offline
+            ? 'The photo is fine — identification just needs a connection. Try again when you have signal.'
+            : unconfigured
+              ? 'The identification service has no API key configured yet. See README &rsaquo; Species identification.'
+              : esc(data?.message || 'The service could not read that photo. Try another shot.')
+        }
       </p>
     </div>`;
 }

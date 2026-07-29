@@ -671,6 +671,20 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   border-radius: calc(var(--radius-sm) - 4px);
 }
 
+/* The identified species, art beside the name. Stacks on a narrow phone so
+   the sprite never squeezes the scientific name into two characters a line. */
+.verdict__head { display: grid; gap: 14px; align-items: center; }
+.verdict__art {
+  background: var(--art-bg);
+  border: var(--border-w-sm) solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid; place-items: center; padding: 10px;
+}
+.verdict__art svg { width: 100%; max-width: 180px; height: auto; }
+@media (min-width: 560px) {
+  .verdict__head { grid-template-columns: 170px 1fr; }
+}
+
 /* --- sync & connected accounts ------------------------------------------- */
 
 /* One line under the log heading. Quiet by default — it only earns attention

@@ -1225,8 +1225,12 @@ async def main():
                     preview: !!document.querySelector('#shot img'),
                     altText: document.querySelector('#shot img')?.alt || '',
                     clearShown: document.getElementById('clearPhoto')?.hidden === false,
-                    saysNotReady: /isn.t connected yet/i.test(result?.textContent || ''),
-                    offersAlternative: !!result?.querySelector('a[href="#/info"]'),
+                    // No Pages Function on the static test server, so the
+                    // call fails. That is the path worth pinning: it must say
+                    // so and must NOT invent a species.
+                    saysFailed: /couldn.t identify|no connection|not set up/i
+                        .test(result?.textContent || ''),
+                    inventedNothing: !result?.querySelector('.verdict'),
                     buttonRestored: document.getElementById('takePhoto').textContent
                         .includes('Take a photo'),
                 };
@@ -1235,12 +1239,106 @@ async def main():
             check("the preview is described for screen readers",
                   bool(shot["altText"]), str(shot))
             check("the photo can be cleared", shot["clearShown"], str(shot))
-            # Honesty check: the screen must not imply it identified anything.
-            check("it says recognition is not connected yet",
-                  shot["saysNotReady"], str(shot))
-            check("and points somewhere useful instead",
-                  shot["offersAlternative"], str(shot))
+            # Honesty check: a failed lookup must read as a failure. Silently
+            # showing nothing, or worse a guess, would be the bad outcome.
+            check("a failed identification says so plainly",
+                  shot["saysFailed"], str(shot))
+            check("and invents no species when the call fails",
+                  shot["inventedNothing"], str(shot))
             check("the button recovers after preparing", shot["buttonRestored"], str(shot))
+
+            verdict = await page.eval("""
+                const v = await import('./js/identify-verdict.js');
+                // Pretend the local catalogue holds only these two.
+                const local = new Set(['sphyraena barracuda', 'lutjanus argentimaculatus']);
+                const inRegion = (n) => local.has(v.normalise(n));
+                const C = (sci) => ({ scientific: sci, speciesId: 'x', confidence: 'high' });
+
+                const agreed = v.arbitrate(
+                    C('Sphyraena barracuda'),
+                    [{ scientific: 'Sphyraena barracuda', accuracy: 0.91 }], inRegion);
+
+                // Fishial ranked something else first but still saw Claude's pick.
+                const corroborated = v.arbitrate(
+                    C('Sphyraena barracuda'),
+                    [{ scientific: 'Sphyraena obtusata', accuracy: 0.6 },
+                     { scientific: 'Sphyraena barracuda', accuracy: 0.4 }], inRegion);
+
+                // Fishial's top does not occur here; Claude's does.
+                const localWins = v.arbitrate(
+                    C('Lutjanus argentimaculatus'),
+                    [{ scientific: 'Micropterus salmoides', accuracy: 0.88 }], inRegion);
+
+                // Neither occurs here — nothing to break the tie with.
+                const split = v.arbitrate(
+                    C('Salmo salar'),
+                    [{ scientific: 'Micropterus salmoides', accuracy: 0.8 }], inRegion);
+
+                const onlyClaude = v.arbitrate(C('Sphyraena barracuda'), [], inRegion);
+                const onlyFishial = v.arbitrate(
+                    null, [{ scientific: 'Sphyraena barracuda', accuracy: 0.9 }], inRegion);
+                const nothing = v.arbitrate(null, [], inRegion);
+
+                return {
+                    // Case-, spacing- and authority-insensitive name matching.
+                    normalises: v.normalise('Sphyraena  barracuda (Walbaum, 1792)')
+                        === 'sphyraena barracuda',
+
+                    agreed: [agreed.verdict, agreed.agreed, agreed.confidence],
+                    corroborated: [corroborated.verdict, corroborated.answer,
+                                   corroborated.runnerUp],
+                    localWins: [localWins.verdict, localWins.answer],
+                    split: [split.verdict, split.confidence],
+                    onlyClaude: [onlyClaude.verdict, onlyClaude.source, onlyClaude.confidence],
+                    onlyFishial: [onlyFishial.verdict, onlyFishial.source],
+                    nothing: [nothing.verdict, nothing.answer],
+
+                    // A low-confidence guess must never be dressed up as certain.
+                    neverHighWhenSplit: split.confidence !== 'high',
+                };
+            """)
+            check("scientific names match despite case and authority",
+                  verdict["normalises"], str(verdict))
+            # Both services landing on the same species is the strong case.
+            check("agreement is reported as agreement",
+                  verdict["agreed"] == ["agreed", True, "high"], str(verdict["agreed"]))
+            # Fishial ranked another fish first but still saw Claude's pick —
+            # closer than the top line suggests.
+            check("a lower-ranked match still counts as corroboration",
+                  verdict["corroborated"][0] == "corroborated"
+                  and verdict["corroborated"][1] == "Sphyraena barracuda"
+                  and verdict["corroborated"][2] == "Sphyraena obtusata",
+                  str(verdict["corroborated"]))
+            # The whole reason for the cross-check: a species that doesn't
+            # occur here is wrong however confident the classifier was.
+            check("a fish that doesn't occur here loses to one that does",
+                  verdict["localWins"] == ["local-wins", "Lutjanus argentimaculatus"],
+                  str(verdict["localWins"]))
+            check("a genuine disagreement is reported, not papered over",
+                  verdict["split"] == ["split", "low"], str(verdict["split"]))
+            check("never claims high confidence on a split",
+                  verdict["neverHighWhenSplit"], str(verdict))
+            check("one service answering is usable but flagged",
+                  verdict["onlyClaude"] == ["one-sided", "claude", "low"]
+                  and verdict["onlyFishial"][:2] == ["one-sided", "fishial"],
+                  str(verdict))
+            check("no answer from either is not an answer",
+                  verdict["nothing"] == ["none", None], str(verdict["nothing"]))
+
+            # The endpoint must never ship a key to the browser.
+            keys = await page.eval("""
+                const src = await (await fetch('./js/pages/identify.js')).text();
+                return {
+                    callsProxy: src.includes('/api/identify'),
+                    noAnthropicKey: !/sk-ant-/.test(src),
+                    noDirectApi: !src.includes('api.anthropic.com')
+                        && !src.includes('api.fishial.ai'),
+                };
+            """)
+            check("the client calls the proxy, not the vendors directly",
+                  keys["callsProxy"] and keys["noDirectApi"], str(keys))
+            check("no API key is shipped to the browser",
+                  keys["noAnthropicKey"], str(keys))
 
             # -------------------------------------------------- routes
             routes = {
