@@ -37,11 +37,16 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screensho
 # name -> (hash route, css selector to wait for, optional JS to run first)
 SHOTS = [
     ("1-home",       "#/",           ".kpi__v, .empty",              None),
-    ("2-species",    "#/species",    ".species-card",                None),
-    ("2b-species-cards", "#/species", ".species-card",
+    ("2-info-fishes", "#/info",      ".species-card",                None),
+    ("2b-species-cards", "#/info",   ".species-card",
      "window.scrollTo(0, 1150); await new Promise(r => setTimeout(r, 1400))"),
-    ("3-species-detail", "#/species", ".species-card",
+    ("3-species-detail", "#/info",   ".species-card",
      "document.querySelectorAll('.species-card')[4].click()"),
+    ("3b-info-gear", "#/info?tab=gear", ".gear-card",                None),
+    ("3c-gear-detail", "#/info?tab=gear", ".gear-card",
+     "document.querySelectorAll('.gear-card')[1].click();"
+     "await new Promise(r=>setTimeout(r,600))"),
+    ("3d-info-zones", "#/info?tab=zones", ".zone-card",              None),
     ("4-map",        "#/map",        "#mapWeather .now-card__temp",  None),
     ("4b-map-forecast", "#/map",     "#mapWeather .now-card__temp",
      "const d=document.getElementById('wxDeck');"
@@ -53,19 +58,22 @@ SHOTS = [
     ("6-conditions", "#/conditions", ".now-card__temp",              None),
     ("7-log",        "#/log",        ".kpi__v, #authForm",           None),
     ("7b-signin",    "#/log",        ".kpi__v, #authForm",
-     "const a = await import('./js/auth.js'); await a.signOut(); location.hash='#/tips';"
+     "const a = await import('./js/auth.js'); await a.signOut(); location.hash='#/';"
      "await new Promise(r=>setTimeout(r,300)); location.hash='#/log';"
      "await new Promise(r=>setTimeout(r,900))"),
     ("7c-signup",    "#/log",        "#authForm",
      "document.querySelector('[data-goto=signup]').click();"
      "await new Promise(r=>setTimeout(r,900))"),
-    ("8-tips",       "#/tips",       ".tip-card",                    None),
+    ("8-trivia",     "#/info?tab=zones", ".tip-card",
+     "const t=document.querySelector('.tip-card');"
+     "t.scrollIntoView({block:'center'}); await new Promise(r=>setTimeout(r,600))"),
     ("9-settings",   "#/settings",   "#saveTides",                   None),
     # Dark theme sweep — set once, then walk the same screens.
     ("d1-home",      "#/",           ".kpi__v, .empty",
      "const t = await import('./js/theme.js'); t.setTheme('dark')"),
-    ("d2-species",   "#/species",    ".species-card",
+    ("d2-species",   "#/info",       ".species-card",
      "window.scrollTo(0, 1150); await new Promise(r => setTimeout(r, 1400))"),
+    ("d2b-gear",     "#/info?tab=gear", ".gear-card",                None),
     ("d3-conditions", "#/conditions", ".now-card__temp",             None),
     ("d4-map",       "#/map",        "#mapWeather .now-card__temp",  None),
     ("d5-settings",  "#/settings",   "#themePicker",                 None),

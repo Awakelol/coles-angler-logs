@@ -71,7 +71,7 @@ export function render(ctx) {
           ${featured
             .map(
               (s) => `
-            <a class="card species-card" href="#/species?open=${esc(s.id)}">
+            <a class="card species-card" href="#/info?open=${esc(s.id)}">
               <div class="species-card__art">${speciesHero(s, { size: 170 })}</div>
               <h3 class="card__title">${esc(s.common)}</h3>
               <p class="card__sub species-card__sci">${esc(s.scientific)}</p>
@@ -85,7 +85,7 @@ export function render(ctx) {
             .join('')}
         </div>
         <div class="center" style="margin-top:24px">
-          <a class="btn btn--dark" href="#/species">Browse the full guide</a>
+          <a class="btn btn--dark" href="#/info">Browse the full guide</a>
         </div>
       </div>
     </section>
@@ -98,7 +98,7 @@ export function render(ctx) {
               <article class="card tip-card" style="max-width:680px;margin:0 auto">
                 <h3 class="card__title" style="font-size:20px">${esc(tip.title)}</h3>
                 <p class="card__body">${esc(tip.body)}</p>
-                <a class="btn btn--sm" href="#/tips" style="align-self:flex-start">More tips</a>
+                <a class="btn btn--sm" href="#/info?tab=zones" style="align-self:flex-start">More tips</a>
               </article>
             </div>
           </section>`

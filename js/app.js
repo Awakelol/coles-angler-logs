@@ -15,11 +15,10 @@ import { icon } from './pixel.js';
 import { esc } from './ui.js';
 
 import * as home from './pages/home.js';
-import * as species from './pages/species.js';
 import * as mapPage from './pages/map.js';
 import * as conditions from './pages/conditions.js';
 import * as log from './pages/log.js';
-import * as tips from './pages/tips.js';
+import * as info from './pages/info.js';
 import * as settings from './pages/settings.js';
 
 // Untracked local keys first, then anything entered in Settings wins.
@@ -30,15 +29,21 @@ loadOverrides();
 // doesn't flash the signed-out gate on the way back from the provider.
 await initAuth();
 
+// Order here is incidental; the tab bar decides what the user sees.
 const ROUTES = [
   { path: '/', page: home },
-  { path: '/species', page: species },
   { path: '/map', page: mapPage },
   { path: '/conditions', page: conditions },
   { path: '/log', page: log },
-  { path: '/tips', page: tips },
+  { path: '/info', page: info },
   { path: '/settings', page: settings },
 ];
+
+// Species and Tips were merged into Info. Old links still exist in the wild —
+// bookmarks, a home-screen shortcut, an app shell cached before the merge — so
+// they are translated to the equivalent Info tab rather than falling through to
+// Home. replaceState keeps the dead URL out of the back stack.
+const LEGACY_ROUTES = { '/species': 'fishes', '/tips': 'zones' };
 
 const main = document.getElementById('main');
 
@@ -47,7 +52,7 @@ function currentRegionId() {
   return REGIONS.some((r) => r.id === saved) ? saved : DEFAULT_REGION_ID;
 }
 
-/** "#/species?family=Lutjanidae" -> { path, params } */
+/** "#/info?family=Lutjanidae" -> { path, params } */
 function parseHash() {
   const raw = location.hash.replace(/^#/, '') || '/';
   const [path, query = ''] = raw.split('?');
@@ -83,7 +88,15 @@ let renderToken = 0;
 
 async function render() {
   const token = ++renderToken;
-  const { path, params } = parseHash();
+  let { path, params } = parseHash();
+
+  if (LEGACY_ROUTES[path]) {
+    params = new URLSearchParams(params);
+    params.set('tab', LEGACY_ROUTES[path]);
+    history.replaceState(null, '', `#/info?${params}`);
+    path = '/info';
+  }
+
   const route = matchRoute(path);
   const regionId = currentRegionId();
   const ctx = { regionId, region: getRegion(regionId), params, navigate };

@@ -611,6 +611,112 @@ ICONS = {
 # right and the pocket beneath it is left EMPTY, so the hollow reads as the
 # tube. Foam (L) rides the crest and the face; the body darkens downward
 # through B and D into S at the waterline.
+# --- gear icons -----------------------------------------------------------
+# Drawn with the same palette slots as everything else so they recolour per
+# category. Deliberately simple silhouettes: they sit at ~48px on a card.
+
+# The blank is drawn in B, not A. Accent is yellow-ish in nearly every
+# palette, so an all-A rod came out identical in all of them — three rods
+# on one screen looked like the same picture three times. B recolours;
+# A is now only the reel seat, which is meant to catch the eye.
+'rod': [
+'                 BB ',
+'                BB  ',
+'               BB   ',
+'              BB    ',
+'             BB     ',
+'            BB      ',
+'      L    BB       ',
+'       L  BB        ',
+'        L BB        ',
+'         BB         ',
+'        BBO         ',
+'       BOOO         ',
+'      AOOO          ',
+'     AOOO           ',
+'    MOOO            ',
+'   MOOO             ',
+'   OOO              ',
+],
+
+'reel': [
+'      OOOOOO        ',
+'     OBBBBBBO       ',
+'    OBBLLLLBBO      ',
+'   OBBLLLLLLBBO     ',
+'   OBLLOOOOLLBO     ',
+'   OBLLOAAOLLBO     ',
+'   OBLLOOOOLLBO     ',
+'   OBBLLLLLLBBO     ',
+'    OBBLLLLBBO      ',
+'     OBBBBBBO       ',
+'      OOOOOO        ',
+'       OOOO         ',
+'      OAAAAO        ',
+'       OOOO         ',
+],
+
+'spool': [
+'    OOOOOOOOOO      ',
+'   OLLLLLLLLLLO     ',
+'   OOOOOOOOOOOO     ',
+'    OBBBBBBBBO      ',
+'    OBMMMMMMBO      ',
+'    OBMBBBBMBO      ',
+'    OBMBBBBMBO      ',
+'    OBMMMMMMBO      ',
+'    OBBBBBBBBO      ',
+'   OOOOOOOOOOOO     ',
+'   OLLLLLLLLLLO     ',
+'    OOOOOOOOOO      ',
+],
+
+'lure': [
+'   OOOO             ',
+'  OBBBBOO           ',
+' OBLLBBBBOO         ',
+'OBLEPBBBBBBOO       ',
+'OBLEEBBBBBBBBO      ',
+' OBBBBBBBBBBBO      ',
+'  OOBBBBBBBOO       ',
+'    OOOOOOO         ',
+'     A   A          ',
+'    AAA AAA         ',
+'     A   A          ',
+],
+
+'net': [
+'  OO          OO    ',
+' OBBO        OBBO   ',
+' OBBOOOOOOOOOOBBO   ',
+'  OBBBBBBBBBBBBO    ',
+'  OLOLOLOLOLOLO     ',
+'  OOLOLOLOLOLOO     ',
+'   OLOLOLOLOLO      ',
+'   OOLOLOLOLOO      ',
+'    OLOLOLOLO       ',
+'     OOLOLOO        ',
+'      OOOOO         ',
+'        AA          ',
+'        AA          ',
+'        AA          ',
+'       OAAO         ',
+],
+
+'box': [
+'    OOOOOOOOOO      ',
+'   OAAAAAAAAAAO     ',
+'  OOOOOOOOOOOOOO    ',
+'  OBBBBBBBBBBBBO    ',
+'  OBLLLLOOLLLLBO    ',
+'  OBLLLLOOLLLLBO    ',
+'  OBBBBBBBBBBBBO    ',
+'  OBLLLLLLLLLLBO    ',
+'  OBLLLLLLLLLLBO    ',
+'  OBBBBBBBBBBBBO    ',
+'  OOOOOOOOOOOOOO    ',
+],
+
 'wave': [
 '',
 '             LLLLLLLL',

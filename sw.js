@@ -15,7 +15,7 @@
 // CACHE_VERSION now only needs bumping to force-evict old assets.
 // ---------------------------------------------------------------------------
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `angler-log-${CACHE_VERSION}`;
 
 const SHELL = [
@@ -30,6 +30,7 @@ const SHELL = [
   './js/search.js',
   './js/moderation.js',
   './js/weather-ui.js',
+  './js/zone-ui.js',
   './js/auth.js',
   './js/auth/local.js',
   './js/auth/cloud.js',
@@ -39,6 +40,7 @@ const SHELL = [
   './js/config.js',
   './js/data/index.js',
   './js/data/tips.js',
+  './js/data/gear.js',
   './js/data/tactics.js',
   './js/data/species/indo-pacific.js',
   './js/data/regions/leyte-gulf.js',
@@ -48,13 +50,12 @@ const SHELL = [
   './js/api/geo.js',
   './js/api/place.js',
   './js/pages/home.js',
-  './js/pages/species.js',
+  './js/pages/info.js',
   './js/pages/map.js',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/leaflet.css',
   './js/pages/conditions.js',
   './js/pages/log.js',
-  './js/pages/tips.js',
   './js/pages/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

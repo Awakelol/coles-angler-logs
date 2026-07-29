@@ -75,6 +75,20 @@ export function tipsFor(regionId) {
   ];
 }
 
+/**
+ * Tips filed under one Info tab — the "Trivia" section of Fishes, Gear or
+ * Zones. An uncategorised tip falls back to 'zones' rather than vanishing,
+ * so adding a tip without a category still shows up somewhere.
+ */
+export function triviaFor(regionId, category) {
+  return tipsFor(regionId).filter((t) => (t.category || 'zones') === category);
+}
+
+/** A region's zones, in declaration order. */
+export function zonesFor(regionId) {
+  return getRegion(regionId).zones || [];
+}
+
 /** Group a region's species by family, for the guide's section headers. */
 export function speciesByFamily(regionId) {
   const groups = new Map();

@@ -18,6 +18,6 @@
   "shortcuts": [
     { "name": "Log a catch", "url": "./index.html#/log" },
     { "name": "Conditions", "url": "./index.html#/conditions" },
-    { "name": "Species guide", "url": "./index.html#/species" }
+    { "name": "Info", "url": "./index.html#/info" }
   ]
 }

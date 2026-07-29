@@ -430,6 +430,11 @@ a.card:active, button.card:active {
 }
 .gallery__item:active { transform: translate(1px, 1px); }
 
+/* Any class that sets `display` outranks the UA's [hidden] { display: none },
+   so hiding an element by attribute silently does nothing. Restate it once,
+   globally, rather than remembering per component. */
+[hidden] { display: none !important; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .chip {
@@ -646,6 +651,89 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 .tip-card { border-left: 10px solid var(--yellow); }
 .tip-card--general { border-left-color: var(--sky-deep); }
+
+/* --- info page ----------------------------------------------------------- */
+
+/* Three-way switch between Fishes, Gear and Zones. A segmented control rather
+   than chips: these are mutually exclusive views, not filters, and the shared
+   track makes that obvious at a glance. */
+.segmented {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  padding: 4px;
+  background: var(--art-bg);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.segmented__btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 9px 4px 8px;
+  font-family: inherit; font-size: 12px; font-weight: 900; letter-spacing: .03em;
+  color: var(--ink-60); background: none; border: 0; cursor: pointer;
+  border-radius: calc(var(--radius-sm) - 4px);
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.segmented__btn:active { transform: scale(.97); }
+.segmented__btn[aria-selected="true"] {
+  background: var(--paper); color: var(--ink);
+  box-shadow: 0 1px 3px rgb(0 0 0 / .18);
+}
+.segmented__icon { display: block; height: 30px; }
+.segmented__icon svg { width: auto; height: 30px; }
+/* Unselected icons stay muted so the chosen tab reads first. */
+.segmented__btn[aria-selected="false"] .segmented__icon { opacity: .5; }
+
+/* "Also matching: 3 in Gear" — a search that finds nothing on this tab but
+   plenty on another should say so rather than look like a dead end. */
+.info-elsewhere {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: 0 0 20px;
+  font-size: 13px; font-weight: 800; color: var(--ink-60);
+}
+.info-elsewhere .chip { cursor: pointer; font-family: inherit; }
+/* .empty centres its contents; a flex row ignores text-align, so say it again. */
+.empty .info-elsewhere { justify-content: center; margin-bottom: 16px; }
+
+.gear-card { position: relative; overflow: hidden; text-align: left; }
+.gear-card__art {
+  background: var(--art-bg);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 10px;
+  display: grid; place-items: center;
+  min-height: 92px;
+}
+.gear-card__art svg { width: auto; max-width: 100%; height: 76px; }
+.gear-card__art--hero {
+  min-height: 170px; margin-bottom: 16px;
+  background: linear-gradient(160deg, var(--art-bg) 0%, var(--art-bg-2) 100%);
+}
+.gear-card__art--hero svg { height: 130px; }
+
+/* what / when / where, in the detail sheet */
+.gear-fact { margin-bottom: 16px; }
+.gear-fact__label {
+  margin: 0 0 6px;
+  font-size: 11.5px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-60);
+}
+.gear-fact + .gear-fact { border-top: var(--border-w-sm) solid var(--line); padding-top: 16px; }
+
+.zone-card { text-align: left; }
+.zone-card__art {
+  background: var(--art-bg);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px;
+  display: grid; place-items: center;
+  min-height: 82px;
+}
+.zone-card__art svg { width: 100%; max-width: 140px; height: auto; }
+.zone-card__type { text-transform: capitalize; }
+/* Blurbs vary from one line to five; clamping keeps a row of cards even. */
+.zone-card__blurb {
+  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
 
 /* --- attached media ------------------------------------------------------- */
 
@@ -1028,18 +1116,22 @@ body:has(.map-screen) { padding-bottom: 0; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--paper); border-top: var(--border-w) solid var(--line);
 }
-.tabbar a {
+.tabbar a, .tabbar button {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   text-decoration: none; color: var(--ink-60); font-size: 10px; font-weight: 800;
   letter-spacing: .03em;
+  font-family: inherit; background: none; border: 0; padding: 0; cursor: pointer;
 }
-.tabbar a svg { width: 22px; height: 22px; }
-@media (max-width: 360px) { .tabbar a { font-size: 9px; } }
+.tabbar a svg, .tabbar button svg { width: 22px; height: 22px; }
+@media (max-width: 360px) { .tabbar a, .tabbar button { font-size: 9px; } }
 .tabbar a[aria-current="page"] { color: var(--ink); }
 .tabbar a[aria-current="page"] svg { color: var(--coral); }
+
+/* The account tab has nowhere to go yet — say so rather than look broken. */
+.tabbar__soon { opacity: .45; cursor: default; }
 
 /* --- toast --------------------------------------------------------------- */
 

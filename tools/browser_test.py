@@ -165,6 +165,10 @@ def static_checks():
                     on_disk.add(rel.replace(os.sep, "/"))
     missing = sorted(on_disk - listed)
     check("every module is precached for offline", not missing, ", ".join(missing))
+    # The other direction: a precached path that no longer exists is a silent
+    # 404 on every install. cache.add() swallows it, so nothing ever complains.
+    stale = sorted(listed - on_disk)
+    check("no precached module has been deleted", not stale, ", ".join(stale))
 
 
 async def main():
@@ -294,15 +298,15 @@ async def main():
                     return false;
                 };
 
-                location.hash = '#/tips';
+                location.hash = '#/info?tab=zones';
                 const onTips = await until('.tip-card');
-                location.hash = '#/species';
+                location.hash = '#/info?tab=fishes';
                 const onSpecies = await until('.species-card');
 
                 // Rapid navigation must not strand a half-finished transition.
-                location.hash = '#/tips';
-                location.hash = '#/species';
-                location.hash = '#/tips';
+                location.hash = '#/info?tab=zones';
+                location.hash = '#/info?tab=fishes';
+                location.hash = '#/info?tab=zones';
                 const settled = await until('.tip-card');
 
                 return { supported, onTips, onSpecies, settled,
@@ -398,9 +402,9 @@ async def main():
                 const results = {};
                 for (const mode of ['light', 'dark']) {
                     t.setTheme(mode);
-                    location.hash = '#/tips';
+                    location.hash = '#/info?tab=zones';
                     await new Promise(r => setTimeout(r, 250));
-                    location.hash = '#/species';
+                    location.hash = '#/info?tab=fishes';
                     await new Promise(r => setTimeout(r, 900));
                     const worst = [];
                     for (const sel of ['.btn--primary', '.chip--local', '.chip--target',
@@ -500,7 +504,7 @@ async def main():
                 localStorage.removeItem('angler.users');
                 return 1;
             """)
-            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('#authForm')", label="auth gate")
 
@@ -684,7 +688,7 @@ async def main():
                   str(scoped))
             check("both catches exist in storage", scoped["everything"] >= 2, str(scoped))
 
-            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log after sign-in")
             signed = await page.eval("""
@@ -828,10 +832,13 @@ async def main():
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
-                "species": ("#/species", ".species-card"),
+                "info-fishes": ("#/info", ".species-card"),
+                "info-gear": ("#/info?tab=gear", ".gear-card"),
+                "info-zones": ("#/info?tab=zones", ".zone-card"),
                 "conditions": ("#/conditions", ".now-card__temp, .notice--error"),
                 "log": ("#/log", ".kpi__v, #authForm"),
-                "tips": ("#/tips", ".tip-card"),
+                "legacy-species": ("#/species", ".species-card"),
+                "legacy-tips": ("#/tips", ".tip-card"),
                 "settings": ("#/settings", "#saveTides"),
             }
             print("\nRoutes")
@@ -861,7 +868,7 @@ async def main():
                 }
                 return 1;
             """)
-            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log stats")
 
@@ -879,7 +886,7 @@ async def main():
             """)
             check("seed two catches", seeded == 2, f"got {seeded}")
 
-            await page.goto(f"{BASE}/index.html#/tips")
+            await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelectorAll('.catch-row').length === 2",
                                 timeout=20, label="catch rows to appear")
@@ -988,15 +995,178 @@ async def main():
             check("clip survives a storage round-trip",
                   roundtrip["video"] and roundtrip["poster"], str(roundtrip))
 
+            # -------------------------------------------------- info page
+            print("\nInfo page")
+            await page.goto(f"{BASE}/index.html#/info")
+            await page.wait_for("document.querySelector('.species-card')", label="info fishes")
+
+            tabs = await page.eval("""
+                const wait = async (sel, ms = 3000) => {
+                    const end = Date.now() + ms;
+                    while (Date.now() < end) {
+                        if (document.querySelector(sel)) return true;
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                    return false;
+                };
+                const btn = (id) => document.querySelector(`.segmented__btn[data-tab="${id}"]`);
+                const seen = {};
+
+                seen.threeTabs = document.querySelectorAll('.segmented__btn').length;
+                seen.familyChipsOnFishes = !document.getElementById('familyFilters').hidden;
+
+                btn('gear').click();
+                seen.gear = await wait('.gear-card');
+                seen.gearCount = document.querySelectorAll('.gear-card').length;
+                // Family filters belong to Fishes only; a class that sets
+                // display beats [hidden] unless CSS says otherwise.
+                const ff = document.getElementById('familyFilters');
+                seen.familyChipsHidden = getComputedStyle(ff).display === 'none';
+                seen.hashFollowsTab = location.hash.includes('tab=gear');
+
+                btn('zones').click();
+                seen.zones = await wait('.zone-card');
+                seen.zoneCount = document.querySelectorAll('.zone-card').length;
+
+                btn('fishes').click();
+                seen.backToFishes = await wait('.species-card');
+                return seen;
+            """)
+            check("info offers three tabs", tabs["threeTabs"] == 3, str(tabs))
+            check("gear tab lists gear", tabs["gear"] and tabs["gearCount"] >= 20, str(tabs))
+            check("zones tab lists waters", tabs["zones"] and tabs["zoneCount"] >= 5, str(tabs))
+            check("switching back returns to fishes", tabs["backToFishes"], str(tabs))
+            check("family filters are fishes-only",
+                  tabs["familyChipsOnFishes"] and tabs["familyChipsHidden"], str(tabs))
+            check("the hash tracks the active tab", tabs["hashFollowsTab"], str(tabs))
+
+            gear = await page.eval("""
+                const { GEAR, GEAR_GROUPS } = await import('./js/data/gear.js');
+                const groups = new Set(GEAR_GROUPS.map(g => g.id));
+                return {
+                    total: GEAR.length,
+                    groups: GEAR_GROUPS.length,
+                    // what / when / where is the whole point of a gear entry.
+                    complete: GEAR.every(g => g.what && g.when && g.where),
+                    grouped: GEAR.every(g => groups.has(g.group)),
+                    unique: new Set(GEAR.map(g => g.id)).size === GEAR.length,
+                };
+            """)
+            check("gear covers several categories", gear["groups"] >= 6, str(gear))
+            check("every gear item answers what/when/where", gear["complete"], str(gear))
+            check("every gear item is in a real group", gear["grouped"], str(gear))
+            check("gear ids are unique", gear["unique"], str(gear))
+
+            gear_sheet = await page.eval("""
+                location.hash = '#/info?tab=gear';
+                await new Promise(r => setTimeout(r, 700));
+                document.querySelector('.gear-card').click();
+                await new Promise(r => setTimeout(r, 500));
+                const s = document.querySelector('.sheet');
+                const labels = [...document.querySelectorAll('.gear-fact__label')]
+                    .map(e => e.textContent.trim());
+                return { open: !!s, labels, art: !!document.querySelector('.gear-card__art--hero') };
+            """)
+            check("gear detail opens in a sheet", gear_sheet["open"], str(gear_sheet))
+            check("gear sheet is what / when / where",
+                  len(gear_sheet["labels"]) == 3
+                  and gear_sheet["labels"][0].startswith("What")
+                  and gear_sheet["labels"][1].startswith("When")
+                  and gear_sheet["labels"][2].startswith("Where"),
+                  str(gear_sheet["labels"]))
+
+            trivia = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const all = d.tipsFor('leyte-gulf');
+                const cats = ['fishes', 'gear', 'zones'];
+                const counts = {};
+                for (const c of cats) counts[c] = d.triviaFor('leyte-gulf', c).length;
+                return {
+                    total: all.length,
+                    counts,
+                    // Every tip must land in exactly one tab, and no tab empty.
+                    partitioned: cats.reduce((n, c) => n + counts[c], 0) === all.length,
+                    allCategorised: all.every(t => cats.includes(t.category)),
+                    everyTabHasSome: cats.every(c => counts[c] > 0),
+                };
+            """)
+            check("every tip is categorised", trivia["allCategorised"], str(trivia))
+            check("tips partition across the three tabs", trivia["partitioned"], str(trivia))
+            check("no info tab is left without trivia", trivia["everyTabHasSome"], str(trivia))
+
+            trivia_ui = await page.eval("""
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.body.classList.remove('is-sheet-open');
+                location.hash = '#/info?tab=zones';
+                await new Promise(r => setTimeout(r, 800));
+                const heads = [...document.querySelectorAll('.section-head h2')]
+                    .map(e => e.textContent.trim());
+                return { heads, cards: document.querySelectorAll('.tip-card').length };
+            """)
+            check("trivia shows inside the tab", "Trivia" in trivia_ui["heads"], str(trivia_ui))
+            check("trivia renders tip cards", trivia_ui["cards"] > 0, str(trivia_ui))
+
+            # A search with no hits on this tab must point at the tab that has them.
+            cross = await page.eval("""
+                location.hash = '#/info?tab=fishes';
+                await new Promise(r => setTimeout(r, 700));
+                const i = document.getElementById('infoSearch');
+                i.value = 'baitcasting';
+                i.dispatchEvent(new Event('input', {bubbles:true}));
+                await new Promise(r => setTimeout(r, 400));
+                const hint = document.querySelector('[data-goto]');
+                if (!hint) return { hint: false };
+                const label = hint.textContent.trim();
+                hint.click();
+                await new Promise(r => setTimeout(r, 500));
+                return { hint: true, label,
+                         landed: document.querySelectorAll('.gear-card').length };
+            """)
+            check("a search points at the tab that has results", cross["hint"], str(cross))
+            check("following the hint switches tab and filters",
+                  cross.get("landed", 0) == 1, str(cross))
+
+            legacy = await page.eval("""
+                location.hash = '#/species?open=sphyraena-barracuda';
+                await new Promise(r => setTimeout(r, 900));
+                return { hash: location.hash,
+                         sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
+            """)
+            check("old species links rewrite to info",
+                  legacy["hash"].startswith("#/info"), str(legacy))
+            check("old deep links still open the species",
+                  "barracuda" in legacy["sheet"].lower(), str(legacy))
+
+            nav = await page.eval("""
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.body.classList.remove('is-sheet-open');
+                const items = [...document.querySelectorAll('.tabbar a, .tabbar button')];
+                const account = document.querySelector('.tabbar button');
+                const before = location.hash;
+                account.click();
+                await new Promise(r => setTimeout(r, 300));
+                return {
+                    order: items.map(e => e.querySelector('span').textContent.trim()),
+                    accountIsButton: account.tagName === 'BUTTON',
+                    accountHasHref: account.hasAttribute('href'),
+                    hashUnchanged: location.hash === before,
+                };
+            """)
+            check("tab bar reads home, map, log, info, account",
+                  nav["order"] == ["Home", "Map", "Log", "Info", "Account"], str(nav["order"]))
+            check("account tab is inert",
+                  nav["accountIsButton"] and not nav["accountHasHref"]
+                  and nav["hashUnchanged"], str(nav))
+
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
-            await page.goto(f"{BASE}/index.html#/species")
+            await page.goto(f"{BASE}/index.html#/info")
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
 
             await page.eval("""
-                const i = document.getElementById('speciesSearch');
+                const i = document.getElementById('infoSearch');
                 i.value = 'sap-sap';
                 i.dispatchEvent(new Event('input', {bubbles:true}));
             """)
@@ -1054,7 +1224,7 @@ async def main():
             check("stays quiet for gibberish", fuzzy["gibberish"] == [], str(fuzzy["gibberish"]))
 
             shownSuggest = await page.eval("""
-                const i = document.getElementById('speciesSearch');
+                const i = document.getElementById('infoSearch');
                 i.value = 'snaper';
                 i.dispatchEvent(new Event('input', {bubbles:true}));
                 await new Promise(r => setTimeout(r, 300));
@@ -1069,7 +1239,7 @@ async def main():
             picked = await page.eval("""
                 document.querySelector('[data-suggest]').click();
                 await new Promise(r => setTimeout(r, 500));
-                return { box: document.getElementById('speciesSearch').value,
+                return { box: document.getElementById('infoSearch').value,
                          sheet: !!document.querySelector('.sheet') };
             """)
             check("picking a suggestion corrects the box and opens it",
@@ -1077,7 +1247,7 @@ async def main():
 
             await page.eval("""
                 document.querySelector('.sheet-backdrop')?.remove();
-                const i = document.getElementById('speciesSearch');
+                const i = document.getElementById('infoSearch');
                 i.value = '';
                 i.dispatchEvent(new Event('input', {bubbles:true}));
                 await new Promise(r => setTimeout(r, 300));
@@ -1218,7 +1388,7 @@ async def main():
                     }));
                     return 1;
                 """)
-                await page.goto(f"{BASE}/index.html#/tips")
+                await page.goto(f"{BASE}/index.html#/")
                 await page.goto(f"{BASE}/index.html#/conditions")
                 await page.wait_for(
                     "document.querySelector('.tide-row, .notice--error, .notice--warn')",
@@ -1319,7 +1489,7 @@ async def main():
                 };
                 // Must navigate AWAY first — setting the hash to its current
                 // value fires no hashchange, so the page would never re-render.
-                location.hash = '#/tips';
+                location.hash = '#/';
                 await new Promise(r => setTimeout(r, 400));
                 location.hash = '#/conditions';
                 await new Promise(r => setTimeout(r, 2500));
@@ -1342,7 +1512,7 @@ async def main():
                 const real = navigator.geolocation.getCurrentPosition;
                 navigator.geolocation.getCurrentPosition = (ok) => { prompted = true; ok({
                     coords: { latitude: 11.238, longitude: 125.004, accuracy: 20 } }); };
-                location.hash = '#/tips'; await new Promise(r => setTimeout(r, 400));
+                location.hash = '#/'; await new Promise(r => setTimeout(r, 400));
                 location.hash = '#/conditions'; await new Promise(r => setTimeout(r, 2000));
                 navigator.geolocation.getCurrentPosition = real;
                 return prompted;
@@ -1543,7 +1713,7 @@ async def main():
             # -------------------------------------------------- sheet gestures
             print()
             print("Sheet")
-            await page.goto(f"{BASE}/index.html#/species")
+            await page.goto(f"{BASE}/index.html#/info")
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -1614,7 +1784,7 @@ async def main():
                 document.querySelector('.species-card').click();
                 await new Promise(r => setTimeout(r, 400));
                 const opened = document.body.classList.contains('is-sheet-open');
-                location.hash = '#/tips';
+                location.hash = '#/';
                 await new Promise(r => setTimeout(r, 700));
                 const cs = getComputedStyle(document.body);
                 return { opened,
