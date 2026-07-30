@@ -279,6 +279,80 @@ async def main():
             check("all palettes are 9 valid hex slots", not art["bad"], "; ".join(art["bad"]))
             check("no sprite has ragged rows", not art["ragged"], ", ".join(art["ragged"]))
 
+            # renderSprite merges runs of one colour along a row into a single
+            # wide rect. That is supposed to be INVISIBLE — same picture, fewer
+            # nodes. These pin both halves of that claim, so a future change to
+            # the emitter can't quietly drop or shift a pixel to look faster.
+            runs = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const parse = (svg) => [...svg.matchAll(
+                    /<rect x="(\\d+)" y="(\\d+)" width="(\\d+)" height="1" fill="([^"]+)"\\/>/g
+                )].map(m => ({ x:+m[1], y:+m[2], w:+m[3], fill:m[4] }));
+
+                const wrong = [], overlap = [], fat = [];
+                const all = { ...p.SPRITES, ...p.ICONS, ...p.HEROES };
+                for (const [name, grid] of Object.entries(all)) {
+                    const rects = parse(p.renderSprite(grid, 'ocean', { size: 64 }));
+
+                    // 1. Same painted pixels: every rect covers exactly the
+                    //    cells that carry a palette letter, once each.
+                    const painted = new Map();          // "x,y" -> fill
+                    let doubled = false;
+                    for (const r of rects) {
+                        for (let i = 0; i < r.w; i++) {
+                            const k = `${r.x + i},${r.y}`;
+                            if (painted.has(k)) doubled = true;
+                            painted.set(k, r.fill);
+                        }
+                    }
+                    if (doubled) overlap.push(name);
+
+                    let cells = 0;
+                    for (let y = 0; y < grid.length; y++) {
+                        for (let x = 0; x < grid[y].length; x++) {
+                            const ch = grid[y][x];
+                            if (ch === ' ' || ch === '.') continue;
+                            cells++;
+                            if (!painted.has(`${x},${y}`)) { wrong.push(`${name} @${x},${y}`); }
+                        }
+                    }
+                    if (painted.size !== cells) wrong.push(`${name}: ${painted.size} painted vs ${cells} cells`);
+
+                    // 2. Actually merged: no two touching rects share a fill,
+                    //    or the run-length pass silently stopped working.
+                    const byRow = new Map();
+                    for (const r of rects) {
+                        if (!byRow.has(r.y)) byRow.set(r.y, []);
+                        byRow.get(r.y).push(r);
+                    }
+                    for (const [, row] of byRow) {
+                        row.sort((a, b) => a.x - b.x);
+                        for (let i = 1; i < row.length; i++) {
+                            if (row[i].x === row[i-1].x + row[i-1].w && row[i].fill === row[i-1].fill) {
+                                fat.push(`${name} row ${row[i].y}`);
+                            }
+                        }
+                    }
+                }
+
+                // 3. The number that made this worth doing.
+                const d = await import('./js/data/index.js');
+                const species = d.allSpecies(d.DEFAULT_REGION_ID);
+                const nodes = species.reduce(
+                    (n, s) => n + (p.speciesHero(s, { size: 170 }).match(/<rect/g) || []).length, 0
+                );
+                return { wrong: wrong.slice(0, 5), overlap, fat: fat.slice(0, 5),
+                         nodesPerHero: Math.round(nodes / species.length) };
+            """)
+            check("merged sprites paint exactly the same pixels",
+                  not runs["wrong"], "; ".join(runs["wrong"]))
+            check("no rect paints over another", not runs["overlap"], ", ".join(runs["overlap"]))
+            check("touching same-colour rects really are merged",
+                  not runs["fat"], "; ".join(runs["fat"]))
+            # 432 before the merge. The Info tab draws sixty-odd at once, so
+            # this is the number that decides whether searching feels instant.
+            check("a species hero stays under 250 rects",
+                  runs["nodesPerHero"] < 250, f"{runs['nodesPerHero']} rects per hero")
 
             # Every WMO code the providers can return must resolve to a real icon.
             wmo = await page.eval("""

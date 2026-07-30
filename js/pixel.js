@@ -1005,6 +1005,13 @@ const EYE = { E: '#ffffff', P: '#10141c' };
 /**
  * Render a sprite grid as an inline SVG string.
  * shape-rendering:crispEdges keeps pixels hard at any scale.
+ *
+ * Runs of the same colour along a row become ONE wide rect instead of one rect
+ * per pixel. The picture is identical — adjacent unit squares of one fill are
+ * the same shape as the rect that spans them — but pixel art is mostly long
+ * horizontal runs, so it cuts a fish from ~430 nodes to well under a hundred.
+ * That matters because the Info tab draws sixty-odd of these at once, and it
+ * was the DOM size, not the drawing, that made searching feel heavy.
  */
 export function renderSprite(grid, paletteKey = 'ocean', { size = 64, className = '', flip = false } = {}) {
   const p = PALETTES[paletteKey] || PALETTES.ocean;
@@ -1014,9 +1021,20 @@ export function renderSprite(grid, paletteKey = 'ocean', { size = 64, className 
   let rects = '';
 
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const fill = map[grid[y][x]];
-      if (fill) rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>`;
+    const row = grid[y];
+    let x = 0;
+    while (x < w) {
+      const fill = map[row[x]];
+      if (!fill) { x++; continue; }
+      // Extend while the next pixel paints the same colour. Comparing the
+      // grid character rather than the mapped fill keeps two slots that happen
+      // to share a hex value in a given palette from merging in one palette
+      // and splitting in another.
+      const ch = row[x];
+      let run = 1;
+      while (x + run < w && row[x + run] === ch) run++;
+      rects += `<rect x="${x}" y="${y}" width="${run}" height="1" fill="${fill}"/>`;
+      x += run;
     }
   }
 
@@ -1049,6 +1067,20 @@ export function speciesHero(species, opts) {
 /** True when a species has real angled art rather than the fallback. */
 export function hasHero(species) {
   return Boolean(HEROES[species.hero] || HEROES[species.sprite]);
+}
+
+/**
+ * True when this species is borrowing a silhouette drawn for something else.
+ *
+ * hasHero() CANNOT tell you this, and that is the trap it hides. A species
+ * given `sprite: 'perch'` because a perch is roughly the right shape reports
+ * hasHero() === true, indistinguishable from a fish whose art was drawn for
+ * it. Left to inference the backlog goes invisible exactly as it grows, so it
+ * is declared in the data instead — `art: 'placeholder'` — and counted by a
+ * test whose ceiling may only ever go down.
+ */
+export function usesPlaceholderArt(species) {
+  return species?.art === 'placeholder';
 }
 
 export function icon(name, opts = {}) {

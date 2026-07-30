@@ -585,6 +585,7 @@ export function mount(root, ctx) {
     const clear = results.querySelector('[data-clear]');
     if (clear) {
       clear.addEventListener('click', () => {
+        clearTimeout(typing); // don't let a half-typed word redraw over the reset
         query = '';
         family = '';
         search.value = '';
@@ -607,9 +608,16 @@ export function mount(root, ctx) {
     draw();
   });
 
+  // Redrawing on every keystroke means a typist outruns the render and the
+  // characters visibly queue. One frame's grace is below the threshold where
+  // a pause reads as lag, and it collapses a whole typed word into one draw.
+  let typing = 0;
   search.addEventListener('input', () => {
-    query = norm(search.value.trim());
-    draw();
+    clearTimeout(typing);
+    typing = setTimeout(() => {
+      query = norm(search.value.trim());
+      draw();
+    }, 120);
   });
 
   filterBar.addEventListener('click', (e) => {
