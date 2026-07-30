@@ -12,7 +12,7 @@
 // once. Adding a region never means copying species data.
 //
 // TO ADD A REGION:
-//   1. Copy js/data/regions/leyte-gulf.js to js/data/regions/<your-region>.js
+//   1. Copy js/data/regions/leyte.js to js/data/regions/<your-region>.js
 //   2. Edit its details and list the species ids that occur there.
 //   3. Import it below and add it to REGIONS.
 // TO ADD A SPECIES:
@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { INDO_PACIFIC_SPECIES } from './species/indo-pacific.js';
-import leyteGulf from './regions/leyte-gulf.js';
+import leyte from './regions/leyte.js';
 import { GENERAL_TIPS } from './tips.js';
 
 // Add further catalogue files here; ids must stay unique across all of them.
@@ -35,11 +35,31 @@ for (const list of CATALOGUES) {
   }
 }
 
-export const REGIONS = [leyteGulf];
-export const DEFAULT_REGION_ID = 'leyte-gulf';
+export const REGIONS = [leyte];
+export const DEFAULT_REGION_ID = 'leyte';
+
+/**
+ * Region ids that have been renamed, mapped to their current id.
+ *
+ * Catches are stored with the `regionId` that was current when they were
+ * logged, and those records outlive a rename. Right now getRegion() falls back
+ * to REGIONS[0] for anything unknown, so a legacy id LOOKS fine — until a
+ * second region exists, at which point every old catch silently attaches to
+ * whichever region happens to be first in the array.
+ *
+ * Translating on read costs one lookup and closes that off permanently. Keep
+ * entries here forever; they are tiny and someone's log depends on them.
+ */
+const RENAMED = {
+  'leyte-gulf': 'leyte', // the gulf became the whole island
+};
+
+/** The current id for a possibly-legacy one. */
+export const currentRegionId = (id) => RENAMED[id] || id;
 
 export function getRegion(id) {
-  return REGIONS.find((r) => r.id === id) || REGIONS[0];
+  const wanted = currentRegionId(id);
+  return REGIONS.find((r) => r.id === wanted) || REGIONS[0];
 }
 
 /** Look up a species by id, from anywhere in the catalogue. */

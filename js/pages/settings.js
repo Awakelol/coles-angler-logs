@@ -240,10 +240,10 @@ export function render() {
         <div class="section-head"><h2>Regions</h2><p>${REGIONS.length} loaded</p></div>
         <div class="card">
           <ul style="margin:0;padding-left:20px;line-height:1.8;font-weight:700">
-            ${REGIONS.map((r) => `<li>${esc(r.name)}, ${esc(r.country)} — ${r.species.length} species, ${(r.spots || []).length} spots</li>`).join('')}
+            ${REGIONS.map((r) => `<li>${esc(r.name)}, ${esc(r.country)} — ${(r.species || []).length} species, ${(r.spots || []).length} spots</li>`).join('')}
           </ul>
           <p class="card__body" style="margin-top:12px">
-            To add a region, copy <code>js/data/regions/leyte-gulf.js</code>, edit it, then import it in
+            To add a region, copy <code>js/data/regions/leyte.js</code>, edit it, then import it in
             <code>js/data/index.js</code>. The picker in the header appears automatically once there is
             more than one.
           </p>

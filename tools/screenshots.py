@@ -166,12 +166,12 @@ async def main():
                 localStorage.removeItem('angler.users');
                 const me = await a.signUp('cole', 'demo1234');
                 await m.store.clearCatches();
-                await m.store.saveCatch({userId: me.id, speciesId:'lutjanus-argentimaculatus', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'lutjanus-argentimaculatus', regionId:'leyte',
                     date:'2026-07-21', weightKg:4.2, lengthCm:61, method:'Casting lure',
                     bait:'live tamban', notes:'Run-out tide at the creek mouth.'});
-                await m.store.saveCatch({userId: me.id, speciesId:'caranx-ignobilis', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'caranx-ignobilis', regionId:'leyte',
                     date:'2026-07-24', weightKg:7.8, lengthCm:83, method:'Casting lure', bait:'popper'});
-                await m.store.saveCatch({userId: me.id, speciesId:'photopectoralis-bindus', regionId:'leyte-gulf',
+                await m.store.saveCatch({userId: me.id, speciesId:'photopectoralis-bindus', regionId:'leyte',
                     date:'2026-07-26', weightKg:0.11, lengthCm:9, method:'Hand line', bait:'cut shrimp'});
                 return 1;
             """)

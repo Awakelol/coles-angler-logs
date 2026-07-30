@@ -334,7 +334,7 @@ grounds use a low value, small creeks a high one.
 
 ### Add a whole new region
 
-1. Copy `js/data/regions/leyte-gulf.js` → `js/data/regions/your-region.js`
+1. Copy `js/data/regions/leyte.js` → `js/data/regions/your-region.js`
 2. Edit `id`, `name`, `coords`, `map`, `spots`, `zones`, `tips`, and list the
    species ids that occur there — reusing catalogue entries freely; add new
    species to the catalogue only if they aren't there yet

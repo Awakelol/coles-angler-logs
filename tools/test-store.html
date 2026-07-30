@@ -27,9 +27,9 @@ try {
   say(`   -> ${empty.length} rows (expect 0)`);
 
   say('3. saving two catches');
-  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 3.4, lengthCm: 58, method: 'Casting lure', bait: 'live tamban' });
-  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte-gulf', date: '2026-07-25', weightKg: 5.1, lengthCm: 66, method: 'Rod & reel' });
-  await store.saveCatch({ speciesId: 'photopectoralis-bindus', regionId: 'leyte-gulf', date: '2026-07-26', weightKg: 0.12, lengthCm: 9 });
+  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte', date: '2026-07-20', weightKg: 3.4, lengthCm: 58, method: 'Casting lure', bait: 'live tamban' });
+  await store.saveCatch({ speciesId: 'lutjanus-argentimaculatus', regionId: 'leyte', date: '2026-07-25', weightKg: 5.1, lengthCm: 66, method: 'Rod & reel' });
+  await store.saveCatch({ speciesId: 'photopectoralis-bindus', regionId: 'leyte', date: '2026-07-26', weightKg: 0.12, lengthCm: 9 });
 
   const all = await store.allCatches();
   say(`4. allCatches -> ${all.length} rows (expect 3)`);

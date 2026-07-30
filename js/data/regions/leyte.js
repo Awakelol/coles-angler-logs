@@ -15,10 +15,10 @@
 // ---------------------------------------------------------------------------
 
 export default {
-  id: 'leyte-gulf',
-  name: 'Leyte Gulf',
+  id: 'leyte',
+  name: 'Leyte',
   country: 'Philippines',
-  blurb: 'Wide, shallow gulf on the eastern Visayas seaboard — ponyfish and snapper country, open to the Pacific swell.',
+  blurb: 'The waters around Leyte island — Pacific-facing gulf on one side, the deeper Bohol Sea on the other, and everything from mangrove creeks to 8-knot straits in between.',
   timezone: 'Asia/Manila',
 
   // Used by the weather + tide dashboard.

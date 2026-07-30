@@ -46,7 +46,7 @@ const SHELL = [
   './js/data/gear.js',
   './js/data/tactics.js',
   './js/data/species/indo-pacific.js',
-  './js/data/regions/leyte-gulf.js',
+  './js/data/regions/leyte.js',
   './js/api/weather.js',
   './js/api/tides.js',
   './js/api/photos.js',

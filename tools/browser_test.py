@@ -227,7 +227,7 @@ async def main():
             hero = await page.eval("""
                 const p = await import('./js/pixel.js');
                 const d = await import('./js/data/index.js');
-                const species = d.allSpecies('leyte-gulf');
+                const species = d.allSpecies(d.DEFAULT_REGION_ID);
                 const missing = [], ragged = [];
                 for (const [n, g] of Object.entries(p.HEROES)) {
                     if (new Set(g.map(r => r.length)).size !== 1) ragged.push(n);
@@ -444,7 +444,7 @@ async def main():
             print("\nData model")
             data = await page.eval("""
                 const d = await import('./js/data/index.js');
-                const region = d.getRegion('leyte-gulf');
+                const region = d.getRegion(d.DEFAULT_REGION_ID);
                 const known = new Set(d.SPECIES.keys());
 
                 // Every id referenced by the region or its zones must exist.
@@ -466,7 +466,7 @@ async def main():
                         if (!inRegion.has(id)) orphans.push(`${z.id}:${id}`);
                     }
                 }
-                const barracudaZones = d.zonesForSpecies('leyte-gulf', 'sphyraena-barracuda')
+                const barracudaZones = d.zonesForSpecies(d.DEFAULT_REGION_ID, 'sphyraena-barracuda')
                     .map(z => z.id);
                 const cancabato = (region.zones || []).find(z => z.id === 'z-cancabato');
                 // How many zones list each species — proves sharing works.
@@ -493,6 +493,92 @@ async def main():
                   f"zones: {data['barracudaZones']}")
             check("Cancabato Bay has a full species list", data["cancabatoCount"] >= 15,
                   str(data["cancabatoCount"]))
+
+            # One deliberate assertion instead of eleven scattered literals, so
+            # renaming the region is a one-line test edit.
+            ident = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const r = d.getRegion(d.DEFAULT_REGION_ID);
+                return { id: d.DEFAULT_REGION_ID, name: r.name, count: d.REGIONS.length };
+            """)
+            check("the default region is the one we think it is",
+                  ident["id"] == "leyte" and ident["name"] == "Leyte",
+                  str(ident))
+            # The picker is hidden below 2 — worth knowing when that changes.
+            check("there is still exactly one region", ident["count"] == 1, str(ident))
+
+            # Catches logged before the rename carry regionId 'leyte-gulf'.
+            # getRegion() falls back to REGIONS[0] for anything unknown, so a
+            # legacy id LOOKS right today and silently attaches to the wrong
+            # region the moment a second one exists.
+            legacy = await page.eval("""
+                const d = await import('./js/data/index.js');
+                return {
+                    mapped: d.currentRegionId('leyte-gulf'),
+                    passthrough: d.currentRegionId('leyte'),
+                    resolves: d.getRegion('leyte-gulf').id,
+                };
+            """)
+            check("the old region id still resolves to the right region",
+                  legacy["mapped"] == "leyte" and legacy["resolves"] == "leyte", str(legacy))
+            check("current ids pass through untouched",
+                  legacy["passthrough"] == "leyte", str(legacy))
+
+            # ---- invariants that will catch a bad hand-typed zone -----------
+            zones = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const { HABITAT_TACTICS } = await import('./js/data/tactics.js');
+                const { ZONE_PALETTE } = await import('./js/zone-ui.js');
+                const r = d.getRegion(d.DEFAULT_REGION_ID);
+                const b = r.map.bounds;
+
+                const tactics = Object.keys(HABITAT_TACTICS).sort();
+                const palettes = Object.keys(ZONE_PALETTE).sort();
+
+                const badType = [], outOfBounds = [], stub = [], badZoom = [];
+                const ids = [];
+                for (const z of r.zones || []) {
+                    ids.push(z.id);
+                    if (!HABITAT_TACTICS[z.type]) badType.push(`${z.id}:${z.type}`);
+                    const c = z.coords || {};
+                    if (!(c.lat >= b.south && c.lat <= b.north
+                          && c.lon >= b.west && c.lon <= b.east)) {
+                        outOfBounds.push(`${z.id} @ ${c.lat},${c.lon}`);
+                    }
+                    if (!z.depth || !z.blurb || !z.best || (z.species || []).length < 5) {
+                        stub.push(z.id);
+                    }
+                    const mz = z.minZoom;
+                    if (typeof mz !== 'number' || mz < r.map.minZoom || mz > r.map.maxZoom) {
+                        badZoom.push(`${z.id}:${mz}`);
+                    }
+                }
+
+                return {
+                    // These two tables must move together or a zone silently
+                    // loses its tactics block and falls back to the ocean colour.
+                    tacticsKeys: tactics, paletteKeys: palettes,
+                    keysMatch: JSON.stringify(tactics) === JSON.stringify(palettes),
+                    badType, outOfBounds, stub, badZoom,
+                    duplicateIds: ids.length !== new Set(ids).size,
+                    count: ids.length,
+                };
+            """)
+            # js/data/tactics.js and js/zone-ui.js are edited independently; an
+            # unknown type drops the "Fishing this water" block with no error.
+            check("habitat tactics and zone palettes cover the same types",
+                  zones["keysMatch"],
+                  f"tactics={zones['tacticsKeys']} palettes={zones['paletteKeys']}")
+            check("every zone has a known habitat type",
+                  not zones["badType"], ", ".join(zones["badType"]))
+            # A transposed lat/lon puts a pin in the Celebes Sea and nothing
+            # else in the app would notice.
+            check("every zone sits inside the region's map bounds",
+                  not zones["outOfBounds"], ", ".join(zones["outOfBounds"]))
+            check("no zone is a stub", not zones["stub"], ", ".join(zones["stub"]))
+            check("every zone's minZoom is within the map's range",
+                  not zones["badZoom"], ", ".join(zones["badZoom"]))
+            check("zone ids are unique", not zones["duplicateIds"], str(zones["count"]))
 
             # -------------------------------------------------- accounts
             print("\nAccounts")
@@ -738,12 +824,12 @@ async def main():
                     const m = await import('./js/store.js');
                     const me = a.currentUser();
                     await m.store.saveCatch({ userId: me.id, speciesId: 'caranx-ignobilis',
-                        regionId: 'leyte-gulf', date: '2026-07-20', weightKg: 5 });
+                        regionId: 'leyte', date: '2026-07-20', weightKg: 5 });
                     const mineBefore = (await m.store.allCatches(me.id)).length;
 
                     const other = await a.signUp('friend', 'abcd');
                     await m.store.saveCatch({ userId: other.id, speciesId: 'chanos-chanos',
-                        regionId: 'leyte-gulf', date: '2026-07-21', weightKg: 2 });
+                        regionId: 'leyte', date: '2026-07-21', weightKg: 2 });
 
                     return {
                         mine: mineBefore,
@@ -1505,10 +1591,10 @@ async def main():
                 const me = a.currentUser();
                 await m.store.clearCatches();
                 await m.store.saveCatch({userId: me.id, speciesId:'lutjanus-argentimaculatus',
-                    regionId:'leyte-gulf', date:'2026-07-21', weightKg:4.2, lengthCm:61,
+                    regionId:'leyte', date:'2026-07-21', weightKg:4.2, lengthCm:61,
                     method:'Casting lure', bait:'live tamban'});
                 await m.store.saveCatch({userId: me.id, speciesId:'photopectoralis-bindus',
-                    regionId:'leyte-gulf', date:'2026-07-24', weightKg:0.11, lengthCm:9});
+                    regionId:'leyte', date:'2026-07-24', weightKg:0.11, lengthCm:9});
                 return (await m.store.allCatches(me.id)).length;
             """)
             check("seed two catches", seeded == 2, f"got {seeded}")
@@ -1611,7 +1697,7 @@ async def main():
                 const blob = new Blob([new Uint8Array(2048)], { type: 'video/webm' });
                 const poster = new Blob([new Uint8Array(256)], { type: 'image/jpeg' });
                 const saved = await s.store.saveCatch({
-                    userId: me.id, speciesId: 'caranx-ignobilis', regionId: 'leyte-gulf',
+                    userId: me.id, speciesId: 'caranx-ignobilis', regionId: 'leyte',
                     date: '2026-07-25', video: blob, poster,
                 });
                 const back = await s.store.getCatch(saved.id);
@@ -1704,10 +1790,10 @@ async def main():
 
             trivia = await page.eval("""
                 const d = await import('./js/data/index.js');
-                const all = d.tipsFor('leyte-gulf');
+                const all = d.tipsFor(d.DEFAULT_REGION_ID);
                 const cats = ['fishes', 'gear', 'zones'];
                 const counts = {};
-                for (const c of cats) counts[c] = d.triviaFor('leyte-gulf', c).length;
+                for (const c of cats) counts[c] = d.triviaFor(d.DEFAULT_REGION_ID, c).length;
                 return {
                     total: all.length,
                     counts,
@@ -1804,7 +1890,7 @@ async def main():
             dupes = await page.eval("""
                 const d = await import('./js/data/index.js');
                 const bad = [];
-                for (const s of d.allSpecies('leyte-gulf')) {
+                for (const s of d.allSpecies(d.DEFAULT_REGION_ID)) {
                     const names = d.localNames(s).map(l => l.name.toLowerCase());
                     if (new Set(names).size !== names.length) bad.push(s.id);
                 }
@@ -1819,7 +1905,7 @@ async def main():
             fuzzy = await page.eval("""
                 const { suggestSpecies } = await import('./js/search.js');
                 const d = await import('./js/data/index.js');
-                const list = d.allSpecies('leyte-gulf');
+                const list = d.allSpecies(d.DEFAULT_REGION_ID);
                 const top = (q) => {
                     const r = suggestSpecies(q, list, d.localNames, { limit: 3 });
                     return r.map(x => x.species.common);
@@ -2007,7 +2093,7 @@ async def main():
                         { time: new Date(now + 16 * h).toISOString(), type: 'low',  heightM: -0.18 },
                     ];
                     const d = await import('./js/data/index.js');
-                    const c = d.getRegion('leyte-gulf').coords;
+                    const c = d.getRegion(d.DEFAULT_REGION_ID).coords;
                     const key = `v2:worldtides:${c.lat},${c.lon}`;
                     localStorage.setItem('angler.tidecache', JSON.stringify({
                         [key]: { at: now, data: { provider: 'WorldTides (test)',
@@ -2035,7 +2121,7 @@ async def main():
                 state = await page.eval("""
                     const t = await import('./js/api/tides.js');
                     const d = await import('./js/data/index.js');
-                    const data = await t.fetchTides(d.getRegion('leyte-gulf').coords);
+                    const data = await t.fetchTides(d.getRegion(d.DEFAULT_REGION_ID).coords);
                     const s = t.currentTideState(data.extremes);
                     return { provider: data.provider, n: data.extremes.length,
                              dir: s && s.direction, cached: !!data.cached };
@@ -2050,7 +2136,7 @@ async def main():
             geo = await page.eval("""
                 const g = await import('./js/api/geo.js');
                 const d = await import('./js/data/index.js');
-                const region = d.getRegion('leyte-gulf');
+                const region = d.getRegion(d.DEFAULT_REGION_ID);
 
                 // Nearby GPS readings must snap to the same grid cell, or every
                 // few metres of drift burns a tide-API request.
@@ -2507,7 +2593,7 @@ async def main():
             refused = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const d = await import('./js/data/index.js');
-                const b = d.getRegion('leyte-gulf').map.bounds;
+                const b = d.getRegion(d.DEFAULT_REGION_ID).map.bounds;
                 const real = navigator.geolocation.getCurrentPosition;
                 navigator.geolocation.getCurrentPosition = (ok, fail) => fail({ code: 1 });
                 await el._locate();
