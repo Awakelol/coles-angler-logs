@@ -18,13 +18,14 @@
 
 import {
   allSpecies, speciesByFamily, fishbaseUrl, localNames, getSpecies, zonesForSpecies,
-  triviaFor, zonesFor,
+  triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, gearByGroup, getGear } from '../data/gear.js';
 import { speciesHero, renderSprite, icon, SPRITES } from '../pixel.js';
 import { hydratePhotos, fetchPhoto, fetchPhotos } from '../api/photos.js';
 import { suggestSpecies } from '../search.js';
 import { zoneSheetHtml, zonePalette } from '../zone-ui.js';
+import { habitatTactics } from '../data/tactics.js';
 import { esc, openSheet } from '../ui.js';
 
 // Each tab gets its own art and palette. A shared palette made the three read
@@ -208,9 +209,9 @@ function zoneCard(z) {
       <div class="zone-card__art">${renderSprite(SPRITES.perch, zonePalette(z), { size: 130 })}</div>
       <div>
         <h3 class="card__title">${esc(z.name)}</h3>
-        <p class="card__sub"><span class="zone-card__type">${esc(z.type)}</span> &middot; ${esc(
-        z.depth || 'depth unknown'
-      )}</p>
+        <p class="card__sub"><span class="zone-card__type">${esc(
+        habitatTactics(z.type)?.label || z.type
+      )}</span> &middot; ${esc(z.depth || 'depth unknown')}</p>
       </div>
       <p class="card__body zone-card__blurb">${esc(z.blurb || '')}</p>
       <div class="chips">
@@ -528,14 +529,30 @@ export function mount(root, ctx) {
       return;
     }
 
+    // Grouped by body of water. Leyte is not surrounded by one sea, and a flat
+    // list of twenty spots reads as noise — the headings restore the shape of
+    // the place. Filtered zones keep their groups, so searching narrows within
+    // each water rather than collapsing them together.
+    const visible = new Set(shown.map((z) => z.id));
+    const groups = zonesByWater(ctx.regionId)
+      .map((g) => ({ ...g, zones: g.zones.filter((z) => visible.has(z.id)) }))
+      .filter((g) => g.zones.length);
+
     results.innerHTML =
       elsewhereHtml() +
-      `<div class="section-head" style="margin-top:8px">
-         <h2>${esc(ctx.region.name)}</h2>
-         <p>${shown.length} water${shown.length === 1 ? '' : 's'} &middot; tap for tactics, or open the map</p>
-       </div>
-       <div class="grid grid--3" style="margin-bottom:20px">${shown.map(zoneCard).join('')}</div>
-       <a class="btn btn--dark" style="margin-bottom:30px" href="#/map">Open the map</a>` +
+      groups
+        .map(
+          (g) => `
+          <div class="section-head" style="margin-top:8px">
+            <h2>${esc(g.water)}</h2>
+            <p>${g.zones.length} spot${g.zones.length === 1 ? '' : 's'} &middot; tap for tactics</p>
+          </div>
+          <div class="grid grid--3" style="margin-bottom:20px">
+            ${g.zones.map(zoneCard).join('')}
+          </div>`
+        )
+        .join('') +
+      `<a class="btn btn--dark" style="margin-bottom:30px" href="#/map">Open the map</a>` +
       triviaHtml(trivia);
 
     for (const btn of results.querySelectorAll('[data-zone]')) {

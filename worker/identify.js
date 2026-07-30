@@ -7,7 +7,7 @@
 // THE CATALOGUE DOES THE CHECKING, and it does it for free. Fishial is trained
 // mostly on North American and European sportfish, so on an Indo-Pacific fish
 // its top answer can be confidently wrong. Catching that needs no
-// intelligence, only a lookup: does this species actually occur in Leyte Gulf?
+// intelligence, only a lookup: does this species actually occur around Leyte?
 // js/identify-verdict.js answers that from data already in the app.
 //
 // A VISION MODEL IS OPTIONAL. It adds the one thing the pair above cannot do:

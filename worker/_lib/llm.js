@@ -4,7 +4,7 @@
 // Fishial names the fish and the local catalogue checks whether that species
 // occurs here — that pair is free and does most of the work. What a vision
 // model adds on top is the thing neither can do: read markings, body shape and
-// fin placement to separate species that look alike. Around Leyte Gulf that
+// fin placement to separate species that look alike. Around Leyte that
 // mostly means the ponyfish, which are genuinely hard.
 //
 // Two providers, one shape. Whichever key is set gets used:
@@ -38,9 +38,16 @@ function systemPrompt(catalogue) {
     .join('\n');
 
   return (
-    `You identify fish from photographs for an angler fishing Leyte Gulf, ` +
-    `Philippines.\n\nChoose from this catalogue of species recorded in these ` +
-    `waters — id | scientific | common | local names:\n\n${list}\n\n` +
+    // Naming the individual waters is an accuracy change, not decoration:
+    // Leyte sits between the Pacific and the Bohol Sea, and which coast a
+    // photo came from changes which lookalikes are plausible.
+    `You identify fish from photographs for an angler fishing the waters ` +
+    `around Leyte island, Philippines — Leyte Gulf and San Pedro Bay on the ` +
+    `Pacific side, Carigara Bay and San Juanico Strait to the north, and ` +
+    `Ormoc Bay, the Camotes Sea, Canigao Channel, Sogod Bay and Surigao ` +
+    `Strait on the Bohol Sea side.\n\nChoose from this catalogue of species ` +
+    `recorded in these waters — id | scientific | common | local names:` +
+    `\n\n${list}\n\n` +
     `Rules:\n` +
     `- Prefer a catalogue species. Use speciesId "unknown" only if none is ` +
     `plausible; a confident wrong answer is worse than an honest one.\n` +
@@ -59,7 +66,7 @@ function userPrompt(guesses) {
     guesses.map((g) => `  ${g.scientific} (${(g.accuracy * 100).toFixed(0)}%)`).join('\n') +
     `\n\nTreat that as evidence, not the answer — it is trained mostly on ` +
     `North American and European sportfish. If it names something that does ` +
-    `not occur in Leyte Gulf, say so.`
+    `not occur in Philippine waters, say so.`
   );
 }
 

@@ -298,6 +298,14 @@ async def main():
                     return false;
                 };
 
+                // Start from a KNOWN different route. Setting the hash to its
+                // current value fires no hashchange, so if an earlier block
+                // left us on this exact tab nothing re-renders and the wait
+                // below times out against a stale page — which is what made
+                // this test fail intermittently rather than honestly.
+                location.hash = '#/';
+                await until('.kpi__v, .empty');
+
                 location.hash = '#/info?tab=zones';
                 const onTips = await until('.tip-card');
                 location.hash = '#/info?tab=fishes';
@@ -579,6 +587,54 @@ async def main():
             check("every zone's minZoom is within the map's range",
                   not zones["badZoom"], ", ".join(zones["badZoom"]))
             check("zone ids are unique", not zones["duplicateIds"], str(zones["count"]))
+
+            water = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const { HABITAT_TACTICS } = await import('./js/data/tactics.js');
+                const groups = d.zonesByWater(d.DEFAULT_REGION_ID);
+                const zones = d.zonesFor(d.DEFAULT_REGION_ID);
+                return {
+                    // A zone without `water` lands in 'Other' rather than
+                    // vanishing — but it should never come to that.
+                    missing: zones.filter(z => !z.water).map(z => z.id),
+                    other: groups.some(g => g.water === 'Other'),
+                    // Grouping must not lose or duplicate a zone.
+                    regrouped: groups.reduce((n, g) => n + g.zones.length, 0) === zones.length,
+                    waters: groups.map(g => g.water),
+                    // Both new types must carry real advice, not a fallback.
+                    hasStrait: Boolean(HABITAT_TACTICS.strait?.advice),
+                    hasDeep: Boolean(HABITAT_TACTICS.deep?.advice),
+                    // The two straits are the reason `strait` exists: its
+                    // advice must lead on current, not on structure.
+                    straitMentionsCurrent: /tide|flow|slack/i
+                        .test(HABITAT_TACTICS.strait?.advice || ''),
+                    deepMentionsVertical: /vertical|jig|bottom/i
+                        .test(HABITAT_TACTICS.deep?.advice || ''),
+                };
+            """)
+            check("every zone declares which water it is in",
+                  not water["missing"] and not water["other"], str(water["missing"]))
+            check("grouping by water loses no zones", water["regrouped"], str(water["waters"]))
+            check("the new habitat types exist",
+                  water["hasStrait"] and water["hasDeep"], str(water))
+            # Reusing 'channel' and 'offshore' would have given advice that is
+            # actively wrong for an 8-knot strait and a drop-off.
+            check("strait advice is about current, not structure",
+                  water["straitMentionsCurrent"], str(water))
+            check("deep advice is about fishing vertically",
+                  water["deepMentionsVertical"], str(water))
+
+            grouped = await page.eval("""
+                location.hash = '#/info?tab=zones';
+                await new Promise(r => setTimeout(r, 900));
+                const heads = [...document.querySelectorAll('.section-head h2')]
+                    .map(e => e.textContent.trim());
+                return { heads, cards: document.querySelectorAll('.zone-card').length };
+            """)
+            check("Info renders a heading per body of water",
+                  "Leyte Gulf" in grouped["heads"], str(grouped["heads"]))
+            check("every zone still gets a card",
+                  grouped["cards"] == zones["count"], str(grouped))
 
             # -------------------------------------------------- accounts
             print("\nAccounts")

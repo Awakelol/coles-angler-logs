@@ -20,6 +20,9 @@ export const ZONE_PALETTE = {
   bay: 'ocean',
   shallows: 'silver',
   offshore: 'violet',
+  // The last two unused palettes, so two new water types cost no art.
+  strait: 'sunset',
+  deep: 'slate',
 };
 
 export const zonePalette = (zone) => ZONE_PALETTE[zone.type] || 'ocean';

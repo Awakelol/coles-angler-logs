@@ -2,7 +2,7 @@
 // GEAR CATALOGUE
 //
 // Region-independent, exactly like the species catalogue: a rod is a rod in
-// Leyte Gulf or anywhere else. Nothing here is tied to a region, so adding one
+// Leyte or anywhere else. Nothing here is tied to a region, so adding one
 // never means touching this file.
 //
 // Every entry answers the same three questions, which is the whole point:
@@ -152,7 +152,7 @@ export const GEAR = [
     palette: 'coral',
     sub: '15–30 cm, single strand or nylon-coated',
     what: 'A short steel leader that teeth cannot cut. Costs you some bites because it is stiff and visible, and buys you the fish that would otherwise leave with your lure.',
-    when: 'When barracuda, mackerel or needlefish are around — which in Leyte Gulf is most of the time near a harbour. If you lose two lures cleanly cut at the knot, stop guessing and put wire on.',
+    when: 'When barracuda, mackerel or needlefish are around — which around Leyte is most of the time near a harbour. If you lose two lures cleanly cut at the knot, stop guessing and put wire on.',
     where: 'Harbour mouths, channel edges and anywhere you see baitfish scattering. Skip it over the flats, where the extra visibility costs more than it saves.',
   },
 

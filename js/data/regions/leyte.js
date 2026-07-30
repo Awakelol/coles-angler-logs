@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// REGION: Leyte Gulf, Philippines
+// REGION: Leyte, Philippines
 //
 // Species emphasis follows BFAR Region VIII (Eastern Visayas) survey findings:
 // Leiognathidae (ponyfish), Lutjanidae (snappers) and Gerreidae (mojarras)
@@ -62,6 +62,7 @@ export default {
   zones: [
     {
       id: 'z-cancabato',
+      water: 'Leyte Gulf',
       name: 'Cancabato Bay',
       type: 'bay',
       coords: { lat: 11.238, lon: 125.004 },
@@ -79,6 +80,7 @@ export default {
     },
     {
       id: 'z-san-pedro',
+      water: 'Leyte Gulf',
       name: 'San Pedro Bay',
       type: 'bay',
       coords: { lat: 11.10, lon: 125.02 },
@@ -90,6 +92,7 @@ export default {
     },
     {
       id: 'z-basey-flats',
+      water: 'Leyte Gulf',
       name: 'Basey tidal flats',
       type: 'flats',
       coords: { lat: 11.28, lon: 125.07 },
@@ -105,6 +108,7 @@ export default {
     },
     {
       id: 'z-basey-mangrove',
+      water: 'Leyte Gulf',
       name: 'Basey mangrove creeks',
       type: 'mangrove',
       coords: { lat: 11.305, lon: 125.09 },
@@ -120,6 +124,7 @@ export default {
     },
     {
       id: 'z-tanauan',
+      water: 'Leyte Gulf',
       name: 'Tanauan coastal shallows',
       type: 'shallows',
       coords: { lat: 11.11, lon: 125.02 },
@@ -135,6 +140,7 @@ export default {
     },
     {
       id: 'z-guiuan-reef',
+      water: 'Leyte Gulf',
       name: 'Guiuan fringing reefs',
       type: 'reef',
       coords: { lat: 11.03, lon: 125.72 },
@@ -150,6 +156,7 @@ export default {
     },
     {
       id: 'z-homonhon',
+      water: 'Leyte Gulf',
       name: 'Homonhon Island channel',
       type: 'channel',
       coords: { lat: 10.75, lon: 125.70 },
@@ -165,6 +172,7 @@ export default {
     },
     {
       id: 'z-pacific-edge',
+      water: 'Leyte Gulf',
       name: 'Pacific edge / offshore',
       type: 'offshore',
       coords: { lat: 10.80, lon: 125.95 },
@@ -176,6 +184,7 @@ export default {
     },
     {
       id: 'z-leyte-west',
+      water: 'Leyte Gulf',
       name: 'Western gulf shelf',
       type: 'shallows',
       coords: { lat: 10.90, lon: 125.15 },
@@ -191,6 +200,7 @@ export default {
     },
     {
       id: 'z-sardine-grounds',
+      water: 'Leyte Gulf',
       name: 'Central sardine grounds',
       type: 'offshore',
       coords: { lat: 11.00, lon: 125.40 },

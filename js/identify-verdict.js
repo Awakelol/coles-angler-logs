@@ -8,7 +8,7 @@
 //            Returns a ranked list with accuracy scores.
 //   CLAUDE   a general model, but it can be handed THIS region's catalogue and
 //            told to pick from it. Weaker at fine-grained lookalikes, much
-//            better at knowing a fish is not plausible in Leyte Gulf.
+//            better at knowing a fish is not plausible in these waters.
 //
 // The rule: agreement is the answer. Disagreement is not a coin toss — the
 // LOCAL CATALOGUE breaks the tie. A species that does not occur in these
@@ -142,7 +142,7 @@ export function reconcileLocal(candidates, catalogue = []) {
     confidence: 'low',
     note:
       `The fish model's best guess is ${top.scientific}, which isn't in the ` +
-      `Leyte Gulf catalogue. Either it's a species not yet listed, or the ` +
+      `local catalogue. Either it's a species not yet listed, or the ` +
       `model is out of its depth — it's trained mostly on Atlantic and ` +
       `Pacific sportfish. Treat this as a lead, not an answer.`,
   };

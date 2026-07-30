@@ -109,6 +109,26 @@ export function zonesFor(regionId) {
   return getRegion(regionId).zones || [];
 }
 
+/**
+ * Zones grouped by the body of water they sit in, in first-appearance order.
+ *
+ * Leyte is not surrounded by one sea — the Pacific-facing gulf and the deeper
+ * Bohol Sea side behave differently enough that a flat list of twenty zones
+ * would read as noise. Grouping restores the shape of the place.
+ *
+ * A zone with no `water` lands in 'Other' rather than vanishing, so forgetting
+ * the field degrades instead of losing data.
+ */
+export function zonesByWater(regionId) {
+  const groups = new Map();
+  for (const z of zonesFor(regionId)) {
+    const key = z.water || 'Other';
+    if (!groups.has(key)) groups.set(key, { water: key, zones: [] });
+    groups.get(key).zones.push(z);
+  }
+  return [...groups.values()];
+}
+
 /** Group a region's species by family, for the guide's section headers. */
 export function speciesByFamily(regionId) {
   const groups = new Map();

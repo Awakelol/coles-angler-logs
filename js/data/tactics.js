@@ -182,6 +182,21 @@ export const HABITAT_TACTICS = {
     advice:
       'Watch for birds and surface commotion — they find the fish before you do. Troll to locate, then cast into the school from the edge. Never drive through it.',
   },
+  // Straits are channels with the volume turned up. Surigao runs to 8 knots
+  // (Wikipedia; see docs/leyte-waters-research.md), which is faster than most
+  // bancas can make way against — so this advice leads with getting home.
+  strait: {
+    label: 'Strait & tidal narrows',
+    advice:
+      'Check the tide before you commit, not after. Flow reverses hard and can run faster than you can motor against it, so fish the slack either side of the turn and keep something solid downstream of you. Work the eddy lines behind points and pilings — that is where bait gets held and predators wait. Never anchor in the main flow.',
+  },
+  // The existing 'offshore' advice is all surface pelagics — birds, trolling,
+  // casting into schools — and is actively wrong over a drop-off.
+  deep: {
+    label: 'Deep water & drop-off',
+    advice:
+      'Fish vertically, not outward. Let jigs reach the bottom and work them up through the column; most takes come on the drop. Braid rather than mono — at depth, stretch swallows the hookset entirely. Watch the sounder for the step in the contour and drift back across it rather than anchoring.',
+  },
 };
 
 const FALLBACK = {

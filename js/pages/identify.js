@@ -167,7 +167,7 @@ function verdictHtml(v) {
       <div class="notice notice--warn" style="margin-top:18px">
         <h3>No confident match</h3>
         <p style="margin:0">
-          Nothing in the Leyte Gulf catalogue matched well. Try a side-on shot
+          Nothing in the local catalogue matched well. Try a side-on shot
           with the whole fish in frame, or browse
           <a href="#/info">Info &rsaquo; Fishes</a>.
         </p>
