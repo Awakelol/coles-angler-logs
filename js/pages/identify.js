@@ -18,9 +18,12 @@
 // capture-a-still flow costs the user nothing versus a live viewfinder, while
 // still allowing an existing photo to be picked on a desktop.
 //
-// Recognition goes through /api/identify — a Cloudflare Pages Function, so the
-// API keys stay off this device. Two services look at the photo and are
-// cross-checked; see js/identify-verdict.js for the arbitration.
+// Recognition goes through /api/identify, a Cloudflare Worker (worker/), so
+// the API keys stay off this device. Fishial names the fish and the local
+// catalogue checks whether that species occurs here at all — see
+// js/identify-verdict.js. An AI second opinion is optional and costs money, so
+// the response says which path ran and the screen repeats it: a free answer
+// must never look like one that had a second opinion behind it.
 // ---------------------------------------------------------------------------
 
 import { prepareMedia, LIMITS, fmtMB } from '../media.js';
@@ -180,7 +183,9 @@ function verdictHtml(v) {
         <div class="verdict__head">
           ${species ? `<div class="verdict__art">${speciesHero(species, { size: 150 })}</div>` : ''}
           <div>
-            <p class="eyebrow">${esc(v.confidence)} confidence &middot; ${esc(v.verdict)}</p>
+            <p class="eyebrow">${esc(v.confidence)} confidence${
+              v.checkedBy ? ` &middot; ${esc(v.checkedBy)}` : ''
+            }</p>
             <h3 style="margin:2px 0 4px">${esc(species ? species.common : v.answer)}</h3>
             <p class="card__sub species-card__sci">${esc(v.answer)}</p>
             ${

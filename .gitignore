@@ -10,3 +10,6 @@ Thumbs.db
 .vscode/
 __pycache__/
 *.pyc
+
+# wrangler local secrets — never commit
+.dev.vars

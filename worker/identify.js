@@ -1,33 +1,40 @@
 // ---------------------------------------------------------------------------
 // POST /api/identify — what fish is this?
 //
-// A Cloudflare Pages Function. It exists for one reason above all others:
-// THE API KEYS MUST NEVER REACH THE BROWSER. The app is a static site, so
-// anything it ships is readable by anyone who opens devtools. An Anthropic key
-// can spend real money and a Fishial key is someone else's quota; both stay
-// here, in Cloudflare's environment, and the browser only ever talks to this.
+// FISHIAL DOES THE LOOKING. A model trained specifically on fish, free for
+// non-commercial use on its developer tier.
 //
-// It asks two services and cross-checks them — see js/identify-verdict.js for
-// why, and for the arbitration rules.
+// THE CATALOGUE DOES THE CHECKING, and it does it for free. Fishial is trained
+// mostly on North American and European sportfish, so on an Indo-Pacific fish
+// its top answer can be confidently wrong. Catching that needs no
+// intelligence, only a lookup: does this species actually occur in Leyte Gulf?
+// js/identify-verdict.js answers that from data already in the app.
+//
+// A LANGUAGE MODEL IS OPTIONAL and off by default, because it costs money per
+// call. Set ANTHROPIC_API_KEY and it adds a second opinion that can read
+// markings and body shape, and the two get arbitrated. Leave it unset and the
+// free path runs alone — and says which path ran, so a cheaper answer is never
+// mistaken for a better one.
+//
+// Keys live in the Worker's environment and never reach the browser: this is a
+// static site, so anything it ships is readable in devtools.
 //
 // ENVIRONMENT VARIABLES (Cloudflare dashboard → Settings → Variables):
-//   ANTHROPIC_API_KEY     required
-//   FISHIAL_API_KEY       optional — omit and it runs on Claude alone
-//   FISHIAL_API_SECRET    optional
-//
-// Set all three as SECRETS (encrypted), not plaintext variables.
+//   FISHIAL_API_KEY      recognition
+//   FISHIAL_API_SECRET   recognition
+//   ANTHROPIC_API_KEY    optional second opinion; omit to stay free
 // ---------------------------------------------------------------------------
 
-import { INDO_PACIFIC_SPECIES } from '../../js/data/species/indo-pacific.js';
-import { arbitrate, normalise } from '../../js/identify-verdict.js';
-import { md5Base64 } from '../_lib/md5.js';
-
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-opus-5';
+import { INDO_PACIFIC_SPECIES } from '../js/data/species/indo-pacific.js';
+import { arbitrate, reconcileLocal, normalise } from '../js/identify-verdict.js';
+import { md5Base64 } from './_lib/md5.js';
 
 const FISHIAL_TOKEN_URL = 'https://api-users.fishial.ai/v1/auth/token';
 const FISHIAL_UPLOAD_URL = 'https://api.fishial.ai/v1/recognition/upload';
 const FISHIAL_RECOGNISE_URL = 'https://api.fishial.ai/v1/recognition/image';
+
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const MODEL = 'claude-opus-5';
 
 const MAX_BYTES = 6 * 1024 * 1024;
 
@@ -39,8 +46,8 @@ const json = (body, status = 200) =>
 
 // --- Fishial ---------------------------------------------------------------
 
-// Tokens last 10 minutes. Cached per isolate — best effort, and a miss just
-// costs one extra round trip.
+// Tokens last 10 minutes. Cached per isolate — best effort; a miss costs one
+// extra round trip and nothing else.
 let tokenCache = { value: null, expires: 0 };
 
 async function fishialToken(env) {
@@ -91,7 +98,7 @@ async function fishialIdentify(env, bytes, mime) {
   const signedId = slot['signed-id'] || slot.signed_id;
   if (!direct?.url || !signedId) throw new Error('fishial upload: unexpected response');
 
-  // Only the headers they specify — adding our own makes the signature fail.
+  // Only the headers they specify — adding our own breaks the signature.
   const put = await fetch(direct.url, {
     method: 'PUT',
     headers: direct.headers || {},
@@ -105,44 +112,29 @@ async function fishialIdentify(env, bytes, mime) {
   if (!rec.ok) throw new Error(`fishial recognise ${rec.status}`);
 
   const data = await rec.json();
-  const species = (data.results || []).flatMap((r) => r.species || []);
-  return species
+  return (data.results || [])
+    .flatMap((r) => r.species || [])
     .map((s) => ({ scientific: s.name, accuracy: Number(s.accuracy) || 0 }))
     .sort((a, b) => b.accuracy - a.accuracy)
     .slice(0, 5);
 }
 
-// --- Claude ----------------------------------------------------------------
+// --- optional second opinion ------------------------------------------------
 
-/**
- * The catalogue is the whole reason this beats a generic classifier: Claude is
- * choosing from the species that actually occur here, with the names people
- * use, rather than from every fish on earth.
- */
 function cataloguePrompt() {
-  const lines = INDO_PACIFIC_SPECIES.map((s) => {
-    const local = Object.values(s.local || {})
-      .flat()
-      .slice(0, 4)
-      .join(', ');
+  return INDO_PACIFIC_SPECIES.map((s) => {
+    const local = Object.values(s.local || {}).flat().slice(0, 4).join(', ');
     return `${s.id} | ${s.scientific} | ${s.common}${local ? ` | local: ${local}` : ''}`;
-  });
-  return lines.join('\n');
+  }).join('\n');
 }
 
 const SCHEMA = {
   type: 'object',
   properties: {
-    speciesId: {
-      type: 'string',
-      description: 'id from the catalogue, or "unknown" if none is a good match',
-    },
-    scientific: { type: 'string', description: 'scientific name, or "" if unknown' },
+    speciesId: { type: 'string', description: 'catalogue id, or "unknown"' },
+    scientific: { type: 'string' },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-    reasoning: {
-      type: 'string',
-      description: 'one or two sentences on the visible features that decided it',
-    },
+    reasoning: { type: 'string', description: 'the visible features that decided it' },
     alternatives: {
       type: 'array',
       items: {
@@ -161,16 +153,13 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-async function claudeIdentify(env, b64, mime, fishialGuesses) {
-  const hint = fishialGuesses.length
+async function llmIdentify(env, b64, mime, guesses) {
+  const hint = guesses.length
     ? `\n\nA fish-recognition model looked at the same photo and offered, best first:\n` +
-      fishialGuesses
-        .map((f) => `  ${f.scientific} (${(f.accuracy * 100).toFixed(0)}%)`)
-        .join('\n') +
-      `\nTreat that as evidence, not as the answer. It is trained mostly on ` +
-      `North American and European sportfish and may not know Indo-Pacific ` +
-      `species well. If it names something that does not occur in Leyte Gulf, ` +
-      `say so.`
+      guesses.map((f) => `  ${f.scientific} (${(f.accuracy * 100).toFixed(0)}%)`).join('\n') +
+      `\nTreat that as evidence, not the answer — it is trained mostly on North ` +
+      `American and European sportfish. If it names something that does not ` +
+      `occur in Leyte Gulf, say so.`
     : '';
 
   const res = await fetch(ANTHROPIC_URL, {
@@ -183,20 +172,19 @@ async function claudeIdentify(env, b64, mime, fishialGuesses) {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 4096,
-      // A constrained pick from a supplied list; it does not need max effort,
+      // A constrained pick from a supplied list — it does not need max effort,
       // and lower effort keeps this quick enough to wait on.
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
       system:
         `You identify fish from photographs for an angler fishing Leyte Gulf, ` +
-        `Philippines.\n\nChoose from this catalogue of species recorded in ` +
-        `these waters — id | scientific | common | local names:\n\n` +
-        cataloguePrompt() +
-        `\n\nRules:\n` +
-        `- Prefer a catalogue species. Only answer "unknown" if none is a ` +
-        `plausible match; a wrong confident answer is worse than an honest one.\n` +
-        `- Judge on visible features: body shape, fin placement, mouth, ` +
-        `markings, colour. Say which ones decided it.\n` +
-        `- Many of these look alike, especially the ponyfish. If you cannot ` +
+        `Philippines.\n\nChoose from this catalogue of species recorded in these ` +
+        `waters — id | scientific | common | local names:\n\n${cataloguePrompt()}\n\n` +
+        `Rules:\n` +
+        `- Prefer a catalogue species. Answer "unknown" only if none is ` +
+        `plausible; a confident wrong answer is worse than an honest one.\n` +
+        `- Judge on visible features — body shape, fin placement, mouth, ` +
+        `markings, colour — and say which ones decided it.\n` +
+        `- Many of these look alike, the ponyfish especially. If you cannot ` +
         `separate two, say low confidence and list the other as an alternative.`,
       messages: [
         {
@@ -210,10 +198,7 @@ async function claudeIdentify(env, b64, mime, fishialGuesses) {
     }),
   });
 
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`anthropic ${res.status}: ${detail.slice(0, 200)}`);
-  }
+  if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
 
   const data = await res.json();
   // Safety classifiers can decline with a 200 — check before reading content.
@@ -226,9 +211,15 @@ async function claudeIdentify(env, b64, mime, fishialGuesses) {
 
 // --- handler ---------------------------------------------------------------
 
-export async function onRequestPost({ request, env }) {
-  if (!env.ANTHROPIC_API_KEY) {
-    return json({ error: 'unconfigured', message: 'ANTHROPIC_API_KEY is not set.' }, 503);
+export async function identify(request, env) {
+  const hasFishial = Boolean(env.FISHIAL_API_KEY && env.FISHIAL_API_SECRET);
+  const hasLLM = Boolean(env.ANTHROPIC_API_KEY);
+
+  if (!hasFishial && !hasLLM) {
+    return json(
+      { error: 'unconfigured', message: 'No recognition service is configured yet.' },
+      503
+    );
   }
 
   let body;
@@ -254,52 +245,63 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'too-large', message: 'That photo is too big.' }, 413);
   }
 
-  // Fishial first: its guesses become evidence in Claude's prompt. Running
-  // them in parallel would be faster but would throw away the cross-check,
-  // which is the entire point.
   let fishial = [];
   let fishialError = null;
-  if (env.FISHIAL_API_KEY && env.FISHIAL_API_SECRET) {
+  if (hasFishial) {
     try {
       fishial = await fishialIdentify(env, bytes, mime);
     } catch (err) {
-      // A dead Fishial must not take the whole feature down.
       fishialError = String(err.message || err);
     }
   }
 
-  let claude = null;
-  let claudeError = null;
-  try {
-    claude = await claudeIdentify(env, b64, mime, fishial);
-  } catch (err) {
-    claudeError = String(err.message || err);
+  let llm = null;
+  let llmError = null;
+  if (hasLLM) {
+    try {
+      llm = await llmIdentify(env, b64, mime, fishial);
+    } catch (err) {
+      llmError = String(err.message || err);
+    }
   }
 
-  if (!claude && !fishial.length) {
+  if (!llm && !fishial.length) {
     return json(
-      { error: 'failed', message: 'Neither service could look at that photo.',
-        detail: { claude: claudeError, fishial: fishialError } },
+      {
+        error: 'failed',
+        message: 'Nothing could read that photo.',
+        detail: { llm: llmError, fishial: fishialError },
+      },
       502
     );
   }
 
-  const known = new Set(INDO_PACIFIC_SPECIES.map((s) => normalise(s.scientific)));
-  const inRegion = (name) => known.has(normalise(name));
+  const catalogue = INDO_PACIFIC_SPECIES.map((s) => ({
+    id: s.id,
+    scientific: s.scientific,
+    common: s.common,
+  }));
 
-  const verdict = arbitrate(
-    claude && claude.speciesId !== 'unknown' ? claude : null,
-    fishial,
-    inRegion
-  );
+  // With a language model, cross-check the two. Without one, the catalogue
+  // does the checking on its own — same idea, no cost, no second network call.
+  const verdict = llm
+    ? arbitrate(
+        llm.speciesId !== 'unknown' ? llm : null,
+        fishial,
+        (name) => catalogue.some((s) => normalise(s.scientific) === normalise(name))
+      )
+    : reconcileLocal(fishial, catalogue);
 
   return json({
     ...verdict,
-    reasoning: claude?.reasoning || null,
-    alternatives: claude?.alternatives || [],
+    reasoning: llm?.reasoning || null,
+    alternatives: llm?.alternatives || [],
+    // Named so the UI can say how the answer was reached — a free answer
+    // should never be presented as though it had a second opinion behind it.
+    checkedBy: llm ? 'fishial + AI second opinion' : 'fishial + local catalogue',
     sources: {
-      claude: claude ? { ...claude, error: null } : { error: claudeError },
       fishial: fishial.length ? { candidates: fishial } : { error: fishialError },
+      llm: hasLLM ? (llm ? { ...llm, error: null } : { error: llmError }) : null,
     },
   });
 }

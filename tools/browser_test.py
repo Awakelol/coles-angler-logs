@@ -1325,6 +1325,75 @@ async def main():
             check("no answer from either is not an answer",
                   verdict["nothing"] == ["none", None], str(verdict["nothing"]))
 
+            # The free path: no language model, the catalogue does the checking.
+            local = await page.eval("""
+                const v = await import('./js/identify-verdict.js');
+                const catalogue = [
+                    { id: 'sphyraena-barracuda', scientific: 'Sphyraena barracuda',
+                      common: 'Great barracuda' },
+                    { id: 'lutjanus-johnii', scientific: 'Lutjanus johnii',
+                      common: 'John\\u2019s snapper' },
+                ];
+                const R = (...names) => names.map((n, i) =>
+                    ({ scientific: n, accuracy: 0.9 - i * 0.2 }));
+
+                const hit = v.reconcileLocal(R('Sphyraena barracuda'), catalogue);
+                const demoted = v.reconcileLocal(
+                    R('Micropterus salmoides', 'Sphyraena barracuda'), catalogue);
+                // Same genus as a local species — a close relative, not the same fish.
+                const related = v.reconcileLocal(R('Lutjanus campechanus'), catalogue);
+                const foreign = v.reconcileLocal(R('Micropterus salmoides'), catalogue);
+                const empty = v.reconcileLocal([], catalogue);
+
+                return {
+                    hit: [hit.verdict, hit.speciesId, hit.agreed, hit.confidence],
+                    demoted: [demoted.verdict, demoted.speciesId, demoted.runnerUp],
+                    related: [related.verdict, related.speciesId, related.confidence],
+                    foreign: [foreign.verdict, foreign.speciesId, foreign.confidence],
+                    empty: empty.verdict,
+                    // A fish that isn't from here must never come back confident.
+                    foreignNotConfident: foreign.confidence === 'low',
+                    relatedNotConfident: related.confidence === 'low',
+                };
+            """)
+            check("a local species ranked first is taken",
+                  local["hit"] == ["local-match", "sphyraena-barracuda", True, "high"],
+                  str(local["hit"]))
+            # This is the free cross-check earning its keep: Fishial's top pick
+            # doesn't occur here, so its second one wins.
+            check("a foreign top pick is demoted to the local one below it",
+                  local["demoted"] == ["local-demoted", "sphyraena-barracuda",
+                                       "Micropterus salmoides"],
+                  str(local["demoted"]))
+            check("an unlisted species falls back to a local relative by genus",
+                  local["related"][:2] == ["related", "lutjanus-johnii"],
+                  str(local["related"]))
+            check("nothing local is reported as such, not dressed up",
+                  local["foreign"] == ["not-local", None, "low"], str(local["foreign"]))
+            check("guesses from outside the catalogue are never confident",
+                  local["foreignNotConfident"] and local["relatedNotConfident"], str(local))
+            check("no candidates is not an answer", local["empty"] == "none", str(local))
+
+            # Deployment shape: a Worker with a script, not assets alone.
+            deploy = await page.eval("""
+                const wrangler = await (await fetch('./wrangler.jsonc')).text();
+                return {
+                    // Without `main` Cloudflare refuses to attach env vars:
+                    // "Variables cannot be added to a Worker that only has
+                    // static assets."
+                    hasMain: /"main"\\s*:\\s*"worker\\//.test(wrangler),
+                    hasAssets: /"binding"\\s*:\\s*"ASSETS"/.test(wrangler),
+                    // Otherwise the asset server answers /api/* with a 404
+                    // before the Worker ever sees it.
+                    apiFirst: /"run_worker_first"[\\s\\S]*?\\/api\\/\\*/.test(wrangler),
+                };
+            """)
+            check("the Worker has a script, so variables can attach",
+                  deploy["hasMain"], str(deploy))
+            check("static assets are still served", deploy["hasAssets"], str(deploy))
+            check("/api/* reaches the Worker before the asset server",
+                  deploy["apiFirst"], str(deploy))
+
             # The endpoint must never ship a key to the browser.
             keys = await page.eval("""
                 const src = await (await fetch('./js/pages/identify.js')).text();

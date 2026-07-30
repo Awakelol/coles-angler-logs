@@ -36,7 +36,117 @@ export const VERDICTS = {
   SPLIT: 'split',
   ONE_SIDED: 'one-sided',
   NONE: 'none',
+  // Reached without any language model — see reconcileLocal().
+  LOCAL_MATCH: 'local-match',
+  LOCAL_DEMOTED: 'local-demoted',
+  RELATED: 'related',
+  NOT_LOCAL: 'not-local',
 };
+
+const genusOf = (name) => normalise(name).split(' ')[0] || '';
+
+/**
+ * Check Fishial's ranking against the local catalogue — no language model.
+ *
+ * This is the whole cross-check done for free. Fishial is trained mostly on
+ * North American and European sportfish, so on an Indo-Pacific fish its top
+ * answer can be confidently wrong. What catches that is not intelligence, it
+ * is a lookup: does this species actually occur here? The catalogue already
+ * knows, and that judgement costs nothing to make.
+ *
+ * The escalation, in order:
+ *   1. Top answer is a local species          -> take it
+ *   2. A LOWER-ranked answer is local         -> take that, say why
+ *   3. None are local but a genus matches     -> offer the local relative
+ *   4. Nothing matches                        -> report it, flagged clearly
+ *
+ * @param {Array} candidates [{scientific, accuracy}] ranked, best first
+ * @param {Array} catalogue  [{id, scientific, common}] species found here
+ */
+export function reconcileLocal(candidates, catalogue = []) {
+  const ranked = (candidates || [])
+    .filter((c) => c && c.scientific)
+    .map((c) => ({ ...c, key: normalise(c.scientific) }));
+
+  if (!ranked.length) {
+    return { verdict: VERDICTS.NONE, agreed: false, confidence: 'none', answer: null };
+  }
+
+  const byName = new Map();
+  const byGenus = new Map();
+  for (const s of catalogue) {
+    const k = normalise(s.scientific);
+    byName.set(k, s);
+    const g = genusOf(s.scientific);
+    if (g && !byGenus.has(g)) byGenus.set(g, s);
+  }
+
+  const top = ranked[0];
+
+  // 1 & 2 — the best-ranked candidate that actually occurs here.
+  const localIndex = ranked.findIndex((c) => byName.has(c.key));
+  if (localIndex >= 0) {
+    const hit = ranked[localIndex];
+    const species = byName.get(hit.key);
+
+    if (localIndex === 0) {
+      return {
+        verdict: VERDICTS.LOCAL_MATCH,
+        agreed: true,
+        answer: species.scientific,
+        speciesId: species.id,
+        confidence: hit.accuracy >= 0.7 ? 'high' : hit.accuracy >= 0.4 ? 'medium' : 'low',
+        note: 'Recorded in these waters, and the fish model ranked it first.',
+      };
+    }
+
+    return {
+      verdict: VERDICTS.LOCAL_DEMOTED,
+      agreed: false,
+      answer: species.scientific,
+      speciesId: species.id,
+      runnerUp: top.scientific,
+      confidence: 'medium',
+      note:
+        `The fish model ranked ${top.scientific} first, but that isn't recorded ` +
+        `in these waters. Its #${localIndex + 1} pick, ${species.scientific}, is.`,
+    };
+  }
+
+  // 3 — same genus as something local. Close relatives look alike, and this is
+  // usually the right family of answer even when the species is wrong.
+  for (const c of ranked) {
+    const relative = byGenus.get(genusOf(c.scientific));
+    if (relative) {
+      return {
+        verdict: VERDICTS.RELATED,
+        agreed: false,
+        answer: relative.scientific,
+        speciesId: relative.id,
+        runnerUp: c.scientific,
+        confidence: 'low',
+        note:
+          `No exact match here. The fish model suggested ${c.scientific}; the ` +
+          `closest species recorded in these waters is ${relative.scientific}, ` +
+          `a close relative. Check the two side by side.`,
+      };
+    }
+  }
+
+  // 4 — nothing local. Say so rather than dressing up a foreign species.
+  return {
+    verdict: VERDICTS.NOT_LOCAL,
+    agreed: false,
+    answer: top.scientific,
+    speciesId: null,
+    confidence: 'low',
+    note:
+      `The fish model's best guess is ${top.scientific}, which isn't in the ` +
+      `Leyte Gulf catalogue. Either it's a species not yet listed, or the ` +
+      `model is out of its depth — it's trained mostly on Atlantic and ` +
+      `Pacific sportfish. Treat this as a lead, not an answer.`,
+  };
+}
 
 /**
  * Decide what to tell the user.
