@@ -1394,6 +1394,44 @@ async def main():
             check("/api/* reaches the Worker before the asset server",
                   deploy["apiFirst"], str(deploy))
 
+            # Provider wiring. Read as source: these run in the Worker, not the
+            # browser, so there is nothing to import here — but a silent typo
+            # in a key name would mean the second opinion never runs and
+            # nobody notices, because the free path answers anyway.
+            llm = await page.eval("""
+                const src = await (await fetch('./worker/_lib/llm.js')).text();
+                const wired = await (await fetch('./worker/identify.js')).text();
+                return {
+                    // Free tier first: Gemini is checked before the metered one.
+                    geminiFirst: src.indexOf('GEMINI_API_KEY') < src.indexOf('ANTHROPIC_API_KEY'),
+                    bothProviders: src.includes('generativelanguage.googleapis.com')
+                        && src.includes('api.anthropic.com'),
+                    // Key in a header, not ?key=, so it stays out of request
+                    // logs. Strip comments first — the source explains the
+                    // choice, and matching that prose is not evidence.
+                    keyInHeader: src.includes('x-goog-api-key')
+                        && !src.replace(/\/\/.*/g, '').includes('key='),
+                    // Both must return the same object or identify.js breaks.
+                    oneShape: src.includes('export async function secondOpinion'),
+                    // A dead or rate-limited model must not take the feature down.
+                    llmFailureTolerated: /catch \(err\)[\s\S]{0,200}llmError/.test(wired),
+                    // 'unknown' should fall through to the free reconciler,
+                    // which can still demote a foreign top pick.
+                    unknownFallsBack: wired.includes("speciesId !== 'unknown'")
+                        && wired.includes('reconcileLocal'),
+                };
+            """)
+            check("the free provider is preferred over the metered one",
+                  llm["geminiFirst"], str(llm))
+            check("both vision providers are wired", llm["bothProviders"], str(llm))
+            check("the Gemini key travels in a header, not the query string",
+                  llm["keyInHeader"], str(llm))
+            check("both providers return one shape", llm["oneShape"], str(llm))
+            check("a failed second opinion doesn't take the feature down",
+                  llm["llmFailureTolerated"], str(llm))
+            check("an 'unknown' answer falls back to the catalogue check",
+                  llm["unknownFallsBack"], str(llm))
+
             # The endpoint must never ship a key to the browser.
             keys = await page.eval("""
                 const src = await (await fetch('./js/pages/identify.js')).text();

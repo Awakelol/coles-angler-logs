@@ -126,7 +126,9 @@ time and an existing deployment won't see them.
 |---|---|---|
 | `FISHIAL_API_KEY` | <https://portal.fishial.ai> → *About → for developers* | yes |
 | `FISHIAL_API_SECRET` | same page | yes |
-| `ANTHROPIC_API_KEY` | optional second opinion — see below | no |
+| `GEMINI_API_KEY` | optional second opinion — see below | no |
+| `GEMINI_MODEL` | overrides the default `gemini-2.5-flash` | no |
+| `ANTHROPIC_API_KEY` | optional second opinion, metered | no |
 
 > **"Variables cannot be added to a Worker that only has static assets."**
 > That error means the Worker has no code for the keys to attach to.
@@ -138,16 +140,31 @@ time and an existing deployment won't see them.
 > the deployed site. The WorldTides key lives there because a leaked tide
 > lookup is harmless; these are not.
 
-### Optional: an AI second opinion (costs money)
+### Optional: a vision model as second opinion
 
-Set `ANTHROPIC_API_KEY` and a vision model is handed the photo *and* your
-catalogue, then arbitrated against Fishial. It can read markings and body
-shape, which helps on lookalikes — the ponyfish especially.
+Set one key and a vision model is handed the photo *and* your catalogue, then
+arbitrated against Fishial. It adds the one thing the free pair can't do: read
+markings, body shape and fin placement to separate lookalikes — the ponyfish
+especially.
 
-It is **off by default and costs roughly 2–3¢ per identification**. The screen
-always shows which path produced an answer — *"fishial + local catalogue"* or
-*"fishial + AI second opinion"* — so a free answer is never mistaken for one
-with a second opinion behind it.
+| Key | Cost | Notes |
+|---|---|---|
+| `GEMINI_API_KEY` | **Free tier** | Google AI Studio. Checked first. |
+| `ANTHROPIC_API_KEY` | ~2–3¢ per call | Used only if no Gemini key is set. |
+
+**One Gemini key can serve several apps.** The key belongs to your Google
+project, not to an application, so the same one already powering a Discord bot
+works here — they simply share the project's quota. If you'd rather be able to
+revoke one without breaking the other, make a second key in the same project;
+it's free and takes a minute. Check your actual limits in
+[AI Studio](https://aistudio.google.com/rate-limit).
+
+If the model errors, times out, or hits a rate limit, the free path answers
+instead — the feature never goes down for want of a second opinion.
+
+The screen always shows which path produced an answer — *"fishial + local
+catalogue"*, *"fishial + gemini"* or *"fishial + claude"* — so a free answer is
+never mistaken for one with a second opinion behind it.
 
 ### Testing it locally
 
@@ -164,6 +181,7 @@ Put the keys in a gitignored `.dev.vars` file for local runs:
 ```
 FISHIAL_API_KEY=...
 FISHIAL_API_SECRET=...
+GEMINI_API_KEY=...
 ```
 
 ---
