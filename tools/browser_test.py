@@ -32,6 +32,15 @@ CHROME = next(
     None,
 )
 
+# Species drawing a silhouette borrowed from another fish, declared in the
+# data as `art: 'placeholder'`. This number may only ever go DOWN: drawing
+# real art and clearing the flag is the only way to lower it. Adding a
+# placeholder beyond the ceiling fails the suite on purpose — the backlog is
+# allowed to be paid off, never to grow.
+#
+# 28 of these arrived with the Leyte island expansion.
+ART_DEBT_MAX = 28
+
 BASE = os.environ.get("APP_BASE", "http://127.0.0.1:8777")
 PORT = 9333
 SHOTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screenshots")
@@ -245,12 +254,31 @@ async def main():
             check("hero art present for every archetype", hero["count"] >= 13, str(hero["count"]))
             check("no hero has ragged rows", not hero["ragged"], ", ".join(hero["ragged"]))
             check("every species renders a hero", not hero["missing"], ", ".join(hero["missing"][:5]))
-            check("most species have real angled art",
-                  hero["withHero"] >= hero["total"] - 5,
-                  f"{hero['withHero']}/{hero['total']} (rest fall back)")
+            # NOT hasHero() — a species given sprite:'perch' because a perch
+            # is roughly the right shape reports hasHero() true, so inference
+            # would hide the backlog exactly as it grew. The flag is declared.
+            debt = await page.eval("""
+                const p = await import('./js/pixel.js');
+                const d = await import('./js/data/index.js');
+                const all = [...d.SPECIES.values()];
+                const placeholders = all.filter(p.usesPlaceholderArt);
+                return {
+                    placeholders: placeholders.length,
+                    total: all.length,
+                    // A placeholder still has to RENDER something.
+                    renders: placeholders.every(s => p.speciesHero(s, { size: 40 }).includes('<svg')),
+                };
+            """)
+            check("the pixel art backlog has not grown",
+                  debt["placeholders"] <= ART_DEBT_MAX,
+                  f"{debt['placeholders']} placeholders, ceiling {ART_DEBT_MAX} — "
+                  f"draw art and clear the flag rather than raising this")
+            check("every placeholder still renders something",
+                  debt["renders"], str(debt))
 
             check("all palettes are 9 valid hex slots", not art["bad"], "; ".join(art["bad"]))
             check("no sprite has ragged rows", not art["ragged"], ", ".join(art["ragged"]))
+
 
             # Every WMO code the providers can return must resolve to a real icon.
             wmo = await page.eval("""
@@ -494,7 +522,7 @@ async def main():
             """)
             check("no dangling species ids", not data["dangling"], ", ".join(data["dangling"][:5]))
             check("no zone species missing from region", not data["orphans"], ", ".join(data["orphans"][:5]))
-            check("catalogue has 40+ species", data["catalogue"] >= 40, str(data["catalogue"]))
+            check("catalogue has 65+ species", data["catalogue"] >= 65, str(data["catalogue"]))
             check("species shared across multiple zones", data["shared"] >= 10,
                   f"only {data['shared']} appear in >1 zone")
             check("barracuda listed in Cancabato Bay", data["cancabatoHasBarracuda"],
@@ -1803,7 +1831,7 @@ async def main():
             """)
             check("info offers three tabs", tabs["threeTabs"] == 3, str(tabs))
             check("gear tab lists gear", tabs["gear"] and tabs["gearCount"] >= 20, str(tabs))
-            check("zones tab lists waters", tabs["zones"] and tabs["zoneCount"] >= 5, str(tabs))
+            check("zones tab lists waters", tabs["zones"] and tabs["zoneCount"] >= 18, str(tabs))
             check("switching back returns to fishes", tabs["backToFishes"], str(tabs))
             check("family filters are fishes-only",
                   tabs["familyChipsOnFishes"] and tabs["familyChipsHidden"], str(tabs))
