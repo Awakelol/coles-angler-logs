@@ -6,7 +6,7 @@
 //
 // Leaflet is vendored in vendor/leaflet so the app has no CDN dependency.
 
-import { getLocation, distanceKm, nearestPlace, geolocationSupported } from '../api/geo.js';
+import { getLocation, nearestPlace, geolocationSupported } from '../api/geo.js';
 import { icon } from '../pixel.js';
 import { fetchWeather } from '../api/weather.js';
 import { placeName } from '../api/place.js';
@@ -162,13 +162,6 @@ export async function mount(root, ctx) {
     });
   };
 
-  for (const btn of root.querySelectorAll('[data-zone]')) {
-    btn.addEventListener('click', () => {
-      const z = zones.find((x) => x.id === btn.dataset.zone);
-      if (z) openZone(z);
-    });
-  }
-
   const container = root.querySelector('#fishMap');
   const hint = root.querySelector('#mapHint');
 
@@ -217,13 +210,31 @@ export async function mount(root, ctx) {
     return { zone, marker };
   });
 
+  // The broadest tier of pins — the ones that ask for the least zoom. Used as
+  // the floor below, so there is always something on the map.
+  const broadestZoom = Math.min(...zones.map((z) => z.minZoom ?? 0));
+
   // Reveal zones progressively: a pin shows once the map is zoomed in far
   // enough for it to be meaningful, so the view never turns into pin soup.
   function syncMarkers() {
     const zoom = map.getZoom();
+
+    // Zoomed out further than any zone asks for, which the map's own minZoom
+    // allows: every pin would fail its test and you'd get bare tiles with
+    // "0 of 21 zones shown". Show the broadest tier instead. Clamping the
+    // ZOOM to fix this was the old approach and it was worse — it cropped the
+    // region to force a pin into view, so "the whole of Leyte" wasn't.
+    //
+    // At that last step out the broad gulf pins do touch, ~25px apart against
+    // a 44px pin. Raising the map's minZoom would separate them, but it would
+    // also crop the island on a landscape phone, where the pane is short
+    // enough to need the wider zoom to fit. Overlap at the extreme beats
+    // cutting the region off at a size people actually use.
+    const floor = zoom < broadestZoom;
+
     let visible = 0;
     for (const { zone, marker } of markers) {
-      const show = zoom >= (zone.minZoom ?? 0);
+      const show = floor ? (zone.minZoom ?? 0) === broadestZoom : zoom >= (zone.minZoom ?? 0);
       if (show) {
         if (!map.hasLayer(marker)) marker.addTo(map);
         visible++;
@@ -245,20 +256,15 @@ export async function mount(root, ctx) {
    * whenever the device won't give one, so the map always shows something
    * useful rather than an arbitrary point of empty water.
    */
-  // The shallowest zone threshold. Fitting the whole region can land below
-  // it — especially in a short, wide map pane — and then NOTHING qualifies to
-  // show, leaving a map with no pins and no explanation.
-  const shallowestZoom = Math.min(...zones.map((z) => z.minZoom ?? 0));
-
   function showWholeRegion() {
     const b = cfg.bounds;
     if (b) {
       const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
-      // Work out the zoom first rather than fitting and correcting afterwards:
-      // fitBounds may animate, so getZoom() straight after still reports the
-      // old value and the clamp silently does nothing.
+      // Whatever zoom actually fits the region, unclamped. If that lands
+      // wider than any pin asks for, syncMarkers shows the broadest tier
+      // rather than the view zooming in and cutting the island off.
       const fitZoom = map.getBoundsZoom(bounds, false, L.point(20, 20));
-      map.setView(bounds.getCenter(), Math.max(fitZoom, shallowestZoom), { animate: false });
+      map.setView(bounds.getCenter(), fitZoom, { animate: false });
     } else {
       const visible = markers.filter(({ zone }) => map.getZoom() >= (zone.minZoom ?? 0));
       if (visible.length) {
@@ -317,10 +323,17 @@ export async function mount(root, ctx) {
 
       // Being far outside the region is worth saying — otherwise the map just
       // looks empty and broken.
+      //
+      // The distance quoted is to the nearest ZONE, not to the region centre.
+      // Those used to disagree: the centre is a single point kept fixed as the
+      // tide-cache key, so once the region grew from one gulf to the whole
+      // island it could be a hundred kilometres from the water nearest you,
+      // and the message put that number next to a claim about zones.
       const near = nearestPlace(ctx.region, fix);
-      const away = Math.round(distanceKm(fix, ctx.region.coords));
-      if (!near || near.km > 60) {
-        hint.textContent = `You're ~${away} km from ${ctx.region.name} — no zones nearby`;
+      if (!near) {
+        hint.textContent = `No ${ctx.region.name} zones to compare against`;
+      } else if (near.km > 60) {
+        hint.textContent = `Nearest is ${near.name}, ~${Math.round(near.km)} km — no zones nearby`;
       } else {
         hint.textContent = `Nearest: ${near.name}, ~${Math.round(near.km)} km`;
       }

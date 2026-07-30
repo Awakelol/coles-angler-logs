@@ -91,7 +91,13 @@ export default {
       water: 'Leyte Gulf',
       name: 'San Pedro Bay',
       type: 'bay',
-      coords: { lat: 11.10, lon: 125.02 },
+      // Mid-basin, between the Tacloban–Palo shore and the Samar side. The pin
+      // used to sit at 11.10/125.02, which is 1.1 km off Tanauan — a pin for
+      // the whole bay parked on one town's shallows, and close enough to the
+      // Tanauan zone's own pin that the two collided from zoom 10 in.
+      // INFERRED from the surrounding coastline, not from a source. Worth a
+      // local check that this is open water and fished as San Pedro Bay.
+      coords: { lat: 11.18, lon: 125.06 },
       minZoom: 8,
       depth: '5–30 m',
       blurb: 'The broad inner basin of the gulf. Mixed mud and sand — the main ground for ponyfish and mojarra volume.',

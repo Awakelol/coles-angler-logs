@@ -2773,6 +2773,50 @@ async def main():
                   all(refused[k] for k in ("coversWest", "coversEast", "coversNorth", "coversSouth")),
                   str(refused))
 
+            # Zoomed all the way out is a place the user can actually get to —
+            # the map's own minZoom allows it — and every zone's minZoom used to
+            # fail there, so it showed bare tiles and "0 of 21 zones shown".
+            # The old fix clamped the ZOOM, which cropped the island instead.
+            empty = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const out = [];
+                for (let z = m.getMinZoom(); z <= m.getMaxZoom(); z++) {
+                    m.setZoom(z, { animate: false });
+                    await new Promise(r => setTimeout(r, 60));
+                    out.push({ z, pins: document.querySelectorAll('.zone-pin').length });
+                }
+                return { bare: out.filter(o => o.pins === 0), tried: out.length };
+            """)
+            check("no zoom level shows an empty map",
+                  not empty["bare"] and empty["tried"] > 1,
+                  f"bare at zoom {[o['z'] for o in empty['bare']]}")
+
+            # 21 pins over one island is only readable if they don't stack. Two
+            # zones 1 km apart is a data mistake, not a rendering one — it means
+            # a pin for a whole bay has been parked on one town's beach.
+            crowd = await page.eval("""
+                const d = await import('./js/data/index.js');
+                const zones = d.zonesFor(d.DEFAULT_REGION_ID);
+                const R = (deg) => deg * Math.PI / 180;
+                const km = (a, b) => Math.hypot(
+                    (a.lat - b.lat) * 111,
+                    (a.lon - b.lon) * 111 * Math.cos(R((a.lat + b.lat) / 2))
+                );
+                const tooClose = [];
+                for (let i = 0; i < zones.length; i++)
+                    for (let j = i + 1; j < zones.length; j++) {
+                        const dist = km(zones[i].coords, zones[j].coords);
+                        // Below ~2.5 km the pins overlap at the zoom where both
+                        // first appear, whichever zoom that is.
+                        if (dist < 2.5) tooClose.push(
+                            `${zones[i].name} / ${zones[j].name} = ${dist.toFixed(1)} km`);
+                    }
+                return tooClose;
+            """)
+            check("no two zone pins sit on top of each other",
+                  not crowd, "; ".join(crowd))
+
             # Map pins must stay horizontal — angled art aliases badly at 34px.
             pin = await page.eval("""
                 const p = await import('./js/pixel.js');
