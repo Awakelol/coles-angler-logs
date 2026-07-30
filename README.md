@@ -1,9 +1,10 @@
 # Cole's Angler Log
 
 A personal fishing companion PWA — species guide, fishing map, tide & weather
-dashboard, and a catch log with personal records. Seeded with **Leyte Gulf,
-Philippines**, but built region-agnostic from the start: adding a new body of
-water is adding a data file, not rewriting code.
+dashboard, and a catch log with personal records. Seeded with **Leyte,
+Philippines** — 68 species across 21 zones in the seven bodies of water that
+surround the island — but built region-agnostic from the start: adding a new
+body of water is adding a data file, not rewriting code.
 
 No build step, no framework, no npm. Plain ES modules, IndexedDB and SVG.
 
@@ -103,7 +104,7 @@ its developer tier for non-commercial use.
 **Your own catalogue does the checking.** Fishial is trained mostly on North
 American and European sportfish, so on an Indo-Pacific fish its top answer can
 be confidently wrong. Catching that needs no AI, only a lookup: *does this
-species occur in Leyte Gulf?* The app already knows — that is what
+species occur in Leyte's waters?* The app already knows — that is what
 `js/data/species/indo-pacific.js` is. So the cross-check costs nothing.
 
 | Fishial says | Result |
@@ -358,8 +359,8 @@ General tips (shown in every region) live in
 ### Add lure / retrieve advice
 
 [`js/data/tactics.js`](js/data/tactics.js) keys advice by **family** (how the
-fish feeds) and **habitat** (how you have to present to it), so ~27 species are
-covered by a dozen entries. A species can override its family default with its
+fish feeds) and **habitat** (how you have to present to it), so all 68 species
+are covered by a dozen entries. A species can override its family default with its
 own `tactics: { lures, retrieve }` block.
 
 ### Add or edit pixel art
@@ -380,6 +381,37 @@ Regenerate the app icons after changing the art:
 python tools/make_icons.py
 ```
 
+`renderSprite` merges runs of one colour along a row into a single `<rect>`
+instead of emitting one per pixel. It cuts a fish from ~430 nodes to ~184,
+which is what makes an Info tab of 68 fish quick to search. It is meant to be
+invisible, and four tests hold it to that — same painted cells, no overlap, no
+two touching rects sharing a fill. If you change the emitter, they will tell
+you whether you changed the picture.
+
+### The pixel art backlog
+
+28 of the 68 species have no art of their own. They borrow the silhouette of a
+fish roughly their shape and declare it:
+
+```js
+art: 'placeholder',
+```
+
+That flag is **declared, not inferred**. `hasHero()` returns true for a
+borrowed sprite, so anything based on it would have quietly hidden this backlog
+exactly as it grew. `usesPlaceholderArt()` reads the flag instead, and
+`ART_DEBT_MAX` in the test suite pins the count at 28.
+
+That number may only ever go **down**. Draw real art, clear the flag, lower the
+ceiling. Adding a 29th placeholder fails the suite on purpose — the backlog is
+allowed to be paid off, never to grow.
+
+To find them:
+
+```bash
+grep -n "art: 'placeholder'" js/data/species/indo-pacific.js
+```
+
 ---
 
 ## Testing
@@ -389,11 +421,21 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 35 checks covering the
-IndexedDB round-trip, sprite/palette integrity, the species-to-zone data model
-(dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
-catch-log flow and stats maths, the species search, and the map's zoom-reveal
-and z-order. Screenshots land in `_screenshots/`.
+Drives real headless Chrome over the DevTools Protocol — 345 checks covering
+the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
+model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
+catch-log flow and stats maths, the species search, the map's zoom-reveal and
+z-order, and the auth and sync paths. Screenshots land in `_screenshots/`.
+
+Some of those checks are **ratchets** rather than assertions — they pin a
+number that is allowed to improve but not to regress, so a shortcut has to be
+taken deliberately:
+
+| Ratchet | Now | Rule |
+|---|---|---|
+| `ART_DEBT_MAX` | 28 placeholder sprites | may only go **down**; draw art and clear the flag |
+| rects per hero sprite | 184 | must stay **under 250**, or the Info tab gets heavy again |
+| zone pin separation | 2.5 km | no two zones may sit closer |
 
 > It uses CDP rather than Chrome's simpler `--dump-dom`, because
 > `--virtual-time-budget` starves IndexedDB callbacks and makes every
@@ -447,10 +489,17 @@ js/
     tactics.js        lure + retrieve advice by family and habitat
     species/          the fish themselves, region-independent
     regions/          places; reference species by id
-  pages/              home, species, map, conditions, log, tips, settings
+  pages/              home, map, conditions, log, info, identify, settings
+  auth/               sign-in, and the PBKDF2 derivation behind username accounts
+worker/               Cloudflare Worker — /api/* only; keys live here, not in js/
 vendor/leaflet/       Leaflet 1.9.4, vendored so there's no CDN dependency
 tools/                sprite authoring, icon generation, browser tests
+docs/                 sourcing notes, with every claim marked cited or inferred
 ```
+
+Species and Tips used to be their own pages; they are now tabs of **Info**.
+`/species` and `/tips` still resolve — old bookmarks and cached shells exist —
+and redirect to the matching tab.
 
 **Storage.** Catches go in IndexedDB, not `localStorage` — photos are stored as
 Blobs, and `localStorage` is strings-only with a ~5 MB cap that one phone photo
@@ -479,9 +528,16 @@ Species data was assembled from:
   lists, and the site currently serves an **incomplete TLS certificate chain**,
   so automated tools may refuse it — open it in a browser.
 - **[FishBase](https://www.fishbase.se/)** — scientific names, families,
-  habitat and size ranges. Every species card links to its FishBase page.
+  habitat and size ranges, and the local-name lists for the species added with
+  the island expansion. Every species card links to its FishBase page.
+  FishBase data is **CC BY-NC 4.0** — fine for personal use, not for commercial
+  use without the FishBase team's agreement.
+- **[`docs/leyte-waters-research.md`](docs/leyte-waters-research.md)** — the
+  sourcing for the expansion from the gulf to the whole island, water by water.
+  Every claim in it is marked **Sourced**, **Verify** or **Gap**, so what is
+  cited and what is inference are separated rather than blended.
 
-Two caveats worth stating plainly:
+Caveats worth stating plainly:
 
 - **The trawl survey under-samples inshore habitat by design.** It sampled open
   gulf bottom, so estuary, mangrove, seagrass and harbour species (barracuda,
@@ -490,6 +546,16 @@ Two caveats worth stating plainly:
 - **No public species list exists for Cancabato Bay specifically.** Its zone
   list is built from the bay's known habitat — roughly 54 ha of seagrass plus
   wharf structure — not from a published inventory. Correct it from experience.
+- **BFAR outranks FishBase, always.** BFAR Region VIII is regional data about
+  these waters; FishBase is a global database. Where they disagree, BFAR wins.
+- **The 28 species added with the island expansion have no BFAR names.** Every
+  local name on them is FishBase's, and *none* has been checked against what
+  fishers here actually say. They are the least trustworthy strings in the app.
+  Correcting one means putting the local name **first** in the list, not
+  appending it — the first name is the one the cards show.
+- **Ormoc Bay is a gap.** No usable public species data was found for it at all.
+  Its zone is habitat inference, and it is the first thing worth correcting
+  from experience.
 
 ## Notes and caveats
 

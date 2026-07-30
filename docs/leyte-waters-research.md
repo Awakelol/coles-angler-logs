@@ -253,3 +253,12 @@ Panaon Island's coastline falls under FMA 8. ✅
 6. Anything from the **BFAR Region VIII provincial fishery offices** for
    [Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-leyte/) and
    [Southern Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-southern-leyte/).
+7. **San Pedro Bay's pin, now at 11.18 / 125.06.** ⚠️ **Verify.** It was at
+   11.10 / 125.02, which is 1.1 km off Tanauan — a pin for the whole bay
+   sitting on one town's shallows, and close enough to the Tanauan zone that
+   the two overlapped on the map. I moved it to what looks like mid-basin from
+   the surrounding coastline. That is **inference, not a source**: worth
+   confirming it is open water and is what people mean by San Pedro Bay.
+8. **The local names on the 28 new species.** Every one is FishBase's, none
+   checked against Leyte usage — the least trustworthy data in the app. A
+   correction means putting the local name **first**, not appending it.
