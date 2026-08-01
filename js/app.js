@@ -19,7 +19,6 @@ import * as mapPage from './pages/map.js';
 import * as conditions from './pages/conditions.js';
 import * as log from './pages/log.js';
 import * as info from './pages/info.js';
-import * as identify from './pages/identify.js';
 import * as settings from './pages/settings.js';
 
 // Untracked local keys first, then anything entered in Settings wins.
@@ -37,15 +36,15 @@ const ROUTES = [
   { path: '/conditions', page: conditions },
   { path: '/log', page: log },
   { path: '/info', page: info },
-  { path: '/identify', page: identify },
   { path: '/settings', page: settings },
 ];
 
-// Species and Tips were merged into Info. Old links still exist in the wild —
-// bookmarks, a home-screen shortcut, an app shell cached before the merge — so
-// they are translated to the equivalent Info tab rather than falling through to
-// Home. replaceState keeps the dead URL out of the back stack.
-const LEGACY_ROUTES = { '/species': 'fishes', '/tips': 'zones' };
+// Species, Tips and Identify were folded into Info. Old links still exist in
+// the wild — bookmarks, a home-screen shortcut, an app shell cached before the
+// merge — so they are translated to the equivalent Info tab rather than
+// falling through to Home. replaceState keeps the dead URL out of the back
+// stack.
+const LEGACY_ROUTES = { '/species': 'fishes', '/tips': 'zones', '/identify': 'photo' };
 
 const main = document.getElementById('main');
 

@@ -101,7 +101,14 @@ returning 401 usually just means "wait".
 
 ## Species identification (photo → name)
 
-Home → **What did I catch?** photographs a fish and names it. Free to run.
+**Info → the camera beside the search box** photographs a fish and names it.
+Free to run.
+
+It sits there rather than on Home because it answers the same question the
+search box does — *which fish is this* — from a picture instead of a name. It is
+**not** a fourth tab: that row is the reference categories you browse, and a
+mode that takes a photo isn't one of them. The old `#/identify` link still
+resolves, redirecting to `#/info?tab=photo`.
 
 ### How it works, and why it's free
 
@@ -463,7 +470,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 376 checks covering
+Drives real headless Chrome over the DevTools Protocol — 385 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

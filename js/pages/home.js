@@ -51,16 +51,6 @@ export function render(ctx) {
             <span class="btn btn--sm btn--primary" style="align-self:flex-start">Add entry</span>
           </a>
 
-          <a class="card" href="#/identify">
-            <div class="row-between">
-              <div>
-                <h2 class="card__title">What did I catch?</h2>
-                <p class="card__sub">Photograph a fish to identify it</p>
-              </div>
-              ${icon('camera', { size: 76, palette: 'slate' })}
-            </div>
-            <span class="btn btn--sm btn--primary" style="align-self:flex-start">Open camera</span>
-          </a>
         </div>
       </div>
     </section>

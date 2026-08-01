@@ -25,6 +25,7 @@ import { speciesHero, renderSprite, icon, SPRITES } from '../pixel.js';
 import { hydratePhotos } from '../api/photos.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
+import { identifyPanelHtml, mountIdentifyPanel } from './identify.js';
 import { zoneSheetHtml, zonePalette, mountZoneSheet } from '../zone-ui.js';
 import { habitatTactics } from '../data/tactics.js';
 import { esc, openSheet } from '../ui.js';
@@ -38,7 +39,16 @@ const TABS = [
   { id: 'zones', label: 'Zones', art: () => icon('wave', { size: 30, palette: 'emerald' }) },
 ];
 
-const isTab = (v) => TABS.some((t) => t.id === v);
+// Photo is a MODE, not a tab. It sits beside the search box rather than in
+// the segmented control because it answers the same question the search box
+// does — which fish is this — just from a picture instead of a name. Putting
+// it in the row of reference categories would have implied it was a fourth
+// body of content to browse, which it isn't.
+//
+// It still travels in the hash as `tab=photo`, so it can be linked to and so
+// the old /identify route has somewhere to redirect.
+const PHOTO = 'photo';
+const isTab = (v) => v === PHOTO || TABS.some((t) => t.id === v);
 
 // ---------------------------------------------------------------------------
 // Fishes
@@ -203,8 +213,14 @@ export function render(ctx) {
             ).join('')}
           </div>
 
-          <input type="search" id="infoSearch" placeholder="Search fishes, gear and waters…"
-                 aria-label="Search information" autocomplete="off">
+          <div class="search-row">
+            <input type="search" id="infoSearch" placeholder="Search fishes, gear and waters…"
+                   aria-label="Search information" autocomplete="off">
+            <button class="search-row__cam" id="infoPhoto" aria-pressed="${tab === PHOTO}"
+                    aria-label="Identify a fish from a photo" title="Identify from a photo">
+              ${icon('camera', { size: 26, palette: 'slate' })}
+            </button>
+          </div>
 
           <div class="chips" id="familyFilters">
             <button class="chip" data-family="" aria-pressed="true">All</button>
@@ -246,6 +262,13 @@ export function mount(root, ctx) {
       b.setAttribute('aria-pressed', String(b.dataset.family === family));
     }
   }
+
+  const photoBtn = root.querySelector('#infoPhoto');
+  // Leaving photo mode has to revoke the blob URL of whatever was shot, and
+  // mode changes use replaceState, so no hashchange comes to do it for us.
+  let releasePhoto = null;
+  // Where the camera returns you to. Photo is a detour, not a destination.
+  let lastTab = tab === PHOTO ? 'fishes' : tab;
 
   const openSpecies = (s) => openSheet(s.common, () => speciesDetailHtml(s, ctx.regionId), mountSheetPhoto(s));
 
@@ -298,6 +321,11 @@ export function mount(root, ctx) {
   }
 
   // --- per-tab renderers ---------------------------------------------------
+
+  function drawPhoto() {
+    results.innerHTML = identifyPanelHtml();
+    releasePhoto = mountIdentifyPanel(results);
+  }
 
   function drawFishes() {
     const shown = species.filter((s) => (!family || s.family === family) && matchesSpecies(s, query));
@@ -466,13 +494,27 @@ export function mount(root, ctx) {
   }
 
   function draw() {
-    filterBar.hidden = tab !== 'fishes';
-    for (const b of tabBar.querySelectorAll('[data-tab]')) {
-      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-    }
-    results.setAttribute('aria-labelledby', `infotab-${tab}`);
+    const photo = tab === PHOTO;
 
-    if (tab === 'gear') drawGear();
+    // The family chips filter fishes, so they go while the camera is up. The
+    // SEARCH BOX STAYS. Hiding it left the camera as an orphaned lozenge in an
+    // empty row, and worse, took away the obvious way out — typing a name is
+    // how you leave photo mode, which only works if the box is still there.
+    filterBar.hidden = photo || tab !== 'fishes';
+    for (const b of tabBar.querySelectorAll('[data-tab]')) {
+      b.setAttribute('aria-selected', String(!photo && b.dataset.tab === tab));
+    }
+    if (photoBtn) photoBtn.setAttribute('aria-pressed', String(photo));
+    results.setAttribute('aria-labelledby', photo ? 'infoPhoto' : `infotab-${tab}`);
+
+    // Whatever was photographed is gone the moment we render over it.
+    if (!photo && releasePhoto) {
+      releasePhoto();
+      releasePhoto = null;
+    }
+
+    if (photo) drawPhoto();
+    else if (tab === 'gear') drawGear();
     else if (tab === 'zones') drawZones();
     else drawFishes();
 
@@ -505,7 +547,18 @@ export function mount(root, ctx) {
   tabBar.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-tab]');
     if (!btn || btn.dataset.tab === tab) return;
+    clearTimeout(typing); // a half-typed word must not redraw over the new tab
     tab = btn.dataset.tab;
+    lastTab = tab;
+    syncHash();
+    draw();
+  });
+
+  // A toggle, not a one-way door: pressing it again puts you back where you
+  // were rather than dumping you on the default tab.
+  photoBtn?.addEventListener('click', () => {
+    clearTimeout(typing);
+    tab = tab === PHOTO ? lastTab : PHOTO;
     syncHash();
     draw();
   });
@@ -518,6 +571,12 @@ export function mount(root, ctx) {
     clearTimeout(typing);
     typing = setTimeout(() => {
       query = norm(search.value.trim());
+      // Typing is a request to browse, which photo mode can't answer — so it
+      // hands you back to the tab you came from rather than swallowing it.
+      if (tab === PHOTO) {
+        tab = lastTab;
+        syncHash();
+      }
       draw();
     }, 120);
   });

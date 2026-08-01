@@ -24,6 +24,13 @@
 // js/identify-verdict.js. An AI second opinion is optional and costs money, so
 // the response says which path ran and the screen repeats it: a free answer
 // must never look like one that had a second opinion behind it.
+//
+// This is no longer a page of its own. It is the photo mode of Info, sitting
+// beside the search box: naming a fish you are holding and looking one up by
+// name are the same question asked two ways, so they belong behind the same
+// control rather than on opposite sides of the app. `/identify` still resolves
+// — it redirects to the mode. What lives here is the panel and its wiring;
+// Info renders it.
 // ---------------------------------------------------------------------------
 
 import { prepareMedia, LIMITS, fmtMB } from '../media.js';
@@ -31,44 +38,42 @@ import { getSpecies, localNames } from '../data/index.js';
 import { speciesHero, icon } from '../pixel.js';
 import { esc, toast, loadingBlock } from '../ui.js';
 
-export function render() {
+/** The panel itself, with no page chrome — Info supplies that. */
+export function identifyPanelHtml() {
   return `
-    <section class="band band--sky">
-      <div class="wrap">
-        <p class="eyebrow">Species recognition</p>
-        <h1 class="display">What did I catch?</h1>
-        <p class="subtitle">
-          Take a photo of the fish and get a name for it — with the local names
-          people here actually use.
-        </p>
+    <div class="section-head" style="margin-top:8px">
+      <h2>What did I catch?</h2>
+      <p>Photograph a fish for a name — with the local ones people here use</p>
+    </div>
+    <div class="card identify">
+      <div class="identify__shot" id="shot">
+        ${icon('camera', { size: 120, palette: 'slate' })}
+        <p class="card__sub">No photo yet</p>
       </div>
-    </section>
 
-    <section class="band band--cream">
-      <div class="wrap">
-        <div class="card identify">
-          <div class="identify__shot" id="shot">
-            ${icon('camera', { size: 120, palette: 'slate' })}
-            <p class="card__sub">No photo yet</p>
-          </div>
-
-          <input type="file" id="fishPhoto" accept="image/*" capture="environment" hidden>
-          <div class="btn-row">
-            <button class="btn btn--primary" id="takePhoto">Take a photo</button>
-            <button class="btn btn--sm" id="clearPhoto" hidden>Clear</button>
-          </div>
-          <p class="field__hint">
-            Fill the frame with the fish, side-on, against a plain background if
-            you can. Photos up to ${esc(fmtMB(LIMITS.imageBytes))}.
-          </p>
-
-          <div id="identifyResult"></div>
-        </div>
+      <input type="file" id="fishPhoto" accept="image/*" capture="environment" hidden>
+      <div class="btn-row">
+        <button class="btn btn--primary" id="takePhoto">Take a photo</button>
+        <button class="btn btn--sm" id="clearPhoto" hidden>Clear</button>
       </div>
-    </section>`;
+      <p class="field__hint">
+        Fill the frame with the fish, side-on, against a plain background if
+        you can. Photos up to ${esc(fmtMB(LIMITS.imageBytes))}.
+      </p>
+
+      <div id="identifyResult"></div>
+    </div>`;
 }
 
-export function mount(root) {
+/**
+ * Wire the panel. Returns a cleanup that revokes the object URL.
+ *
+ * The caller has to invoke it. This used to lean on a one-shot `hashchange`
+ * listener, which worked when leaving the page was the only way out — but Info
+ * switches modes with replaceState, so no hashchange fires and the photo's
+ * blob URL would be held until reload.
+ */
+export function mountIdentifyPanel(root) {
   const input = root.querySelector('#fishPhoto');
   const shot = root.querySelector('#shot');
   const take = root.querySelector('#takePhoto');
@@ -120,7 +125,7 @@ export function mount(root) {
     }
   });
 
-  window.addEventListener('hashchange', release, { once: true });
+  return release;
 }
 
 /** Blob -> base64, without the data: prefix the API doesn't want. */

@@ -1415,19 +1415,31 @@ async def main():
             await page.wait_for("document.querySelector('#takePhoto')", label="identify screen")
 
             cam = await page.eval("""
-                const input = document.getElementById('fishPhoto');
-                const homeLink = () => {
-                    location.hash = '#/';
-                    return new Promise(r => setTimeout(() => r(
-                        document.querySelector('a.card[href="#/identify"]')), 700));
-                };
-                const card = await homeLink();
-                location.hash = '#/identify';
+                // The camera lives beside Info's search box now, not on Home:
+                // naming a fish you are holding and looking one up by name are
+                // the same question, so they sit behind adjacent controls.
+                location.hash = '#/';
                 await new Promise(r => setTimeout(r, 700));
+                const homeCard = document.querySelector('a.card[href="#/identify"]');
+
+                location.hash = '#/identify';   // must still resolve
+                await new Promise(r => setTimeout(r, 900));
+                const input = document.getElementById('fishPhoto');
+                const camBtn = document.getElementById('infoPhoto');
+                const box = document.getElementById('infoSearch');
 
                 return {
-                    onHome: !!card,
-                    homeIcon: !!card && !!card.querySelector('svg'),
+                    goneFromHome: !homeCard,
+                    // The old route redirects into the mode rather than 404ing
+                    // to Home, because bookmarks and cached shells exist.
+                    redirected: location.hash.includes('tab=photo'),
+                    besideSearch: !!camBtn && !!box
+                        && camBtn.closest('.search-row') === box.closest('.search-row'),
+                    camIcon: !!camBtn?.querySelector('svg'),
+                    pressed: camBtn?.getAttribute('aria-pressed'),
+                    // The box stays: typing a name is how you leave photo
+                    // mode, which only works if it's still there.
+                    searchStays: box?.hidden === false,
                     // capture="environment" is what opens the rear camera
                     // directly instead of a file browser on a phone.
                     capture: input?.getAttribute('capture'),
@@ -1439,7 +1451,101 @@ async def main():
                         ?.textContent.trim() === '',
                 };
             """)
-            check("home offers the camera", cam["onHome"] and cam["homeIcon"], str(cam))
+            check("the camera sits beside Info's search box",
+                  cam["besideSearch"] and cam["camIcon"], str(cam))
+            check("the camera is gone from Home", cam["goneFromHome"], str(cam))
+            check("the old /identify link still resolves",
+                  cam["redirected"] and cam["hasButton"], str(cam))
+            check("photo mode reads as on, and keeps the search box",
+                  cam["pressed"] == "true" and cam["searchStays"], str(cam))
+
+            # A detour, not a destination: it must put you back where you were,
+            # not on the default tab.
+            toggle = await page.eval("""
+                location.hash = '#/info?tab=zones';
+                await new Promise(r => setTimeout(r, 900));
+                const cam = document.getElementById('infoPhoto');
+                const box = document.getElementById('infoSearch');
+
+                cam.click();
+                await new Promise(r => setTimeout(r, 500));
+                const inPhoto = {
+                    camera: !!document.getElementById('takePhoto'),
+                    hash: location.hash,
+                    // No reference category is selected while in photo mode —
+                    // it isn't one of them.
+                    anyTabSelected: !!document.querySelector('[data-tab][aria-selected="true"]'),
+                    chipsHidden: document.getElementById('familyFilters').hidden,
+                };
+
+                cam.click();
+                await new Promise(r => setTimeout(r, 500));
+                const afterToggle = {
+                    backTo: document.querySelector('[data-tab][aria-selected="true"]')
+                            ?.dataset.tab,
+                    zonesShown: document.querySelectorAll('.zone-card').length > 0,
+                    pressed: cam.getAttribute('aria-pressed'),
+                };
+
+                // Typing is the other way out: it can't be answered by a
+                // camera, so it hands you back to browsing instead of being
+                // swallowed.
+                cam.click();
+                await new Promise(r => setTimeout(r, 400));
+                // A term that exists on the tab it returns to (zones), so a
+                // legitimate no-match can't be mistaken for a broken handover.
+                box.value = 'sogod';
+                box.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 600));
+                const shown = document.querySelectorAll('.zone-card').length;
+                const typedOut = {
+                    left: !document.getElementById('takePhoto'),
+                    searched: shown > 0 && shown < 21,   // filtered, not just back
+                    shown,
+                    pressed: cam.getAttribute('aria-pressed'),
+                };
+                box.value = '';
+                box.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 400));
+                return { inPhoto, ...afterToggle, typedOut };
+            """)
+            check("the camera opens photo mode from any tab",
+                  toggle["inPhoto"]["camera"] and "tab=photo" in toggle["inPhoto"]["hash"],
+                  str(toggle))
+            check("no reference tab claims to be selected in photo mode",
+                  not toggle["inPhoto"]["anyTabSelected"] and toggle["inPhoto"]["chipsHidden"],
+                  str(toggle))
+            check("pressing it again returns to the tab you left",
+                  toggle["backTo"] == "zones" and toggle["zonesShown"], str(toggle))
+            check("the camera unpresses when you leave",
+                  toggle["pressed"] == "false", str(toggle))
+            check("typing a name leaves photo mode and searches",
+                  toggle["typedOut"]["left"] and toggle["typedOut"]["searched"]
+                  and toggle["typedOut"]["pressed"] == "false", str(toggle["typedOut"]))
+
+            # The panel holds a blob URL for the shot. Mode changes go through
+            # replaceState, so no hashchange arrives to revoke it — Info has to.
+            leak = await page.eval("""
+                const m = await import('./js/pages/identify.js');
+                const host = document.createElement('div');
+                document.body.appendChild(host);
+                host.innerHTML = m.identifyPanelHtml();
+                const release = m.mountIdentifyPanel(host);
+                const revoked = [];
+                const real = URL.revokeObjectURL;
+                URL.revokeObjectURL = (u) => { revoked.push(u); return real.call(URL, u); };
+                const returnsCleanup = typeof release === 'function';
+                release();
+                URL.revokeObjectURL = real;
+                host.remove();
+                return { returnsCleanup, survivedNoPhoto: true };
+            """)
+            check("the photo panel hands back a cleanup",
+                  leak["returnsCleanup"] and leak["survivedNoPhoto"], str(leak))
+
+            # Back into photo mode — the checks below feed it a real image.
+            await page.goto(f"{BASE}/index.html#/info?tab=photo")
+            await page.wait_for("document.querySelector('#fishPhoto')", label="photo mode")
             check("the camera opens straight to the rear lens",
                   cam["capture"] == "environment", str(cam))
             check("it accepts any image", cam["accept"] == "image/*", str(cam))
