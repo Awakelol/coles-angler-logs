@@ -463,7 +463,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 373 checks covering
+Drives real headless Chrome over the DevTools Protocol — 376 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

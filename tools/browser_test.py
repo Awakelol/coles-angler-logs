@@ -2609,6 +2609,27 @@ async def main():
             check("no dead space between map and tab bar",
                   abs(gap["gap"]) <= 2, f"{gap['gap']}px")
 
+            # The map is the only element that could run clean off the window,
+            # and did — every other surface on this screen is inset. The bottom
+            # is exempt on purpose: the tab bar is already a hard edge, checked
+            # directly above.
+            inset = await page.eval("""
+                const map = document.getElementById('fishMap').getBoundingClientRect();
+                const info = document.querySelector('.map-screen__info').getBoundingClientRect();
+                return {
+                    right: Math.round(window.innerWidth - map.right),
+                    left: Math.round(map.left),
+                    top: Math.round(map.top - info.bottom),
+                    w: Math.round(map.width), h: Math.round(map.height),
+                };
+            """)
+            check("the map is inset from the right of the window",
+                  inset["right"] >= 6, f"{inset['right']}px")
+            check("the map is inset from the panel above it",
+                  inset["top"] >= 6, f"{inset['top']}px")
+            check("insetting the map did not collapse it",
+                  inset["w"] > 200 and inset["h"] > 200, str(inset))
+
             check("label shows no coordinates",
                   not place["hasDegrees"] and not place["hasCoords"], str(place["label"]))
 

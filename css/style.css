@@ -1093,12 +1093,33 @@ body:has(.map-screen) { padding-bottom: 0; }
   isolation: isolate;
   z-index: 0;
   min-height: 0; /* let the grid row actually shrink it */
+
+  /* Every other surface on this screen is inset — the weather panel, the
+     cards inside it. The map was the one element running clean off the
+     window, which read as the layout having lost its edge rather than as a
+     deliberate full-bleed. The bottom stays flush: the tab bar is already a
+     hard edge there, and a gap above it would look like a gap, not a margin.
+     Absolutely-positioned children (the locate button, the zone hint) offset
+     from the padding box, so they come in with it. */
+  padding: 10px 12px 0;
 }
 
 #fishMap {
   height: 100%;
   width: 100%;
   background: var(--art-bg);
+  /* Rounded only where the gutter exists, so the corners the map still runs
+     into stay square and it doesn't look like a card floating half off. */
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  /* The left edge meets the sidebar's border — a real boundary, not a window
+     edge, so it stays flush and only the two window-facing sides get the
+     gutter. A little more of it here: there is more room to spend. */
+  #mapWrap { padding: 14px 16px 0 0; }
+  #fishMap { border-radius: 0 var(--radius-sm) 0 0; }
 }
 
 /* Leaflet injects its own controls; keep them in the app's visual language. */

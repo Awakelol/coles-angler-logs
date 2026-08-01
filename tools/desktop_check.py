@@ -79,6 +79,26 @@ async def main():
             check("paging dots are hidden", layout["dotsHidden"], str(layout))
             check("map takes the majority", layout["mapShare"] >= 0.6, str(layout["mapShare"]))
 
+
+            # On a wide window the map's left edge meets the sidebar's border —
+            # a real boundary — so only the two window-facing sides get the
+            # gutter, and the left must stay flush or the border looks orphaned.
+            inset = await ev("""
+                const map = document.getElementById('fishMap').getBoundingClientRect();
+                const side = document.querySelector('.map-screen__info').getBoundingClientRect();
+                return {
+                    right: Math.round(window.innerWidth - map.right),
+                    top: Math.round(map.top),
+                    fromSidebar: Math.round(map.left - side.right),
+                    w: Math.round(map.width),
+                };
+            """)
+            check("the map is inset from the right of the window",
+                  inset["right"] >= 8, f"{inset['right']}px")
+            check("the map is inset from the top", inset["top"] >= 8, f"{inset['top']}px")
+            check("the map still meets the sidebar border",
+                  abs(inset["fromSidebar"]) <= 2, f"{inset['fromSidebar']}px")
+            check("insetting the map did not collapse it", inset["w"] > 400, str(inset))
             zone = await ev("""
                 document.querySelector('.zone-pin').click();
                 await new Promise(r => setTimeout(r, 600));
