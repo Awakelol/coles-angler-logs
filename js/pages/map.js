@@ -14,6 +14,7 @@ import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
 import { zoneMarkerHtml, zoneSheetHtml, mountZoneSheet } from '../zone-ui.js';
 import { mountUserSpots } from '../map-spots.js';
 import { esc, openSheet, toast, loadingBlock, errorBlock, round } from '../ui.js';
+import { prefs } from '../store.js';
 
 let leafletPromise = null;
 
@@ -56,7 +57,13 @@ export function render(ctx) {
 
   return `
     <div class="map-screen">
-      <div class="map-screen__info">
+      <div class="map-screen__info" id="wxDrawer">
+        <!-- Phone only. The weather sits over the foot of the map as a drawer
+             you can pull down for a bigger map, leaving the grip and the place
+             name behind so there is something to pull back up. On a wide
+             window it is a sidebar and this does nothing. -->
+        <button class="wx-grip" id="wxGrip" aria-expanded="true" aria-controls="wxDeck"
+                aria-label="Collapse the weather panel"><span></span></button>
         <div class="map-screen__bar">
           <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
           <!-- Only appears once the weather is showing a tapped zone rather
@@ -88,6 +95,13 @@ export function render(ctx) {
 
       <div id="mapWrap">
         <div id="fishMap" role="application" aria-label="Fishing zone map"></div>
+        <!-- Over the map rather than above it in the layout: this screen is
+             one screenful with no page scroll, and a real row would cost the
+             height the drawer exists to give back. -->
+        <div class="map-filters" id="mapFilters" role="group" aria-label="What to show on the map">
+          <button class="map-filters__btn" data-layer="zones" aria-pressed="true">Zones</button>
+          <button class="map-filters__btn" data-layer="spots" aria-pressed="true">Spots</button>
+        </div>
         <div id="mapHint" class="map-hint"></div>
         ${
           geolocationSupported()
@@ -286,8 +300,19 @@ export async function mount(root, ctx) {
 
   // Reveal zones progressively: a pin shows once the map is zoomed in far
   // enough for it to be meaningful, so the view never turns into pin soup.
+  // Filter state. Persisted: someone who fishes by their own marks shouldn't
+  // have to switch the region's zones off on every visit.
+  let showZones = prefs.get('mapShowZones', true) !== false;
+  let showSpots = prefs.get('mapShowSpots', true) !== false;
+
   function syncMarkers() {
     const zoom = map.getZoom();
+
+    if (!showZones) {
+      for (const { marker } of markers) if (map.hasLayer(marker)) map.removeLayer(marker);
+      hint.textContent = `Zones hidden — ${markers.length} in this region`;
+      return;
+    }
 
     // Zoomed out further than any zone asks for, which the map's own minZoom
     // allows: every pin would fail its test and you'd get bare tiles with
@@ -466,7 +491,137 @@ export async function mount(root, ctx) {
   if (geolocationSupported()) locate({ silent: true });
 
   // Your own marks, on top of the region's zones.
-  const userSpots = mountUserSpots(L, map, ctx.regionId);
+  const userSpots = mountUserSpots(L, map, ctx.regionId, { visible: showSpots });
+
+  // --- layer filters -------------------------------------------------------
+
+  const filters = root.querySelector('#mapFilters');
+  filters?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-layer]');
+    if (!btn) return;
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(on));
+    if (btn.dataset.layer === 'zones') {
+      showZones = on;
+      prefs.set('mapShowZones', on);
+      syncMarkers();
+    } else {
+      showSpots = on;
+      prefs.set('mapShowSpots', on);
+      userSpots.setVisible(on);
+    }
+  });
+  for (const btn of filters?.querySelectorAll('[data-layer]') || []) {
+    btn.setAttribute('aria-pressed',
+      String(btn.dataset.layer === 'zones' ? showZones : showSpots));
+  }
+
+  // --- the weather drawer (phone only) -------------------------------------
+  //
+  // On a phone the weather sits over the foot of the map and pulls down out of
+  // the way, leaving its grip and the place name behind. The map is the reason
+  // this screen exists; the forecast is what you glance at before deciding to
+  // look at it. A fixed split made both worse on a short phone.
+  //
+  // The drag is hand-rolled for the same reason the long-press is: a finger on
+  // the grip has to be told apart from a finger scrolling the panel's own
+  // contents, and no built-in gesture knows the difference.
+
+  const drawer = root.querySelector('#wxDrawer');
+  const grip = root.querySelector('#wxGrip');
+
+  if (drawer && grip) {
+    // How much stays on screen when it is down. Measured rather than guessed:
+    // a long place name wraps the bar and a hardcoded value would clip it.
+    const measurePeek = () => {
+      const bar = root.querySelector('.map-screen__bar');
+      if (!bar) return 56;
+      const top = drawer.getBoundingClientRect().top;
+      return Math.ceil(bar.getBoundingClientRect().bottom - top + 8);
+    };
+    const screen = root.querySelector('.map-screen');
+    const applyPeek = () => drawer.style.setProperty('--wx-peek', `${measurePeek()}px`);
+
+    // How much of the map the drawer is covering right now, so the locate
+    // button and the zone hint can sit above it instead of behind it.
+    const applyVisible = () => {
+      const px = collapsed ? measurePeek() : Math.round(drawer.getBoundingClientRect().height);
+      screen?.style.setProperty('--wx-visible', `${px}px`);
+    };
+
+    let collapsed = prefs.get('mapDrawerDown', false) === true;
+    const setCollapsed = (next, remember = true) => {
+      collapsed = next;
+      applyPeek();
+      drawer.classList.toggle('is-collapsed', collapsed);
+      grip.setAttribute('aria-expanded', String(!collapsed));
+      grip.setAttribute('aria-label',
+        collapsed ? 'Expand the weather panel' : 'Collapse the weather panel');
+      applyVisible();
+      if (remember) prefs.set('mapDrawerDown', collapsed);
+      // Leaflet caches its size; the map's visible area just changed.
+      setTimeout(() => map.invalidateSize(), 260);
+    };
+
+    // The bar's height isn't final until the place name has resolved.
+    applyPeek();
+    setTimeout(() => { applyPeek(); applyVisible(); }, 800);
+    setCollapsed(collapsed, false);
+
+    let dragging = false;
+    let startY = 0;
+    let startCollapsed = false;
+    let dy = 0;
+    let moved = false;
+
+    const travel = () => Math.max(1, drawer.getBoundingClientRect().height - measurePeek());
+
+    grip.addEventListener('pointerdown', (e) => {
+      if (wideScreen()) return;
+      dragging = true;
+      moved = false;
+      startY = e.clientY;
+      startCollapsed = collapsed;
+      dy = 0;
+      grip.setPointerCapture(e.pointerId);
+      drawer.classList.add('is-dragging');
+    });
+
+    grip.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const max = travel();
+      // Clamped both ways: dragging past either end should feel like the end,
+      // not detach the panel from the bottom of the screen.
+      dy = Math.min(max, Math.max(0, (startCollapsed ? max : 0) + (e.clientY - startY)));
+      if (Math.abs(e.clientY - startY) > 4) moved = true;
+      drawer.style.transform = `translateY(${dy}px)`;
+    });
+
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      try { grip.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
+      drawer.classList.remove('is-dragging');
+      drawer.style.transform = '';
+      // A tap toggles; a drag settles wherever it passed halfway.
+      setCollapsed(moved ? dy > travel() / 2 : !collapsed);
+    };
+    grip.addEventListener('pointerup', endDrag);
+    grip.addEventListener('pointercancel', endDrag);
+
+    grip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(!collapsed); }
+    });
+
+    // Crossing the desktop breakpoint changes what the panel even is.
+    const wide = matchMedia('(min-width: 900px)');
+    wide.addEventListener('change', () => {
+      drawer.style.transform = '';
+      applyPeek();
+    });
+
+    container._wxDrawer = { setCollapsed, isCollapsed: () => collapsed, measurePeek };
+  }
 
   // Handle for the browser test suite (tools/browser_test.py).
   container._leafletMap = map;

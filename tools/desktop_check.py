@@ -99,6 +99,54 @@ async def main():
             check("the map still meets the sidebar border",
                   abs(inset["fromSidebar"]) <= 2, f"{inset['fromSidebar']}px")
             check("insetting the map did not collapse it", inset["w"] > 400, str(inset))
+            # The drawer is a phone answer to a phone problem. On a wide
+            # window the panel is a sidebar covering no part of the map, so
+            # there is nothing to pull down and no grip to pull it with.
+            sidebar = await ev("""
+                const d = document.getElementById('wxDrawer');
+                const grip = document.getElementById('wxGrip');
+                const cs = getComputedStyle(d);
+                const map = document.getElementById('fishMap').getBoundingClientRect();
+                const box = d.getBoundingClientRect();
+                return {
+                    inFlow: cs.position === 'static',
+                    gripHidden: getComputedStyle(grip).display === 'none',
+                    notCollapsed: !d.classList.contains('is-collapsed'),
+                    noTransform: cs.transform === 'none',
+                    // Beside the map, not over it.
+                    besideNotOver: box.right <= map.left + 2,
+                    lift: cs.getPropertyValue('--wx-visible').trim(),
+                };
+            """)
+            check("the weather is a sidebar, not a drawer, on desktop",
+                  sidebar["inFlow"] and sidebar["gripHidden"], str(sidebar))
+            check("the sidebar sits beside the map rather than over it",
+                  sidebar["besideNotOver"] and sidebar["noTransform"], str(sidebar))
+
+            # The filters are for both layouts, unlike the drawer.
+            filters = await ev("""
+                const zones = () => document.querySelectorAll('.zone-pin').length;
+                const btn = (n) => document.querySelector(`[data-layer="${n}"]`);
+                if (!btn('zones')) return { present: false };
+                const before = zones();
+                btn('zones').click();
+                await new Promise(r => setTimeout(r, 300));
+                const off = zones();
+                btn('zones').click();
+                await new Promise(r => setTimeout(r, 300));
+                return { present: true, before, off, back: zones(),
+                         overMap: (() => {
+                             const f = document.getElementById('mapFilters').getBoundingClientRect();
+                             const m = document.getElementById('fishMap').getBoundingClientRect();
+                             return f.top >= m.top - 2 && f.left >= m.left - 2
+                                 && f.right <= m.right + 2;
+                         })() };
+            """)
+            check("the layer filters are on desktop too",
+                  filters["present"] and filters["overMap"], str(filters))
+            check("the desktop Zones filter works",
+                  filters["off"] == 0 and filters["back"] == filters["before"], str(filters))
+
             zone = await ev("""
                 document.querySelector('.zone-pin').click();
                 await new Promise(r => setTimeout(r, 600));

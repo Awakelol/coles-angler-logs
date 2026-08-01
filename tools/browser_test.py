@@ -2578,8 +2578,10 @@ async def main():
                 return {
                     exists: !!screen,
                     noZoneList: !document.querySelector('[data-zone]'),
-                    // Stacked on a phone: info above, map below.
-                    stacked: ir.bottom <= wr.top + 2,
+                    // On a phone the weather is a drawer OVER the foot of the
+                    // map, not a row above it — the map gets the whole screen.
+                    overlays: ir.top > wr.top + 20 && ir.bottom <= wr.bottom + 2,
+                    outOfFlow: getComputedStyle(info).position === 'absolute',
                     mapShare: wr.height / r.height,
                     // The whole thing must fit the viewport, not push a scroll.
                     fitsViewport: r.height <= window.innerHeight + 2,
@@ -2589,9 +2591,10 @@ async def main():
             """)
             check("map screen is a single layout", layout["exists"] and layout["noZoneList"],
                   str(layout))
-            check("phone layout stacks info above map", layout["stacked"], str(layout))
-            check("map takes the larger share",
-                  0.5 <= layout["mapShare"] <= 0.75, f"{layout['mapShare']:.2f}")
+            check("the weather drawer sits over the foot of the map",
+                  layout["overlays"] and layout["outOfFlow"], str(layout))
+            check("the map gets the whole screen on a phone",
+                  layout["mapShare"] >= 0.95, f"{layout['mapShare']:.2f}")
             check("screen fits the viewport", layout["fitsViewport"], str(layout))
             check("topbar height is measured, not guessed",
                   layout["topbarVar"].endswith("px"), str(layout["topbarVar"]))
@@ -2721,18 +2724,18 @@ async def main():
             # directly above.
             inset = await page.eval("""
                 const map = document.getElementById('fishMap').getBoundingClientRect();
-                const info = document.querySelector('.map-screen__info').getBoundingClientRect();
+                const screen = document.querySelector('.map-screen').getBoundingClientRect();
                 return {
                     right: Math.round(window.innerWidth - map.right),
                     left: Math.round(map.left),
-                    top: Math.round(map.top - info.bottom),
+                    fromScreenTop: Math.round(map.top - screen.top),
                     w: Math.round(map.width), h: Math.round(map.height),
                 };
             """)
             check("the map is inset from the right of the window",
                   inset["right"] >= 6, f"{inset['right']}px")
-            check("the map is inset from the panel above it",
-                  inset["top"] >= 6, f"{inset['top']}px")
+            check("the map is inset from the top of the screen",
+                  inset["fromScreenTop"] >= 6, f"{inset['fromScreenTop']}px")
             check("insetting the map did not collapse it",
                   inset["w"] > 200 and inset["h"] > 200, str(inset))
 
@@ -3492,6 +3495,137 @@ async def main():
             check("removing a spot hides it", owners["afterDelete"] == 1, str(owners))
             check("spots carry the shape sync will need",
                   owners["stamped"], str(owners))
+
+            # --- the weather drawer, and the layer filters -------------------
+            print("\nMap drawer and filters")
+
+            drawer = await page.eval("""
+                await new Promise(r => setTimeout(r, 400));
+                const el = document.querySelector('#fishMap');
+                const d = document.getElementById('wxDrawer');
+                const grip = document.getElementById('wxGrip');
+                const locate = document.querySelector('.map-locate');
+                const api = el._wxDrawer;
+
+                api.setCollapsed(false);
+                await new Promise(r => setTimeout(r, 400));
+                const upTop = d.getBoundingClientRect().top;
+                const locateUp = locate?.getBoundingClientRect().bottom;
+
+                api.setCollapsed(true);
+                await new Promise(r => setTimeout(r, 500));
+                const box = d.getBoundingClientRect();
+                const g = grip.getBoundingClientRect();
+                const atGrip = document.elementFromPoint(g.left + g.width / 2,
+                                                         g.top + g.height / 2);
+                return {
+                    upTop: Math.round(upTop),
+                    downTop: Math.round(box.top),
+                    // Still on screen when down — a drawer you cannot grab is a
+                    // panel you have destroyed.
+                    stillShowing: Math.round(window.innerHeight - box.top),
+                    gripHittable: !!atGrip && !!atGrip.closest('#wxGrip'),
+                    peek: getComputedStyle(d).getPropertyValue('--wx-peek').trim(),
+                    // The locate button must not end up buried behind it.
+                    locateUpAbove: locateUp != null && locateUp <= upTop + 2,
+                    locateDownAbove: locate
+                        ? locate.getBoundingClientRect().bottom <= box.top + 2 : true,
+                    remembered: JSON.parse(localStorage.getItem('angler.prefs') || '{}')
+                                    .mapDrawerDown,
+                };
+            """)
+            check("the drawer pulls down to enlarge the map",
+                  drawer["downTop"] > drawer["upTop"] + 40, str(drawer))
+            check("a strip of the drawer stays visible to pull back up",
+                  20 <= drawer["stillShowing"] <= 200 and drawer["gripHittable"], str(drawer))
+            check("the peek height is measured, not guessed",
+                  drawer["peek"].endswith("px") and drawer["peek"] != "0px", str(drawer))
+            check("the locate button stays clear of the drawer",
+                  drawer["locateUpAbove"] and drawer["locateDownAbove"], str(drawer))
+            check("the drawer remembers where you left it",
+                  drawer["remembered"] is True, str(drawer))
+
+            # Dragging the grip, not just calling the API.
+            dragged = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const grip = document.getElementById('wxGrip');
+                const d = document.getElementById('wxDrawer');
+                el._wxDrawer.setCollapsed(false);
+                await new Promise(r => setTimeout(r, 400));
+
+                const g = grip.getBoundingClientRect();
+                const x = g.left + g.width / 2;
+                const y = g.top + g.height / 2;
+                const fire = (t, cy) => grip.dispatchEvent(new PointerEvent(t, {
+                    bubbles: true, clientX: x, clientY: cy, button: 0, pointerId: 7,
+                }));
+                grip.setPointerCapture = () => {};
+                grip.releasePointerCapture = () => {};
+
+                fire('pointerdown', y);
+                fire('pointermove', y + 200);
+                fire('pointerup', y + 200);
+                await new Promise(r => setTimeout(r, 500));
+                return { collapsed: el._wxDrawer.isCollapsed(),
+                         hasClass: d.classList.contains('is-collapsed') };
+            """)
+            check("dragging the grip down collapses the drawer",
+                  dragged["collapsed"] and dragged["hasClass"], str(dragged))
+
+            filtered = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                el._wxDrawer.setCollapsed(true);
+                await new Promise(r => setTimeout(r, 300));
+
+                const { store } = await import('./js/store.js');
+                // Whoever is signed in by this point in the suite — a spot
+                // filed under null would be correctly invisible to them, which
+                // is the scoping working, not the filter failing.
+                const { currentUser } = await import('./js/auth.js');
+                await store.saveSpot({ userId: currentUser()?.id || null, regionId: 'leyte',
+                                       lat: 11.0, lon: 125.0, name: 'Filter test' });
+                await el._userSpots.reload();
+                await new Promise(r => setTimeout(r, 200));
+
+                const zones = () => document.querySelectorAll('.zone-pin').length;
+                const spots = () => document.querySelectorAll('.my-spot-pin').length;
+                const btn = (n) => document.querySelector(`[data-layer="${n}"]`);
+                const start = { zones: zones(), spots: spots() };
+
+                btn('zones').click();
+                await new Promise(r => setTimeout(r, 300));
+                const noZones = { zones: zones(), spots: spots(),
+                                  pressed: btn('zones').getAttribute('aria-pressed') };
+
+                btn('spots').click();
+                await new Promise(r => setTimeout(r, 300));
+                const neither = { zones: zones(), spots: spots() };
+
+                btn('zones').click();
+                btn('spots').click();
+                await new Promise(r => setTimeout(r, 400));
+                const both = { zones: zones(), spots: spots() };
+
+                await store.clearSpots();
+                await el._userSpots.reload();
+                return { start, noZones, neither, both,
+                         remembered: JSON.parse(localStorage.getItem('angler.prefs') || '{}') };
+            """)
+            check("both layers start on",
+                  filtered["start"]["zones"] > 0 and filtered["start"]["spots"] > 0,
+                  str(filtered))
+            check("the Zones button hides the zone pins",
+                  filtered["noZones"]["zones"] == 0
+                  and filtered["noZones"]["spots"] == filtered["start"]["spots"]
+                  and filtered["noZones"]["pressed"] == "false", str(filtered))
+            check("the Spots button hides your own pins",
+                  filtered["neither"]["spots"] == 0, str(filtered))
+            check("turning them back on restores both",
+                  filtered["both"]["zones"] > 0 and filtered["both"]["spots"] > 0,
+                  str(filtered))
+            check("the filters are remembered",
+                  "mapShowZones" in filtered["remembered"]
+                  and "mapShowSpots" in filtered["remembered"], str(filtered["remembered"]))
 
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")

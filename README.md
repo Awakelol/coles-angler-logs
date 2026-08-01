@@ -363,6 +363,25 @@ restores the wrong position. `mountZoneSheet` in
 [`js/zone-ui.js`](js/zone-ui.js) swaps the contents of the open one instead,
 and works unchanged in the phone sheet, the desktop sidebar and Info › Zones.
 
+### The map screen
+
+The map gets the whole screen. On a **phone** the weather is a drawer over the
+foot of it: drag the grip down for a bigger map and it leaves the grip and the
+place name behind, so there is something to pull back up. Where you left it is
+remembered. On a **wide window** it is a sidebar instead — the drawer is a
+phone answer to a phone problem, and a wide window has room for both.
+
+The peek height is measured from the real elements rather than hardcoded,
+because a long place name wraps the bar and a fixed value would either clip it
+or leave a gap. The locate button and the zone hint ride above whatever the
+drawer is covering (`--wx-visible`), or the drawer would bury the control you
+press to find yourself.
+
+Two filter buttons float over the top of the map on **both** layouts — Zones
+and Spots — and are remembered. They are over the map rather than in a row
+above it because this screen is one screenful with no page scroll, and a real
+row would cost the height the drawer exists to give back.
+
 ### Your own spots
 
 Long-press anywhere on the map (right-click on a desktop) to drop a mark, name
@@ -488,7 +507,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 401 checks covering
+Drives real headless Chrome over the DevTools Protocol — 412 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

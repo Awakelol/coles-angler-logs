@@ -903,31 +903,67 @@ img.is-video ~ .play-badge { content: ''; }
 body:has(.map-screen) { padding-bottom: 0; }
 
 .map-screen {
+  position: relative;      /* the phone drawer positions against this */
   display: grid;
-  /* A fixed 40/60 split, not `auto` for the info row. With `auto` the panel
-     sized to its content and left the map a sliver — and Leaflet initialising
-     into a near-zero-height box renders no tiles at all. The panel scrolls
-     internally instead. */
-  /* The panel takes the height it actually needs; the map is guaranteed at
-     least 55%. A fixed ratio was brittle — tuned to fit one phone height, it
-     clipped the forecast on anything shorter. This lands near 40/60 on a
-     typical phone and simply gives the map more when the panel needs less. */
-  grid-template-rows: minmax(0, auto) minmax(52%, 1fr);
+  /* The map gets the whole screen. On a phone the weather is lifted out of
+     the flow into a drawer over the foot of it (below), so there is no second
+     row to size — which is also what stopped the old split from being a
+     compromise: the panel needed room for a forecast, the map needed room to
+     be a map, and on a short phone neither won. */
+  grid-template-rows: minmax(0, 1fr);
   height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-h) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
   margin-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
 }
 
 .map-screen__info {
-  padding: 10px 12px 8px;
+  /* Out of the grid flow entirely, so #mapWrap fills the single row. */
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 5;              /* over #mapWrap, which sets z-index 0 */
+  max-height: 66%;
+  padding: 0 12px 8px;
   background: var(--band-sky);
-  border-bottom: var(--border-w) solid var(--line);
+  border-top: var(--border-w) solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* Collapsed leaves --wx-peek showing: the grip and the place name. Measured
+     in JS from the real elements rather than guessed, because the place name
+     line wraps differently with a long name and a hardcoded value would
+     either clip it or leave a gap. */
+  transform: translateY(0);
+  transition: transform .24s cubic-bezier(.22, .61, .36, 1);
 }
+.map-screen__info.is-collapsed {
+  transform: translateY(calc(100% - var(--wx-peek, 56px)));
+}
+/* Mid-drag JS drives the transform directly; a transition would lag the finger. */
+.map-screen__info.is-dragging { transition: none; }
+
+/* The pull handle. Sticky so it stays reachable when the drawer's own content
+   is scrolled — otherwise scrolling the forecast takes the grip away with it. */
+.wx-grip {
+  position: sticky; top: 0; z-index: 1;
+  flex: none;
+  display: grid; place-items: center;
+  height: 26px;
+  margin: 0 -12px;
+  padding: 0 12px;
+  width: calc(100% + 24px);
+  border: 0; background: var(--band-sky);
+  cursor: grab;
+  touch-action: none;      /* the drag is ours, not the browser's scroll */
+}
+.wx-grip:active { cursor: grabbing; }
+.wx-grip span {
+  display: block; width: 42px; height: 5px; border-radius: 99px;
+  background: var(--ink-30);
+}
+.wx-grip:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: -4px; }
 /* Location on the left, the link through to tides on the right. Inline rather
    than a full-width button below the forecast: on a 780px viewport that button
    was the row that pushed the strip out of sight, and a text link costs nothing
@@ -1089,12 +1125,21 @@ body:has(.map-screen) { padding-bottom: 0; }
     grid-template-rows: minmax(0, 1fr);
     grid-template-columns: minmax(340px, 34%) minmax(0, 1fr);
   }
+  /* Back to a sidebar. The drawer is a phone answer to a phone problem —
+     a wide window has room for both and nothing to reclaim. */
   .map-screen__info {
-    border-bottom: 0;
+    position: static;
+    transform: none;
+    max-height: none;
+    border-top: 0;
+    border-radius: 0;
     border-right: var(--border-w) solid var(--line);
     padding: 18px 16px;
     gap: 12px;
   }
+  .wx-grip { display: none; }
+  /* The sidebar covers no part of the map, so nothing needs lifting. */
+  .map-screen { --wx-visible: 0px; }
   /* Room to stack on a wide window, so the deck stops being a carousel. */
   .wx-deck {
     display: block;
@@ -1129,8 +1174,11 @@ body:has(.map-screen) { padding-bottom: 0; }
      deliberate full-bleed. The bottom stays flush: the tab bar is already a
      hard edge there, and a gap above it would look like a gap, not a margin.
      Absolutely-positioned children (the locate button, the zone hint) offset
-     from the padding box, so they come in with it. */
-  padding: 10px 12px 0;
+     from the padding box, so they come in with it — but that also means
+     anything measured from the TOP has to add the gutter back, or it floats
+     in the gap above the map instead of sitting on it. Hence the variable. */
+  --map-gutter-top: 10px;
+  padding: var(--map-gutter-top) 12px 0;
 }
 
 #fishMap {
@@ -1147,7 +1195,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   /* The left edge meets the sidebar's border — a real boundary, not a window
      edge, so it stays flush and only the two window-facing sides get the
      gutter. A little more of it here: there is more room to spend. */
-  #mapWrap { padding: 14px 16px 0 0; }
+  #mapWrap { --map-gutter-top: 14px; padding: var(--map-gutter-top) 16px 0 0; }
   #fishMap { border-radius: 0 var(--radius-sm) 0 0; }
 }
 
@@ -1174,6 +1222,36 @@ body:has(.map-screen) { padding-bottom: 0; }
   cursor: pointer;
   transition: transform .12s;
 }
+/* Layer filters, floated over the top of the map. Centred: the zoom control
+   owns the top-left and the locate button the bottom-right, and squeezing a
+   third control against either was worse than using the empty middle. */
+.map-filters {
+  position: absolute;
+  top: calc(var(--map-gutter-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;            /* over Leaflet's panes, under its popups (1000) */
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 99px;
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  box-shadow: var(--shadow);
+  max-width: calc(100% - 24px);
+}
+.map-filters__btn {
+  font-family: inherit; font-size: 12px; font-weight: 900;
+  letter-spacing: .03em;
+  padding: 7px 14px;
+  border: 0; border-radius: 99px;
+  background: none; color: var(--ink-30);
+  cursor: pointer; white-space: nowrap;
+  transition: background .16s ease, color .16s ease;
+}
+.map-filters__btn[aria-pressed="true"] { background: var(--sky-deep); color: var(--on-accent); }
+.map-filters__btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+
 .zone-pin:hover { transform: translateY(-2px) scale(1.06); }
 .zone-pin svg { width: 32px; height: auto; }
 
@@ -1225,7 +1303,9 @@ body:has(.map-screen) { padding-bottom: 0; }
 /* "Centre on me" button. Sits above Leaflet's own controls (z-index 800) but
    inside #mapWrap's isolated stacking context, so it can't cover the tab bar. */
 .map-locate {
-  position: absolute; right: 12px; bottom: 12px; z-index: 900;
+  position: absolute; right: 12px; z-index: 900;
+  bottom: calc(12px + var(--wx-visible, 0px));
+  transition: bottom .24s cubic-bezier(.22, .61, .36, 1);
   width: 46px; height: 46px;
   display: grid; place-items: center;
   border: var(--border-w) solid var(--line); border-radius: 50%;
@@ -1247,8 +1327,15 @@ body:has(.map-screen) { padding-bottom: 0; }
   box-shadow: 0 0 0 2px var(--line);
 }
 
+/* Both bottom controls ride above whatever the drawer is currently covering.
+   Without this the locate button ends up half-buried behind it — the drawer
+   would have taken away the control you press to find yourself. --wx-visible
+   is set by map.js on .map-screen and is 0 on a wide window, where the panel
+   is a sidebar and covers nothing. */
 .map-hint {
-  position: absolute; left: 12px; bottom: 12px; z-index: 500;
+  position: absolute; left: 12px; z-index: 500;
+  bottom: calc(12px + var(--wx-visible, 0px));
+  transition: bottom .24s cubic-bezier(.22, .61, .36, 1);
   background: var(--invert-bg); color: var(--invert-fg);
   font-size: 11.5px; font-weight: 800;
   padding: 7px 13px; border-radius: 999px;

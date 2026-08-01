@@ -85,8 +85,10 @@ function spotMarkerHtml(spot) {
  * @param {string} regionId spots are per region as well as per user
  * @returns {{destroy: Function, reload: Function}}
  */
-export function mountUserSpots(L, map, regionId) {
-  const layer = L.layerGroup().addTo(map);
+export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
+  const layer = L.layerGroup();
+  let shown = visible;
+  if (shown) layer.addTo(map);
   const container = map.getContainer();
 
   const userId = () => currentUser()?.id || null;
@@ -210,6 +212,9 @@ export function mountUserSpots(L, map, regionId) {
   };
 
   const onDown = (e) => {
+    // Adding while the layer is filtered off would drop a pin the user cannot
+    // see, and look like nothing happened.
+    if (!shown) return;
     // Only a primary press, and never on something already on the map — a long
     // press on a zone pin is someone hesitating over it, not asking for a
     // second pin on top.
@@ -244,12 +249,22 @@ export function mountUserSpots(L, map, regionId) {
   const onContextMenu = (e) => e.preventDefault();
   container.addEventListener('contextmenu', onContextMenu);
   // A mouse has no long press worth making; right-click is the same intent.
-  map.on('contextmenu', (e) => askToAdd(e.latlng));
+  map.on('contextmenu', (e) => { if (shown) askToAdd(e.latlng); });
 
   reload();
 
   return {
     reload,
+    /** Hidden spots stay loaded — the filter is a view, not a delete. */
+    setVisible(next) {
+      shown = !!next;
+      if (shown) layer.addTo(map);
+      else {
+        map.closePopup();
+        layer.remove();
+      }
+    },
+    count: () => layer.getLayers().length,
     destroy() {
       cancel();
       container.removeEventListener('pointerdown', onDown);
