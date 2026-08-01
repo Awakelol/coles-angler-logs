@@ -931,6 +931,30 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 .map-screen__link:hover { text-decoration: underline; }
 
+/* The "you are reading another place's weather" marker. Sits between the
+   place name and the tides link, and is only in the flow while a zone is
+   selected — the label ellipsises to make room rather than the bar wrapping,
+   which would push the map out of line with the tab bar. */
+.map-screen__reset {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--paper, #fff);
+  background: var(--sky-deep);
+  /* Baseline alignment on a round button leaves it sitting low next to text. */
+  align-self: center;
+}
+.map-screen__reset:hover { filter: brightness(1.15); }
+.map-screen__reset:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: 2px; }
+
 /* The provider/updated line is useful on the Conditions page but is pure
    overhead here, where every pixel is contested. */
 .map-screen__info #mapWeather .field__hint { display: none; }

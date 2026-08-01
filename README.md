@@ -46,6 +46,13 @@ the device.
 Open-Meteo rather than OpenWeather so the dashboard is live the moment you open
 it. Only tides need you to sign up.
 
+The map's weather follows what you tap: press a zone pin and the panel above
+the map switches to that zone's forecast, with a **&times;** next to the place
+name to hand it back to you. Leyte is 150 km end to end, so the conditions
+where you're standing can be no guide to the water you were thinking of running
+out to. Forecasts are cached for ten minutes in memory, so browsing the zones
+doesn't fire a request per tap.
+
 ### Getting a tide key
 
 There is no genuinely free global tide API — all of them want a key. Pick one:
@@ -320,6 +327,7 @@ In the same file, add to the `zones` array:
 {
   id: 'z-my-spot',
   name: 'My spot',
+  water: 'Sogod Bay',           // groups the zone under a heading in Info
   type: 'reef',                 // key from HABITAT_TACTICS in js/data/tactics.js
   coords: { lat: 11.0, lon: 125.5 },
   minZoom: 11,                  // pin appears at this zoom and closer
@@ -331,7 +339,31 @@ In the same file, add to the `zones` array:
 ```
 
 `minZoom` is what makes the map reveal detail as you zoom in — broad offshore
-grounds use a low value, small creeks a high one.
+grounds use a low value, small creeks a high one. Zoom out past every zone's
+`minZoom` and the broadest tier shows anyway, so the map is never blank.
+
+`coords` is also the zone's weather: tapping its pin swings the map's forecast
+panel onto that spot. Keep two zones at least 2.5 km apart or their pins
+overlap — a test enforces this.
+
+### Where the map may go, and what counts as "here"
+
+`map.bounds` frames the region. `map.panBounds` is a second, much wider box —
+the **country** — and does two jobs:
+
+- The map cannot be dragged outside it. Without that you can pan off into empty
+  ocean with nothing on screen to say which way back, requesting tiles for
+  places the app has nothing to say about.
+- It is what counts as being in the area. A fix inside it is used as-is, even
+  600 km from the nearest zone — Manila is somewhere this app can sensibly
+  answer for. A fix outside it falls back to `coords`, because a five-day
+  forecast for another hemisphere next to a map of Leyte helps nobody.
+
+Omit `panBounds` and neither restriction applies.
+
+`coords` is the region's home: where weather and tides point when there's no
+usable fix. Make it a **port, not open water** — it is also the tide cache key,
+and a named landing is what tide predictions are meaningful for.
 
 ### Add a whole new region
 
@@ -421,7 +453,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 345 checks covering
+Drives real headless Chrome over the DevTools Protocol — 363 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

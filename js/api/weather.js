@@ -175,9 +175,36 @@ async function fetchOpenWeather({ lat, lon }) {
   };
 }
 
+// In-memory only, cleared by a reload. Tapping around the map asks for the
+// weather at a different zone every time, and neighbouring zones are minutes
+// apart in a forecast that updates hourly — so refetching each tap would spend
+// requests to redraw the same card. Ten minutes is short enough that the panel
+// is never visibly stale and long enough to cover a browse through the zones.
+//
+// Deliberately not localStorage, unlike tides. Tides are astronomical, valid
+// for hours, and metered against a 100-a-month quota worth protecting across
+// sessions. Weather is none of those things, and a forecast that survived a
+// restart would be the wrong trade.
+const CACHE_MS = 10 * 60 * 1000;
+const weatherCache = new Map();
+
 export async function fetchWeather(coords, timezone) {
   const provider = CONFIG.weather.provider;
+  // ~1 km of precision. Finer would miss on GPS jitter alone and cache nothing.
+  const key = `${provider}:${coords.lat.toFixed(2)},${coords.lon.toFixed(2)}:${timezone}`;
+  const hit = weatherCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
+
   const args = { ...coords, timezone };
-  if (provider === 'openweather') return fetchOpenWeather(args);
-  return fetchOpenMeteo(args);
+  const data = await (provider === 'openweather' ? fetchOpenWeather(args) : fetchOpenMeteo(args));
+
+  // Only cache success — a rejected promise must not be replayed for ten
+  // minutes, or one dropped connection makes the panel look permanently broken.
+  weatherCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+/** Drop the cached forecasts. Exported for the test suite. */
+export function clearWeatherCache() {
+  weatherCache.clear();
 }

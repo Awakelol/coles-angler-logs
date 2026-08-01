@@ -6,7 +6,7 @@
 //
 // Leaflet is vendored in vendor/leaflet so the app has no CDN dependency.
 
-import { getLocation, nearestPlace, geolocationSupported } from '../api/geo.js';
+import { getLocation, nearestPlace, geolocationSupported, withinBounds } from '../api/geo.js';
 import { icon } from '../pixel.js';
 import { fetchWeather } from '../api/weather.js';
 import { placeName } from '../api/place.js';
@@ -58,6 +58,13 @@ export function render(ctx) {
       <div class="map-screen__info">
         <div class="map-screen__bar">
           <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
+          <!-- Only appears once the weather is showing a tapped zone rather
+               than you. It is the only thing on screen saying that what you
+               are reading is somewhere you aren't, so it doubles as the
+               indicator and the way back. -->
+          <button class="map-screen__reset" id="wxReset" hidden
+                  aria-label="Show the weather where I am again"
+                  title="Back to my location">&times;</button>
           <a class="map-screen__link" href="#/conditions">Tides &amp; forecast &rarr;</a>
         </div>
         <!-- Two pages side by side: conditions, then the five-day strip.
@@ -95,37 +102,66 @@ export function render(ctx) {
     </div>`;
 }
 
-/** Weather panel above the map. Independent of Leaflet — if tiles fail to
- *  load the forecast should still be there, and vice versa. */
-async function mountWeather(root, ctx) {
+// Rapid taps across zones start overlapping fetches, and they don't come back
+// in the order they were sent. Without this the panel can settle on whichever
+// request happened to be slowest rather than the zone you actually tapped.
+let weatherSeq = 0;
+
+/**
+ * Weather panel above the map. Independent of Leaflet — if tiles fail to
+ * load the forecast should still be there, and vice versa.
+ *
+ * @param {?{coords: object, name: string}} place a zone to show the weather
+ *        for instead of the device location. Null means work it out: device
+ *        fix if we have one and it's in the country, otherwise the region.
+ */
+async function mountWeather(root, ctx, place = null) {
   const pane = root.querySelector('#mapWeather');
   const strip = root.querySelector('#mapForecast');
   const source = root.querySelector('#mapSource');
+  const reset = root.querySelector('#wxReset');
   if (!pane) return;
 
+  const mine = ++weatherSeq;
+  const stale = () => mine !== weatherSeq;
+
   const tz = ctx.region.timezone;
-  const { coords, source: kind } = await resolveCoords(ctx);
+  const resolved = place ? { coords: place.coords, source: 'zone' } : await resolveCoords(ctx);
+  if (stale()) return;
+  const { coords, source: kind } = resolved;
+
+  if (reset) reset.hidden = !place;
 
   // Where the person actually is, not a bearing and not the region name.
   // Coordinates are meaningless to read, and naming the region is wrong when
   // they're somewhere else entirely.
+  //
+  // A zone needs no lookup at all: its name is the one the user just tapped,
+  // which beats whatever the reverse geocoder calls that patch of water.
   if (source) {
-    source.textContent = kind === 'device' ? 'Locating…' : ctx.region.name;
-    placeName(coords).then((name) => {
-      if (name) source.textContent = name;
-      else if (kind === 'device') source.textContent = 'Your location';
-    });
+    if (place) {
+      source.textContent = place.name;
+    } else {
+      source.textContent = kind === 'device' ? 'Locating…' : ctx.region.name;
+      placeName(coords).then((name) => {
+        if (stale()) return;
+        if (name) source.textContent = name;
+        else if (kind === 'device') source.textContent = 'Your location';
+      });
+    }
   }
 
   try {
     const w = await fetchWeather(coords, tz);
+    if (stale()) return;
     pane.innerHTML = weatherHtml(w, tz);
     if (strip) strip.innerHTML = forecastHtml(w, tz, { compact: true });
   } catch (err) {
+    if (stale()) return;
     console.error('[map weather]', err);
     pane.innerHTML = errorBlock('Could not load weather', err.message, 'Try again');
     if (strip) strip.innerHTML = '';
-    pane.querySelector('[data-retry]')?.addEventListener('click', () => mountWeather(root, ctx));
+    pane.querySelector('[data-retry]')?.addEventListener('click', () => mountWeather(root, ctx, place));
   }
 }
 
@@ -138,10 +174,21 @@ export async function mount(root, ctx) {
   const panel = root.querySelector('#zonePanel');
   const wideScreen = () => matchMedia('(min-width: 900px)').matches;
 
+  // Tapping a zone also swings the weather panel onto it. Leyte is 150 km
+  // end to end with an 8-knot strait at one end, so "the weather" is not one
+  // thing across it — the conditions where you are standing can be no guide
+  // at all to the water you were thinking of running out to.
+  //
+  // It stays on that zone until you dismiss it, deliberately: closing the
+  // sheet is how you get a clear look at the weather you just asked for, so
+  // reverting there would undo the thing you tapped for.
+  root.querySelector('#wxReset')?.addEventListener('click', () => mountWeather(root, ctx));
+
   // On a wide window the zone belongs in the sidebar under the weather —
   // a modal over a map you're still reading is the wrong shape there. On a
   // phone there's no sidebar to put it in, so it stays a sheet.
   const openZone = (zone) => {
+    mountWeather(root, ctx, { coords: zone.coords, name: zone.name });
     if (!wideScreen() || !panel) {
       openSheet(zone.name, () => zoneSheetHtml(zone));
       return;
@@ -182,12 +229,25 @@ export async function mount(root, ctx) {
   const cfg = ctx.region.map || {};
   const center = cfg.center || ctx.region.coords;
 
+  // Panning is fenced to the country the region belongs to. Without it you can
+  // drag off into empty ocean and lose the map entirely, with nothing on screen
+  // to tell you which way back — and every tile you drag through is a request
+  // to OpenStreetMap for somewhere this app has nothing to say about.
+  // Viscosity 1 makes it a wall rather than a rubber band; a soft edge on a
+  // touchscreen just feels like the map is fighting you.
+  const pb = cfg.panBounds;
   const map = L.map(container, {
     center: [center.lat, center.lon],
     zoom: cfg.zoom || 9,
     minZoom: cfg.minZoom || 6,
     maxZoom: cfg.maxZoom || 15,
     scrollWheelZoom: true,
+    ...(pb
+      ? {
+          maxBounds: L.latLngBounds([pb.south, pb.west], [pb.north, pb.east]),
+          maxBoundsViscosity: 1.0,
+        }
+      : {}),
   });
 
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -317,6 +377,19 @@ export async function mount(root, ctx) {
     btn?.classList.add('is-busy');
     try {
       const fix = await getLocation();
+
+      // Outside the country, flying to the fix would be pointless twice over:
+      // maxBounds would drag the view back to the border anyway, and the
+      // "you are here" dot would be left somewhere off screen implying the
+      // map had simply broken. Say where they are instead, and keep the
+      // region on screen — which is the thing they opened the app to see.
+      if (!withinBounds(fix, cfg.panBounds)) {
+        showWholeRegion();
+        hint.textContent =
+          `You're outside ${ctx.region.country || ctx.region.name} — showing ${ctx.region.name}`;
+        return true;
+      }
+
       showYouAreHere(fix);
       map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), LOCATE_ZOOM));
       syncMarkers();
@@ -349,7 +422,13 @@ export async function mount(root, ctx) {
     }
   }
 
-  root.querySelector('#locateBtn')?.addEventListener('click', () => locate());
+  // Pressing "centre on me" means me — including in the weather panel, if a
+  // zone had taken it over. Only on a deliberate press: the silent attempt on
+  // open happens before any zone can have been tapped.
+  root.querySelector('#locateBtn')?.addEventListener('click', () => {
+    mountWeather(root, ctx);
+    locate();
+  });
 
   // --- weather deck paging -------------------------------------------------
   const deck = root.querySelector('#wxDeck');

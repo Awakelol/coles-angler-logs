@@ -82,6 +82,27 @@ export function distanceKm(a, b) {
   return EARTH_KM * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
+/**
+ * Is a point inside a `{ south, west, north, east }` box?
+ *
+ * Used for the country a region belongs to, not the region itself: a fix in
+ * Manila is far from any Leyte zone but is somewhere this app can sensibly
+ * show weather for, while a fix in Tokyo is not.
+ *
+ * No antimeridian handling — a box that wraps 180° would need west > east and
+ * an OR here instead. Nothing this app ships is anywhere near it, and guessing
+ * at the intent of an inverted box would hide a typo rather than catch it.
+ */
+export function withinBounds(coords, bounds) {
+  if (!bounds || !coords) return true; // no box declared means no restriction
+  return (
+    coords.lat >= bounds.south &&
+    coords.lat <= bounds.north &&
+    coords.lon >= bounds.west &&
+    coords.lon <= bounds.east
+  );
+}
+
 /** Nearest named zone or spot in a region, so the readout has a place name. */
 export function nearestPlace(region, coords) {
   const candidates = [...(region.zones || []), ...(region.spots || [])];

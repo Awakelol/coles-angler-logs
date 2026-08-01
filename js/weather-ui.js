@@ -8,7 +8,9 @@
 // ---------------------------------------------------------------------------
 
 import { describeCode, compass, windAdvice, isNight } from './api/weather.js';
-import { getLocation, roundCoords, distanceKm, nearestPlace, geolocationSupported } from './api/geo.js';
+import {
+  getLocation, roundCoords, distanceKm, nearestPlace, geolocationSupported, withinBounds,
+} from './api/geo.js';
 import { prefs } from './store.js';
 import { icon } from './pixel.js';
 import { esc, fmtTime, fmtWeekday, round } from './ui.js';
@@ -89,6 +91,23 @@ export async function resolveCoords(ctx) {
   }
   try {
     const fix = await getLocation();
+
+    // A fix from outside the country this region belongs to is a real
+    // location and still the wrong one to show. Someone opening the app from
+    // abroad wants to know what it's doing at home, not the weather where
+    // they are standing — and a five-day forecast for another hemisphere is
+    // worse than useless next to a map of Leyte. Being merely far from the
+    // zones is fine: Manila is 600 km away and still somewhere this app can
+    // sensibly answer for.
+    if (!withinBounds(fix, ctx.region.map?.panBounds)) {
+      return {
+        coords: ctx.region.coords,
+        label: `${ctx.region.name} · you're outside ${ctx.region.country || 'the region'}`,
+        source: 'region',
+        outsideCountry: true,
+      };
+    }
+
     // Snapped to a ~5 km grid so the tide API's monthly quota isn't spent on
     // GPS jitter. See js/api/geo.js.
     const coords = roundCoords(fix);

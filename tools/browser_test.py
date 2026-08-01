@@ -2746,6 +2746,122 @@ async def main():
             """)
             check("far-away position is explained", "no zones nearby" in far, far)
 
+            # --- the map is fenced to the country ----------------------------
+            # Manila is 600 km from any zone but is still somewhere this app can
+            # answer for; Tokyo is not. The line is the country, not the region,
+            # and the two cases must not be collapsed into one.
+            fence = await page.eval("""
+                const g = await import('./js/api/geo.js');
+                const d = await import('./js/data/index.js');
+                const pb = d.getRegion(d.DEFAULT_REGION_ID).map.panBounds;
+                const at = (lat, lon) => g.withinBounds({ lat, lon }, pb);
+                return {
+                    tacloban:  at(11.24, 125.00),
+                    manila:    at(14.60, 120.98),
+                    batanes:   at(20.45, 121.97),   // northern tip
+                    tawitawi:  at(5.05, 119.80),    // southern tip
+                    davaoEast: at(7.10, 126.60),    // easternmost point
+                    tokyo:     at(35.68, 139.69),
+                    guam:      at(13.44, 144.79),
+                    borneo:    at(1.50, 110.30),
+                    noBox:     g.withinBounds({ lat: 0, lon: 0 }, null),
+                };
+            """)
+            check("the country box holds the whole archipelago",
+                  all(fence[k] for k in ("tacloban", "manila", "batanes", "tawitawi", "davaoEast")),
+                  str(fence))
+            check("the country box excludes everywhere else",
+                  not any(fence[k] for k in ("tokyo", "guam", "borneo")), str(fence))
+            check("no declared box means no restriction", fence["noBox"])
+
+            locked = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const d = await import('./js/data/index.js');
+                const pb = d.getRegion(d.DEFAULT_REGION_ID).map.panBounds;
+                const mb = m.options.maxBounds;
+                if (!mb) return { declared: false };
+                // Try to drag the map to Tokyo. Leaflet must refuse.
+                m.setView([35.68, 139.69], 9, { animate: false });
+                await new Promise(r => setTimeout(r, 200));
+                const c = m.getCenter();
+                return {
+                    declared: true,
+                    matchesData: mb.getSouth() === pb.south && mb.getNorth() === pb.north
+                              && mb.getWest()  === pb.west  && mb.getEast()  === pb.east,
+                    viscosity: m.options.maxBoundsViscosity,
+                    landedLon: +c.lng.toFixed(1),
+                    stillInBox: c.lng <= pb.east + 1 && c.lng >= pb.west - 1
+                             && c.lat <= pb.north + 1 && c.lat >= pb.south - 1,
+                };
+            """)
+            check("the map declares the country as its pan limit",
+                  locked["declared"] and locked["matchesData"], str(locked))
+            check("panning out of the country is refused",
+                  locked.get("stillInBox"), str(locked))
+
+            # Outside the country the map must NOT fly to the fix — maxBounds
+            # would drag the view back to the border anyway and strand the
+            # "you are here" dot off screen, which reads as a broken map.
+            abroad = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const real = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = (ok) => ok({
+                    coords: { latitude: 35.68, longitude: 139.69, accuracy: 40 }
+                });
+                await el._locate();
+                navigator.geolocation.getCurrentPosition = real;
+                const c = m.getCenter();
+                return { hint: document.getElementById('mapHint').textContent,
+                         lon: +c.lng.toFixed(1),
+                         pins: document.querySelectorAll('.zone-pin').length };
+            """)
+            check("a fix from abroad says so rather than looking broken",
+                  "outside" in abroad["hint"].lower(), str(abroad))
+            check("a fix from abroad keeps the region on screen",
+                  abroad["lon"] < 130 and abroad["pins"] > 0, str(abroad))
+
+            # ...and the weather falls back to the region's home rather than
+            # forecasting for wherever the phone happens to be.
+            home = await page.eval("""
+                const wui = await import('./js/weather-ui.js');
+                const d = await import('./js/data/index.js');
+                const region = d.getRegion(d.DEFAULT_REGION_ID);
+                const real = navigator.geolocation.getCurrentPosition;
+
+                const ask = async (lat, lon) => {
+                    navigator.geolocation.getCurrentPosition = (ok) => ok({
+                        coords: { latitude: lat, longitude: lon, accuracy: 40 }
+                    });
+                    localStorage.removeItem('angler.prefs');
+                    return wui.resolveCoords({ region, regionId: region.id });
+                };
+                const away = await ask(35.68, 139.69);     // Tokyo
+                const inPh = await ask(14.60, 120.98);     // Manila
+                navigator.geolocation.getCurrentPosition = real;
+                return {
+                    awaySource: away.source, awayCoords: away.coords,
+                    awayLabel: away.label, awayFlag: !!away.outsideCountry,
+                    inPhSource: inPh.source, inPhLat: Math.round(inPh.coords.lat),
+                    regionCoords: region.coords,
+                };
+            """)
+            check("a fix from abroad falls back to the region's home weather",
+                  home["awaySource"] == "region"
+                  and home["awayCoords"] == home["regionCoords"], str(home))
+            check("the fallback says why it isn't your location",
+                  "outside" in home["awayLabel"].lower() and home["awayFlag"],
+                  home["awayLabel"])
+            check("a fix elsewhere in the country is still used",
+                  home["inPhSource"] == "device" and home["inPhLat"] == 15, str(home))
+            # The home is the port, not open water — it is also the tide cache
+            # key, and tides for an unnamed offshore point help nobody.
+            check("the region's weather home is Tacloban",
+                  abs(home["regionCoords"]["lat"] - 11.238) < 0.02
+                  and abs(home["regionCoords"]["lon"] - 125.004) < 0.02,
+                  str(home["regionCoords"]))
+
             # Refusing must fall back to the whole of Leyte, not leave the map
             # wherever it happened to be sitting.
             refused = await page.eval("""
@@ -2841,6 +2957,7 @@ async def main():
             check("zone sheet shows lures", "Bring these" in sheet_txt, sheet_txt[:120])
             check("zone sheet shows habitat advice",
                   "Fishing this water" in sheet_txt, sheet_txt[:120])
+
             # The sheet must actually sit above the map. Leaflet's panes reach
             # z-index 1000, so a hit-test is the only honest check here.
             on_top = await page.eval("""
@@ -2873,6 +2990,101 @@ async def main():
             """)
             await asyncio.sleep(0.3)
             await page.shot("map-zone-sheet-scrolled", full=False)
+
+            # --- tapping a zone swings the weather onto it -------------------
+            # Leyte is 150 km end to end, so the conditions where you're
+            # standing can be no guide at all to the water you were thinking of
+            # running out to.
+            zone_wx = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const d = await import('./js/data/index.js');
+                const zones = d.zonesFor(d.DEFAULT_REGION_ID);
+
+                document.querySelector('.sheet-backdrop')?.remove();
+                const before = document.getElementById('mapSource').textContent;
+
+                // Pick a pin that is showing, and find out which zone it is.
+                const pins = [...document.querySelectorAll('.zone-pin')];
+                const titles = pins.map(p => p.closest('.leaflet-marker-icon')?.title || '');
+                const i = titles.findIndex(t => zones.some(z => z.name === t));
+                if (i < 0) return { error: 'no identifiable pin', titles };
+                const zone = zones.find(z => z.name === titles[i]);
+                pins[i].click();
+                await new Promise(r => setTimeout(r, 900));
+
+                return {
+                    zoneName: zone.name,
+                    before,
+                    label: document.getElementById('mapSource').textContent,
+                    resetShown: !document.getElementById('wxReset').hidden,
+                    // The card must actually have weather in it, not an error.
+                    hasCard: !!document.querySelector('#mapWeather .now-card'),
+                    hasForecast: document.querySelectorAll('#mapForecast .fc-day').length,
+                };
+            """)
+            check("tapping a zone names it as the weather's source",
+                  zone_wx.get("label") == zone_wx.get("zoneName"), str(zone_wx))
+            check("zone weather renders a real forecast",
+                  zone_wx.get("hasCard") and zone_wx.get("hasForecast", 0) >= 3, str(zone_wx))
+            check("a zone's weather is marked as not your location",
+                  zone_wx.get("resetShown"), str(zone_wx))
+
+            back = await page.eval("""
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.getElementById('wxReset').click();
+                await new Promise(r => setTimeout(r, 1200));
+                return { label: document.getElementById('mapSource').textContent,
+                         resetShown: !document.getElementById('wxReset').hidden,
+                         hasCard: !!document.querySelector('#mapWeather .now-card') };
+            """)
+            check("dismissing zone weather goes back to your own",
+                  not back["resetShown"] and back["hasCard"], str(back))
+
+            # "Centre on me" means me in the weather panel too, or the button
+            # half-answers: the map moves to you and the card still doesn't.
+            via_locate = await page.eval("""
+                const zones = (await import('./js/data/index.js'))
+                    .zonesFor('leyte');
+                document.querySelector('.sheet-backdrop')?.remove();
+                const pins = [...document.querySelectorAll('.zone-pin')];
+                const t = pins.map(p => p.closest('.leaflet-marker-icon')?.title || '');
+                const i = t.findIndex(x => zones.some(z => z.name === x));
+                pins[i].click();
+                await new Promise(r => setTimeout(r, 700));
+                const took = !document.getElementById('wxReset').hidden;
+
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.getElementById('locateBtn').click();
+                await new Promise(r => setTimeout(r, 1500));
+                return { took, stillZone: !document.getElementById('wxReset').hidden };
+            """)
+            check("centring on your location takes the weather back too",
+                  via_locate["took"] and not via_locate["stillZone"], str(via_locate))
+
+            # Browsing zones must not fire a request per tap: neighbouring
+            # zones are minutes apart in a forecast that updates hourly.
+            wx_cache = await page.eval("""
+                const w = await import('./js/api/weather.js');
+                w.clearWeatherCache();
+                let calls = 0;
+                const real = window.fetch;
+                window.fetch = (...a) => { calls++; return real(...a); };
+                const tz = 'Asia/Manila';
+                await w.fetchWeather({ lat: 11.238, lon: 125.004 }, tz);
+                const afterFirst = calls;
+                await w.fetchWeather({ lat: 11.238, lon: 125.004 }, tz);
+                await w.fetchWeather({ lat: 11.2381, lon: 125.0042 }, tz);  // jitter
+                const afterRepeat = calls;
+                await w.fetchWeather({ lat: 10.30, lon: 125.02 }, tz);      // Sogod
+                const afterOther = calls;
+                window.fetch = real;
+                return { afterFirst, afterRepeat, afterOther };
+            """)
+            check("the same place is not fetched twice",
+                  wx_cache["afterRepeat"] == wx_cache["afterFirst"], str(wx_cache))
+            check("a different place still is",
+                  wx_cache["afterOther"] > wx_cache["afterRepeat"], str(wx_cache))
 
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")

@@ -21,8 +21,14 @@ export default {
   blurb: 'The waters around Leyte island — Pacific-facing gulf on one side, the deeper Bohol Sea on the other, and everything from mangrove creeks to 8-knot straits in between.',
   timezone: 'Asia/Manila',
 
-  // Used by the weather + tide dashboard.
-  coords: { lat: 11.0, lon: 125.2 },
+  // Home for the weather + tide dashboard: where they point when the device
+  // won't give a location, or gives one from outside the country.
+  //
+  // Tacloban, not the middle of the gulf. This used to be 11.0/125.2, an
+  // offshore point with no station, no name and nobody standing on it — and
+  // it is also the tide cache key, so predictions were being fetched for open
+  // water rather than for the port everyone actually launches from.
+  coords: { lat: 11.238, lon: 125.004 },
 
   // Named fishing spots. Add freely — the catch log builds its dropdown here.
   spots: [
@@ -52,6 +58,23 @@ export default {
     minZoom: 7,
     maxZoom: 15,
     bounds: { south: 9.85, west: 124.15, north: 11.6, east: 126.0 },
+
+    // How far you may pan away from the region — the Philippines, here.
+    // Deliberately much wider than `bounds`: this is not "where the fish
+    // are", it is "where this app is about". You can still drag up to Luzon
+    // to see where a storm is coming from; you cannot drag out to the
+    // Pacific and lose the country entirely.
+    //
+    // It is also what counts as being in the area. A fix outside this box
+    // sends the weather back to `coords` above rather than reporting the
+    // conditions wherever the phone happens to be.
+    //
+    // Corners are the archipelago's extremes: Y'Ami in the Batanes to the
+    // north, the Tawi-Tawi group to the south, Balabac west, Pusan Point
+    // east — each rounded outward. The far-western Kalayaan claim is left
+    // out on purpose; including it would stretch the box across several
+    // hundred km of open sea nobody is fishing from Leyte.
+    panBounds: { south: 4.2, west: 116.0, north: 21.4, east: 126.8 },
   },
 
   // ---------------------------------------------------------------------
