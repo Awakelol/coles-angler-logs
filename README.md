@@ -382,6 +382,13 @@ and Spots — and are remembered. A **Map / Satellite** switch sits opposite
 them, so the top of the map reads left to right as: how close, what is drawn
 on it, what it is drawn on.
 
+Esri's imagery over Leyte stops at zoom **18**. Asking for 19 does not 404 —
+it returns a real tile reading *"Map data not yet available"*, so the map looks
+broken at the last step. `maxNativeZoom: 18` stops the request and upscales
+instead. That ceiling was measured, not assumed: the placeholder is
+byte-identical wherever it appears, so fetching two tiles at one zoom and
+comparing them finds it.
+
 Satellite imagery is **Esri World Imagery**, which is free and needs no key,
 unlike Mapbox or Google. It is Esri's service on Esri's terms — fine for
 personal use, worth re-reading before anyone makes money from this. A second
@@ -517,7 +524,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 421 checks covering
+Drives real headless Chrome over the DevTools Protocol — 432 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and
@@ -604,6 +611,27 @@ would eat. Photos are downscaled to 1280px on save.
 **Your data is local to the device.** There's no account and no server. Clearing
 site data or uninstalling the PWA deletes your log — use **Settings → Export
 JSON** to back up. Export omits photos, since JSON can't carry image data.
+
+---
+
+## Versions
+
+`js/data/changelog.js` holds `APP_VERSION` and one entry per release, shown at
+the foot of **Settings**. Semver, read as: MAJOR when the shape of the app
+changes for the person using it, MINOR for a new capability, PATCH for a fix.
+`1.0.0` is the first build that did everything a fishing companion has to do on
+its own rather than the first commit — everything before it is `0.x`, which is
+what those builds honestly were.
+
+Settings also reports the **cache name read from the browser**, not printed
+from a constant. On a PWA a stale service worker can leave a phone a week
+behind the site without saying so, and the two disagreeing is exactly the
+situation worth being able to see.
+
+**To release:** add a changelog entry, set `APP_VERSION` to match, bump
+`CACHE_VERSION` in `sw.js`. All three by hand, on purpose — a version that
+changes itself tells you nothing about whether anyone meant it to. A test
+fails if `APP_VERSION` and the newest entry disagree.
 
 ---
 

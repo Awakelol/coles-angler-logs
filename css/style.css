@@ -1510,3 +1510,33 @@ body.is-sheet-open {
   .sheet-backdrop { place-items: center; padding: 20px; }
   .sheet { border-bottom: var(--border-w) solid var(--line); border-radius: var(--radius); }
 }
+
+/* --- version history ------------------------------------------------------ */
+
+.version-line { margin: 0 0 4px; font-size: 15px; font-weight: 800; }
+.version-line strong { font-family: var(--mono); font-size: 14px; }
+
+.version-history { margin-top: 14px; }
+.version-history > summary {
+  cursor: pointer;
+  font-size: 13px; font-weight: 900;
+  letter-spacing: .02em;
+  color: var(--sky-deep);
+  padding: 6px 0;
+}
+.version-history[open] > summary { margin-bottom: 6px; }
+
+/* Numbers would fight the version chips, which already say which release. */
+.version-list { list-style: none; margin: 0; padding: 0; }
+
+.version-item { padding: 14px 0; border-top: var(--border-w-sm) solid var(--line); }
+.version-item:first-child { border-top: 0; }
+.version-item__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.version-item__head .chip { font-family: var(--mono); }
+.version-item__date { font-size: 11px; font-weight: 700; color: var(--ink-30); }
+.version-item__title { margin: 0 0 6px; font-size: 15px; font-weight: 900; }
+.version-item__changes {
+  margin: 0; padding-left: 18px;
+  font-size: 13.5px; font-weight: 600; line-height: 1.65;
+  color: var(--ink-60);
+}

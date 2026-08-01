@@ -294,6 +294,8 @@ export async function mount(root, ctx) {
   // worth re-reading before anyone makes money from this.
   const basemaps = {
     map: () =>
+      // No maxNativeZoom needed: OSM renders to 19 everywhere and simply
+      // refuses beyond it, which the map's own maxZoom already prevents.
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 19,
@@ -309,6 +311,17 @@ export async function mount(root, ctx) {
             attribution:
               'Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community',
             maxZoom: 19,
+            // Esri's imagery over Leyte stops at 18. Ask for 19 and it does
+            // NOT 404 — it returns a real tile reading "Map data not yet
+            // available", so the map appears to break at the last zoom step.
+            // maxNativeZoom stops the request and upscales the 18 tile
+            // instead: soft, but continuous and still the right place.
+            //
+            // Measured, not assumed. The placeholder is byte-identical
+            // wherever it appears, so fetching two tiles at one zoom and
+            // comparing them finds the ceiling; over Leyte 18 is the last
+            // level with real imagery everywhere.
+            maxNativeZoom: 18,
           }
         ),
         // Imagery alone has no names on it. On open water that is most of the
@@ -316,7 +329,7 @@ export async function mount(root, ctx) {
         // the one thing this is for — working out where you are going.
         L.tileLayer(
           'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-          { maxZoom: 19, pane: 'shadowPane' }
+          { maxZoom: 19, maxNativeZoom: 18, pane: 'shadowPane' }
         ),
       ]),
   };

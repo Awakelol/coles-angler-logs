@@ -15,7 +15,7 @@
 // CACHE_VERSION now only needs bumping to force-evict old assets.
 // ---------------------------------------------------------------------------
 
-const CACHE_VERSION = 'v14';
+const CACHE_VERSION = 'v15';
 const CACHE_NAME = `angler-log-${CACHE_VERSION}`;
 
 const SHELL = [
@@ -45,6 +45,7 @@ const SHELL = [
   './js/config.js',
   './js/data/index.js',
   './js/data/tips.js',
+  './js/data/changelog.js',
   './js/data/gear.js',
   './js/data/tactics.js',
   './js/data/species/indo-pacific.js',

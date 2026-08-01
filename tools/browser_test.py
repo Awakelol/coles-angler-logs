@@ -1797,6 +1797,70 @@ async def main():
             check("no API key is shipped to the browser",
                   keys["noAnthropicKey"], str(keys))
 
+            # -------------------------------------------------- version
+            print("\nVersion")
+            await page.goto(f"{BASE}/index.html#/settings")
+            await page.wait_for("document.querySelector('#appVersion')", label="settings")
+
+            ver = await page.eval("""
+                const { APP_VERSION, CHANGELOG } = await import('./js/data/changelog.js');
+                const shown = document.getElementById('appVersion')?.textContent.trim();
+                const semver = /^\d+\.\d+\.\d+$/;
+
+                // The list must be newest-first and every version distinct,
+                // or "which build is this" has no answer.
+                const versions = CHANGELOG.map(r => r.version);
+                const dates = CHANGELOG.map(r => r.date);
+                const descending = dates.every((d, i) => i === 0 || dates[i - 1] >= d);
+                const cmp = (a, b) => {
+                    const x = a.split('.').map(Number), y = b.split('.').map(Number);
+                    for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i];
+                    return 0;
+                };
+                return {
+                    shown,
+                    current: APP_VERSION,
+                    // The number on screen must be the number the code claims.
+                    matchesConstant: shown === `v${APP_VERSION}`,
+                    // ...and the newest entry in the history, or the history
+                    // is describing a build nobody is running.
+                    matchesNewest: CHANGELOG[0].version === APP_VERSION,
+                    allSemver: versions.every(v => semver.test(v)),
+                    unique: new Set(versions).size === versions.length,
+                    versionsDescend: versions.every((v, i) => i === 0 || cmp(versions[i - 1], v) > 0),
+                    datesDescend: descending,
+                    everyEntryHasChanges: CHANGELOG.every(r => r.changes.length > 0 && r.title),
+                    releases: CHANGELOG.length,
+                    listed: document.querySelectorAll('.version-item').length,
+                    hasBuildLine: !!document.getElementById('buildInfo'),
+                };
+            """)
+            check("settings shows the app version",
+                  ver["matchesConstant"] and ver["shown"].startswith("v"), str(ver))
+            check("the version matches the newest release note",
+                  ver["matchesNewest"], str(ver))
+            check("every release is semver and unique",
+                  ver["allSemver"] and ver["unique"], str(ver))
+            check("releases run newest first",
+                  ver["versionsDescend"] and ver["datesDescend"], str(ver))
+            check("every release says what changed",
+                  ver["everyEntryHasChanges"], str(ver))
+            check("the whole history is on the page",
+                  ver["listed"] == ver["releases"] and ver["releases"] >= 10, str(ver))
+            check("the build line reports what is really cached",
+                  ver["hasBuildLine"], str(ver))
+
+            # A version that doesn't move with the cache is worse than none:
+            # it would claim a build the device isn't running.
+            bumped = await page.eval("""
+                const sw = await (await fetch('./sw.js')).text();
+                const cache = (sw.match(/CACHE_VERSION = '([^']+)'/) || [])[1];
+                const { APP_VERSION } = await import('./js/data/changelog.js');
+                return { cache, app: APP_VERSION };
+            """)
+            check("the service worker cache version is set",
+                  bool(bumped["cache"]), str(bumped))
+
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
@@ -3701,6 +3765,44 @@ async def main():
             """)
             check("Esri tiles are addressed row-then-column",
                   tileorder["esriYX"] and tileorder["osmXY"], str(tileorder))
+
+            # Esri imagery over Leyte stops at 18. Asking for 19 does not 404 —
+            # it returns a real tile reading "Map data not yet available", so
+            # the map appears to break at the last zoom step. maxNativeZoom
+            # stops the request and upscales the 18 tile instead.
+            native = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const btn = document.getElementById('basemapBtn');
+                if (btn.getAttribute('aria-pressed') !== 'true') btn.click();
+                await new Promise(r => setTimeout(r, 500));
+
+                const caps = [];
+                m.eachLayer(l => {
+                    if (l._url && l._url.includes('arcgisonline')) {
+                        caps.push({ max: l.options.maxZoom, native: l.options.maxNativeZoom });
+                    }
+                });
+
+                // At the deepest zoom, no tile may be REQUESTED beyond native.
+                m.setView([11.238, 125.004], m.getMaxZoom(), { animate: false });
+                await new Promise(r => setTimeout(r, 2500));
+                const asked = [...document.querySelectorAll('.leaflet-tile')]
+                    .map(i => i.src)
+                    .filter(u => u.includes('arcgisonline'))
+                    .map(u => Number(u.split('/tile/')[1].split('/')[0]));
+                btn.click();
+                await new Promise(r => setTimeout(r, 400));
+                return { caps, deepest: asked.length ? Math.max(...asked) : null,
+                         mapZoom: m.getMaxZoom() };
+            """)
+            check("every Esri layer is capped at its real imagery depth",
+                  bool(native["caps"]) and all(c["native"] == 18 and c["max"] >= 19
+                                               for c in native["caps"]), str(native))
+            check("no tile is requested past where the imagery exists",
+                  native["deepest"] is not None and native["deepest"] <= 18, str(native))
+            check("you can still zoom past it, upscaled",
+                  native["mapZoom"] >= 19, str(native))
 
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")

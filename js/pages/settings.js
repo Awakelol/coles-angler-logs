@@ -3,6 +3,7 @@
 import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
 import { REGIONS } from '../data/index.js';
+import { APP_VERSION, CHANGELOG } from '../data/changelog.js';
 import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
 import {
   currentUser, signOut, cloudConfigured, linkProvider, unlinkProvider, linkedProviders,
@@ -249,6 +250,44 @@ export function render() {
           </p>
         </div>
       </div>
+    </section>
+
+    <!-- Which build is this? A fair question on a PWA, where a stale service
+         worker can leave a phone a week behind the site and say nothing. The
+         cache name is read from the browser rather than printed from a
+         constant, so it is evidence rather than a claim. -->
+    <section class="band band--cream">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Version</h2>
+          <p>What this device is running</p>
+        </div>
+        <div class="card">
+          <p class="version-line">
+            Cole&rsquo;s Angler Log <strong id="appVersion">v${esc(APP_VERSION)}</strong>
+          </p>
+          <p class="field__hint" id="buildInfo">Checking what&rsquo;s cached&hellip;</p>
+
+          <details class="version-history">
+            <summary>Version history (${CHANGELOG.length} releases)</summary>
+            <ol class="version-list">
+              ${CHANGELOG.map(
+                (r) => `
+                <li class="version-item">
+                  <div class="version-item__head">
+                    <span class="chip chip--target">v${esc(r.version)}</span>
+                    <span class="version-item__date">${esc(r.date)}</span>
+                  </div>
+                  <h3 class="version-item__title">${esc(r.title)}</h3>
+                  <ul class="version-item__changes">
+                    ${r.changes.map((c) => `<li>${esc(c)}</li>`).join('')}
+                  </ul>
+                </li>`
+              ).join('')}
+            </ol>
+          </details>
+        </div>
+      </div>
     </section>`;
 }
 
@@ -409,6 +448,27 @@ export function mount(root) {
     await store.clearCatches();
     toast('All catches deleted');
   });
+
+  // --- which build is actually installed ---
+  //
+  // The app version is a constant and only says what the code THINKS it is.
+  // The cache name comes from the service worker that is really serving this
+  // device, so the two disagreeing is exactly the situation worth seeing.
+  const build = root.querySelector('#buildInfo');
+  if (build) {
+    (async () => {
+      const bits = [];
+      try {
+        const names = (await caches.keys()).filter((n) => n.startsWith('angler-log-'));
+        bits.push(names.length ? `cache ${names.sort().pop().replace('angler-log-', '')}` : 'not cached yet');
+      } catch {
+        bits.push('cache unavailable');
+      }
+      const reg = await navigator.serviceWorker?.getRegistration?.();
+      bits.push(reg ? 'offline ready' : 'no service worker');
+      build.textContent = bits.join(' · ');
+    })();
+  }
 
   // --- storage estimate ---
   const info = root.querySelector('#storageInfo');
