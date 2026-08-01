@@ -346,6 +346,16 @@ grounds use a low value, small creeks a high one. Zoom out past every zone's
 panel onto that spot. Keep two zones at least 2.5 km apart or their pins
 overlap — a test enforces this.
 
+A zone's fish open **inside** the zone's own sheet or sidebar panel, with a
+back button naming the water you came from — reading a zone and reading a fish
+in it is one task, and it shouldn't cost you the map. The same applies to the
+other waters listed on a fish's card: from a zone they move the sheet rather
+than navigating to Info. Sheets deliberately do not stack; `openSheet` locks
+the body scroll and restores one offset, so a second one over the first
+restores the wrong position. `mountZoneSheet` in
+[`js/zone-ui.js`](js/zone-ui.js) swaps the contents of the open one instead,
+and works unchanged in the phone sheet, the desktop sidebar and Info › Zones.
+
 ### Where the map may go, and what counts as "here"
 
 `map.bounds` frames the region. `map.panBounds` is a second, much wider box —
@@ -453,7 +463,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 363 checks covering
+Drives real headless Chrome over the DevTools Protocol — 373 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

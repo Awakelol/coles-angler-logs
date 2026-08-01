@@ -101,6 +101,41 @@ async def main():
             check("zone detail is complete", zone["hasSpecies"], str(zone))
             check("zone panel can be closed", zone["closable"], str(zone))
 
+            # A fish opens in the sidebar too. There is no sheet here to swap,
+            # so this is the case that proves mountZoneSheet isn't quietly
+            # assuming one — the panel keeps its own head and close button.
+            drill = await ev("""
+                const panel = document.getElementById('zonePanel');
+                const zoneTitle = panel.querySelector('.zone-panel__head h2').textContent;
+                panel.querySelector('[data-species-detail]').click();
+                await new Promise(r => setTimeout(r, 500));
+                return {
+                    zoneTitle,
+                    title: panel.querySelector('.zone-panel__head h2').textContent,
+                    isSpeciesCard: panel.innerText.includes('FishBase'),
+                    hasBack: !!panel.querySelector('[data-back-to-zone]'),
+                    stillClosable: !!panel.querySelector('[data-close-zone]'),
+                    noModal: !document.querySelector('.sheet-backdrop'),
+                    hash: location.hash,
+                };
+            """)
+            check("a zone's fish opens in the sidebar",
+                  drill["isSpeciesCard"] and drill["title"] != drill["zoneTitle"], str(drill))
+            check("opening a fish raises no modal on desktop",
+                  drill["noModal"] and drill["hash"] == "#/map", str(drill))
+            check("the sidebar keeps its close button while showing a fish",
+                  drill["stillClosable"] and drill["hasBack"], str(drill))
+
+            went_back = await ev("""
+                const panel = document.getElementById('zonePanel');
+                panel.querySelector('[data-back-to-zone]').click();
+                await new Promise(r => setTimeout(r, 400));
+                return { onZone: panel.innerText.includes('Possible catches'),
+                         closable: !!panel.querySelector('[data-close-zone]') };
+            """)
+            check("the sidebar goes back to the zone",
+                  went_back["onZone"] and went_back["closable"], str(went_back))
+
             os.makedirs(OUT, exist_ok=True)
             shot = await send("Page.captureScreenshot", format="png", captureBeyondViewport=False)
             with open(os.path.join(OUT, "desktop-map-zone.png"), "wb") as f:

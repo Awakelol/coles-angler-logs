@@ -17,14 +17,15 @@
 // ---------------------------------------------------------------------------
 
 import {
-  allSpecies, speciesByFamily, fishbaseUrl, localNames, getSpecies, zonesForSpecies,
+  allSpecies, speciesByFamily, localNames, getSpecies,
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, gearByGroup, getGear } from '../data/gear.js';
 import { speciesHero, renderSprite, icon, SPRITES } from '../pixel.js';
-import { hydratePhotos, fetchPhoto, fetchPhotos } from '../api/photos.js';
+import { hydratePhotos } from '../api/photos.js';
+import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
-import { zoneSheetHtml, zonePalette } from '../zone-ui.js';
+import { zoneSheetHtml, zonePalette, mountZoneSheet } from '../zone-ui.js';
 import { habitatTactics } from '../data/tactics.js';
 import { esc, openSheet } from '../ui.js';
 
@@ -61,106 +62,6 @@ function speciesCard(s) {
         <figcaption></figcaption>
       </figure>
     </button>`;
-}
-
-function speciesDetailHtml(s, regionId) {
-  const locals = localNames(s);
-  const zones = zonesForSpecies(regionId, s.id);
-  const size = s.size
-    ? `${s.size.typicalCm ? `~${s.size.typicalCm} cm typical` : ''}${
-        s.size.typicalCm && s.size.maxCm ? ' · ' : ''
-      }${s.size.maxCm ? `${s.size.maxCm} cm max` : ''}`
-    : '—';
-
-  return `
-    <div class="species-card__art species-card__art--hero">${speciesHero(s, { size: 300 })}</div>
-
-    <div class="chips" style="margin-bottom:14px">
-      <span class="chip chip--family">${esc(s.familyCommon || s.family)}</span>
-      ${s.target ? '<span class="chip chip--target">Common target</span>' : ''}
-    </div>
-
-    <dl class="meta-list" style="margin-bottom:16px">
-      <div><dt>Scientific</dt><dd><em>${esc(s.scientific)}</em></dd></div>
-      <div><dt>Family</dt><dd>${esc(s.family)}</dd></div>
-      ${
-        locals.length
-          ? `<div><dt>Local</dt><dd>${locals
-              .map((l) => `${esc(l.name)} <span style="color:var(--ink-30)">(${esc(l.label)})</span>`)
-              .join(', ')}</dd></div>`
-          : ''
-      }
-      <div><dt>Size</dt><dd>${esc(size)}</dd></div>
-      ${s.habitat ? `<div><dt>Habitat</dt><dd>${esc(s.habitat)}</dd></div>` : ''}
-    </dl>
-
-    ${s.notes ? `<p class="card__body" style="margin-bottom:16px">${esc(s.notes)}</p>` : ''}
-
-    ${
-      zones.length
-        ? `<h3 class="card__title" style="font-size:15px;margin-bottom:8px">Possible in these waters</h3>
-           <div class="chips" style="margin-bottom:16px">
-             ${zones
-               .map((z) => `<a class="chip chip--family" href="#/info?tab=zones&zone=${esc(z.id)}">${esc(z.name)}</a>`)
-               .join('')}
-           </div>`
-        : ''
-    }
-
-    <section data-gallery hidden style="margin-bottom:18px">
-      <h3 class="card__title" style="font-size:15px;margin-bottom:8px">In the flesh</h3>
-      <div class="gallery" data-gallery-grid></div>
-      <p class="field__hint" style="margin-top:8px">
-        Photos from Wikimedia Commons, freely licensed. Tap one for the source and full credit.
-      </p>
-    </section>
-
-    <div class="btn-row">
-      <a class="btn btn--primary" href="${esc(fishbaseUrl(s))}" target="_blank" rel="noopener noreferrer">
-        FishBase reference &nearr;
-      </a>
-      <a class="btn btn--sm" href="#/log?species=${esc(s.id)}">Log a catch</a>
-    </div>
-    <p class="field__hint" style="margin-top:10px">
-      FishBase opens in a new tab for photos and full biology. Photos aren't embedded here — they're copyrighted by their contributors.
-    </p>`;
-}
-
-/**
- * Fills the sheet's photo gallery once it's in the DOM.
- *
- * Sits below the written information rather than under the hero art: the
- * pixel sprite establishes what the app thinks the fish is, the facts explain
- * it, and the photos are the reference you check afterwards.
- */
-function mountSheetPhoto(s) {
-  return async (rootEl) => {
-    const section = rootEl.querySelector('[data-gallery]');
-    const grid = rootEl.querySelector('[data-gallery-grid]');
-    if (!section || !grid) return;
-
-    let photos = await fetchPhotos(s.scientific, 4);
-
-    // Commons search can come back empty for less-documented species; the
-    // Wikipedia summary image is a reliable single fallback.
-    if (!photos.length) {
-      const one = await fetchPhoto(s.scientific);
-      if (one) photos = [one];
-    }
-    if (!photos.length || !section.isConnected) return;
-
-    grid.innerHTML = photos
-      .map(
-        (p) => `
-        <a class="gallery__item" href="${esc(p.page)}" target="_blank" rel="noopener noreferrer"
-           title="${esc(p.title || s.common)} — ${esc(p.credit)}">
-          <img src="${esc(p.src)}" alt="Photograph of ${esc(s.common)}" loading="lazy" decoding="async">
-          <span>${esc(p.credit)}</span>
-        </a>`
-      )
-      .join('');
-    section.hidden = false;
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -558,7 +459,8 @@ export function mount(root, ctx) {
     for (const btn of results.querySelectorAll('[data-zone]')) {
       btn.addEventListener('click', () => {
         const z = zones.find((x) => x.id === btn.dataset.zone);
-        if (z) openSheet(z.name, () => zoneSheetHtml(z));
+        if (z) openSheet(z.name, () => zoneSheetHtml(z), (sheetRoot) =>
+          mountZoneSheet(sheetRoot, z, ctx.regionId));
       });
     }
   }
@@ -650,6 +552,7 @@ export function mount(root, ctx) {
   const openZoneId = ctx.params.get('zone');
   if (openZoneId) {
     const z = zones.find((x) => x.id === openZoneId);
-    if (z) openSheet(z.name, () => zoneSheetHtml(z));
+    if (z) openSheet(z.name, () => zoneSheetHtml(z), (sheetRoot) =>
+      mountZoneSheet(sheetRoot, z, ctx.regionId));
   }
 }

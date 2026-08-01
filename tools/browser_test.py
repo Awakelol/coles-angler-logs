@@ -1911,6 +1911,37 @@ async def main():
                   tabs["familyChipsOnFishes"] and tabs["familyChipsHidden"], str(tabs))
             check("the hash tracks the active tab", tabs["hashFollowsTab"], str(tabs))
 
+            # Info › Zones opens the same write-up as the map, so its fish must
+            # drill down in place too. Separate call site, so worth its own
+            # check: the shared component working doesn't prove it was wired.
+            info_drill = await page.eval("""
+                location.hash = '#/info?tab=zones';
+                await new Promise(r => setTimeout(r, 800));
+                document.querySelector('.zone-card').click();
+                await new Promise(r => setTimeout(r, 500));
+                const before = document.querySelector('.sheet__head h2').textContent;
+                const btn = document.querySelector('.sheet [data-species-detail]');
+                if (!btn) return { wired: false };
+                btn.click();
+                await new Promise(r => setTimeout(r, 500));
+                const out = {
+                    wired: true,
+                    before,
+                    title: document.querySelector('.sheet__head h2').textContent,
+                    isSpeciesCard: document.querySelector('.sheet').innerText.includes('FishBase'),
+                    backdrops: document.querySelectorAll('.sheet-backdrop').length,
+                    hash: location.hash,
+                };
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.body.classList.remove('is-sheet-open');
+                document.body.style.top = '';
+                return out;
+            """)
+            check("Info's zone sheet opens fish in place too",
+                  info_drill.get("wired") and info_drill.get("isSpeciesCard")
+                  and info_drill.get("title") != info_drill.get("before")
+                  and info_drill.get("backdrops") == 1, str(info_drill))
+
             gear = await page.eval("""
                 const { GEAR, GEAR_GROUPS } = await import('./js/data/gear.js');
                 const groups = new Set(GEAR_GROUPS.map(g => g.id));
@@ -2957,6 +2988,105 @@ async def main():
             check("zone sheet shows lures", "Bring these" in sheet_txt, sheet_txt[:120])
             check("zone sheet shows habitat advice",
                   "Fishing this water" in sheet_txt, sheet_txt[:120])
+
+            # --- a fish opens IN the sheet, not on another page --------------
+            # "Species detail" used to be a link to #/info?open=<id>, which
+            # threw away the map, the zone and your place in the list.
+            drill = await page.eval("""
+                const sheet = document.querySelector('.sheet');
+                const zoneTitle = document.querySelector('.sheet__head h2').textContent;
+                const btn = sheet.querySelector('[data-species-detail]');
+                if (!btn) return { error: 'no species detail button' };
+                sheet.scrollTop = 300;   // so we can prove the swap resets it
+                btn.click();
+                await new Promise(r => setTimeout(r, 500));
+                const now = document.querySelector('.sheet');
+                return {
+                    zoneTitle,
+                    title: document.querySelector('.sheet__head h2').textContent,
+                    hash: location.hash,
+                    isSpeciesCard: now.innerText.includes('FishBase'),
+                    hasBack: !!now.querySelector('[data-back-to-zone]'),
+                    backNamesZone: (now.querySelector('[data-back-to-zone]')
+                                       ?.textContent || '').includes(zoneTitle),
+                    // One sheet, not two stacked — openSheet cannot nest.
+                    backdrops: document.querySelectorAll('.sheet-backdrop').length,
+                    mapAlive: !!document.querySelector('#fishMap')?._leafletMap,
+                    scrollReset: now.scrollTop === 0,
+                    // The old link must be gone, not merely bypassed.
+                    oldLink: !!now.querySelector('a[href*="info?open"]'),
+                };
+            """)
+            check("a zone's fish opens inside the sheet",
+                  drill.get("isSpeciesCard") and drill.get("title") != drill.get("zoneTitle"),
+                  str(drill))
+            check("opening a fish does not leave the map",
+                  drill.get("hash") == "#/map" and drill.get("mapAlive"), str(drill))
+            check("the fish does not stack a second sheet",
+                  drill.get("backdrops") == 1, str(drill))
+            check("the way back names the zone you came from",
+                  drill.get("hasBack") and drill.get("backNamesZone"), str(drill))
+            check("swapping the sheet scrolls it back to the top",
+                  drill.get("scrollReset"), str(drill))
+            check("the redirect to Info is gone, not just bypassed",
+                  not drill.get("oldLink"), str(drill))
+
+            # The species card lists the other waters the fish turns up in. From
+            # a zone sheet those move the sheet; they used to leave the map too.
+            hop = await page.eval("""
+                const sheet = document.querySelector('.sheet');
+                const chip = sheet.querySelector('a[href*="tab=zones&zone="]');
+                if (!chip) return { skipped: 'this fish is in only one zone' };
+                const to = chip.textContent.trim();
+                chip.click();
+                await new Promise(r => setTimeout(r, 600));
+                return {
+                    to,
+                    title: document.querySelector('.sheet__head h2').textContent,
+                    onAZone: document.querySelector('.sheet').innerText
+                             .includes('Possible catches in these waters'),
+                    hash: location.hash,
+                    // The weather panel follows the sheet, not just the pin.
+                    weatherLabel: document.getElementById('mapSource').textContent,
+                };
+            """)
+            if "skipped" in hop:
+                check("another water opens in the sheet", True, hop["skipped"])
+            else:
+                check("another water opens in the sheet",
+                      hop["title"] == hop["to"] and hop["onAZone"]
+                      and hop["hash"] == "#/map", str(hop))
+                check("the weather follows the sheet to the new water",
+                      hop["weatherLabel"] == hop["to"], str(hop))
+
+            back_to_zone = await page.eval("""
+                const sheet = document.querySelector('.sheet');
+                const btn = sheet.querySelector('[data-species-detail]');
+                btn.click();
+                await new Promise(r => setTimeout(r, 400));
+                document.querySelector('[data-back-to-zone]').click();
+                await new Promise(r => setTimeout(r, 400));
+                return { onAZone: document.querySelector('.sheet').innerText
+                                  .includes('Possible catches in these waters'),
+                         backdrops: document.querySelectorAll('.sheet-backdrop').length };
+            """)
+            check("going back returns to the zone",
+                  back_to_zone["onAZone"] and back_to_zone["backdrops"] == 1,
+                  str(back_to_zone))
+
+            # Put a plain zone sheet back for the tests below, which need one.
+            await page.eval("""
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.body.classList.remove('is-sheet-open');
+                document.body.style.top = '';
+                document.querySelector('.zone-pin').click();
+                await new Promise(r => setTimeout(r, 600));
+                return 1;
+            """)
+            sheet_txt = await page.eval("""
+                const s = document.querySelector('.sheet');
+                return s ? s.innerText : '';
+            """)
 
             # The sheet must actually sit above the map. Leaflet's panes reach
             # z-index 1000, so a hit-test is the only honest check here.

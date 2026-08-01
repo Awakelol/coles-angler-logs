@@ -11,7 +11,7 @@ import { icon } from '../pixel.js';
 import { fetchWeather } from '../api/weather.js';
 import { placeName } from '../api/place.js';
 import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
-import { zoneMarkerHtml, zoneSheetHtml } from '../zone-ui.js';
+import { zoneMarkerHtml, zoneSheetHtml, mountZoneSheet } from '../zone-ui.js';
 import { esc, openSheet, toast, loadingBlock, errorBlock, round } from '../ui.js';
 
 let leafletPromise = null;
@@ -187,10 +187,18 @@ export async function mount(root, ctx) {
   // On a wide window the zone belongs in the sidebar under the weather —
   // a modal over a map you're still reading is the wrong shape there. On a
   // phone there's no sidebar to put it in, so it stays a sheet.
+  // The sheet can walk on to another zone from a fish's "possible in these
+  // waters" list, so the weather follows the sheet rather than only the pin.
+  const followWeather = (z) => mountWeather(root, ctx, { coords: z.coords, name: z.name });
+
   const openZone = (zone) => {
-    mountWeather(root, ctx, { coords: zone.coords, name: zone.name });
+    followWeather(zone);
     if (!wideScreen() || !panel) {
-      openSheet(zone.name, () => zoneSheetHtml(zone));
+      // mountZoneSheet fills the body itself, so the render callback only has
+      // to hand openSheet something non-empty to size the sheet from.
+      openSheet(zone.name, () => zoneSheetHtml(zone), (sheetRoot) =>
+        mountZoneSheet(sheetRoot, zone, ctx.regionId, { onZone: followWeather })
+      );
       return;
     }
     panel.innerHTML = `
@@ -200,7 +208,8 @@ export async function mount(root, ctx) {
           <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
         </button>
       </div>
-      ${zoneSheetHtml(zone)}`;
+      <div data-zone-body></div>`;
+    mountZoneSheet(panel, zone, ctx.regionId, { onZone: followWeather });
     panel.hidden = false;
     panel.scrollTop = 0;
     panel.querySelector('[data-close-zone]').addEventListener('click', () => {

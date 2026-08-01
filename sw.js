@@ -31,6 +31,7 @@ const SHELL = [
   './js/moderation.js',
   './js/weather-ui.js',
   './js/zone-ui.js',
+  './js/species-ui.js',
   './js/identify-verdict.js',
   './js/sync.js',
   './js/auth.js',
