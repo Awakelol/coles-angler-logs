@@ -19,8 +19,11 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'anglerlog';
-const DB_VERSION = 1;
+// v2 added SPOTS. The upgrade only creates what is missing, so an existing
+// database keeps every catch in it.
+const DB_VERSION = 2;
 const CATCHES = 'catches';
+const SPOTS = 'spots';
 
 // Long enough that a phone left in a drawer for a season still learns about
 // deletions when it comes back; short enough that the store doesn't grow
@@ -43,6 +46,12 @@ function openDb() {
         store.createIndex('by-species', 'speciesId');
         store.createIndex('by-region', 'regionId');
       }
+      // Places the user dropped on the map themselves — their own marks, as
+      // opposed to the zones and spots that ship with a region.
+      if (!db.objectStoreNames.contains(SPOTS)) {
+        const store = db.createObjectStore(SPOTS, { keyPath: 'id' });
+        store.createIndex('by-region', 'regionId');
+      }
     };
 
     req.onsuccess = () => resolve(req.result);
@@ -52,12 +61,12 @@ function openDb() {
   return dbPromise;
 }
 
-function tx(mode, fn) {
+function txIn(name, mode, fn) {
   return openDb().then(
     (db) =>
       new Promise((resolve, reject) => {
-        const t = db.transaction(CATCHES, mode);
-        const store = t.objectStore(CATCHES);
+        const t = db.transaction(name, mode);
+        const store = t.objectStore(name);
         let result;
         try {
           result = fn(store);
@@ -71,6 +80,11 @@ function tx(mode, fn) {
       })
   );
 }
+
+// Every existing call reads and writes catches; keeping the short name means
+// the store below stays as it was.
+const tx = (mode, fn) => txIn(CATCHES, mode, fn);
+const spotTx = (mode, fn) => txIn(SPOTS, mode, fn);
 
 const wrap = (req) => ({ __req: req });
 
@@ -198,6 +212,72 @@ export const store = {
 
   async clearCatches() {
     await tx('readwrite', (s) => s.clear());
+  },
+
+  // --- the user's own spots -------------------------------------------------
+  //
+  // Distinct from `region.spots`, which are the named places that ship with a
+  // region and are the same for everybody. These are marks somebody dropped on
+  // the map themselves — the gap in the reef only they know about — so they
+  // are owned, scoped by userId exactly as catches are, and carry the same
+  // createdAt / updatedAt / deleted shape. Nothing syncs them yet; having the
+  // shape already right is what makes that a small change rather than a
+  // migration.
+
+  /** One user's spots in a region, newest first. Tombstones excluded. */
+  async allSpots(userId = null, regionId = null) {
+    const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
+    return rows
+      .filter((r) => !r.deleted)
+      .filter((r) => (userId === null ? true : r.userId === userId))
+      .filter((r) => (regionId === null ? true : r.regionId === regionId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  },
+
+  async saveSpot(spot) {
+    const record = { ...spot };
+    if (!record.id) record.id = crypto.randomUUID();
+    if (!record.createdAt) record.createdAt = new Date().toISOString();
+    record.updatedAt = new Date().toISOString();
+    await spotTx('readwrite', (s) => s.put(record));
+    return record;
+  },
+
+  /** Soft delete, for the same reason catches get one — see the file header. */
+  async deleteSpot(id) {
+    const existing = await spotTx('readonly', (s) => wrap(s.get(id)));
+    if (!existing) return;
+    await spotTx('readwrite', (s) =>
+      s.put({ ...existing, deleted: true, updatedAt: new Date().toISOString() })
+    );
+  },
+
+  /** Pre-account spots join the first account created, as catches do. */
+  async adoptOrphanSpots(userId) {
+    const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
+    const orphans = rows.filter((r) => !r.userId);
+    for (const row of orphans) await spotTx('readwrite', (s) => s.put({ ...row, userId }));
+    return orphans.length;
+  },
+
+  /** Re-key when a device-only account becomes a synced one. */
+  async reassignSpotOwner(fromUserId, toUserId) {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return 0;
+    const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
+    const mine = rows.filter((r) => r.userId === fromUserId);
+    for (const row of mine) await spotTx('readwrite', (s) => s.put({ ...row, userId: toUserId }));
+    return mine.length;
+  },
+
+  async deleteAllSpotsFor(userId) {
+    const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
+    for (const row of rows.filter((r) => r.userId === userId)) {
+      await spotTx('readwrite', (s) => s.delete(row.id));
+    }
+  },
+
+  async clearSpots() {
+    await spotTx('readwrite', (s) => s.clear());
   },
 };
 

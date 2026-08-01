@@ -12,6 +12,7 @@ import { fetchWeather } from '../api/weather.js';
 import { placeName } from '../api/place.js';
 import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
 import { zoneMarkerHtml, zoneSheetHtml, mountZoneSheet } from '../zone-ui.js';
+import { mountUserSpots } from '../map-spots.js';
 import { esc, openSheet, toast, loadingBlock, errorBlock, round } from '../ui.js';
 
 let leafletPromise = null;
@@ -464,7 +465,11 @@ export async function mount(root, ctx) {
   // refusal simply leaves the whole-region view already on screen.
   if (geolocationSupported()) locate({ silent: true });
 
+  // Your own marks, on top of the region's zones.
+  const userSpots = mountUserSpots(L, map, ctx.regionId);
+
   // Handle for the browser test suite (tools/browser_test.py).
   container._leafletMap = map;
   container._locate = locate;
+  container._userSpots = userSpots;
 }

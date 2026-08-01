@@ -239,8 +239,10 @@ async function tryUpgrade(username, password, localUser) {
     }
 
     // The catches were written against the local id. Re-key them to the cloud
-    // uid before anything syncs, or they'd belong to nobody.
+    // uid before anything syncs, or they'd belong to nobody. Spots are owned
+    // the same way and would be just as orphaned.
     await store.reassignOwner(localUser.id, profile.id);
+    await store.reassignSpotOwner(localUser.id, profile.id);
     local.deleteAccount(localUser.id);
     await mirrorLocally(profile.username, password, profile.id);
     writeSession({ kind: 'cloud', id: profile.id });

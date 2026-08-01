@@ -1177,6 +1177,51 @@ body:has(.map-screen) { padding-bottom: 0; }
 .zone-pin:hover { transform: translateY(-2px) scale(1.06); }
 .zone-pin svg { width: 32px; height: auto; }
 
+/* Your own spots. Smaller than a zone pin and a hook rather than a fish, so
+   at a glance you can tell what the app knows about from what you added. */
+.my-spot-pin {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  background: var(--coral);
+  border: var(--border-w) solid var(--line);
+  border-radius: 50% 50% 50% 6px;   /* a dropped-pin corner */
+  box-shadow: 2px 2px 0 var(--line);
+  cursor: pointer;
+  transition: transform .12s;
+}
+.my-spot-pin:hover { transform: translateY(-2px) scale(1.08); }
+.my-spot-pin svg { width: 22px; height: auto; }
+
+/* A long press puts up the naming popup; without this iOS also raises its own
+   text-selection callout over the top of it. */
+#fishMap { -webkit-touch-callout: none; }
+.leaflet-container { -webkit-user-select: none; user-select: none; }
+/* ...but the one field the user is meant to type into needs it back. */
+.spot-pop input { -webkit-user-select: text; user-select: text; }
+
+.spot-pop { min-width: 190px; font-family: var(--font); }
+.spot-pop__name { margin: 0 0 2px; font-size: 15px; font-weight: 900; color: var(--ink); }
+.spot-pop__at {
+  margin: 0 0 10px;
+  font-size: 11px; font-weight: 700;
+  color: var(--ink-60);
+  font-family: var(--mono);
+}
+.spot-pop input { margin-bottom: 10px; padding: 9px 11px; font-size: 14px; }
+.spot-pop__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.spot-pop__row .btn { flex: 1 1 auto; text-align: center; text-decoration: none; }
+
+/* Leaflet's popup chrome is white and square-cornered; match the app instead. */
+.spot-popup .leaflet-popup-content-wrapper {
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.spot-popup .leaflet-popup-content { margin: 12px 14px; }
+.spot-popup .leaflet-popup-tip { background: var(--paper); border: var(--border-w) solid var(--line); }
+
 /* "Centre on me" button. Sits above Leaflet's own controls (z-index 800) but
    inside #mapWrap's isolated stacking context, so it can't cover the tab bar. */
 .map-locate {

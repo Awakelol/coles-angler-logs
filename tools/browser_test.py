@@ -3343,6 +3343,156 @@ async def main():
             check("a different place still is",
                   wx_cache["afterOther"] > wx_cache["afterRepeat"], str(wx_cache))
 
+            # --- your own spots ----------------------------------------------
+            print("\nYour spots")
+
+            # The link is a plain https URL on both platforms on purpose: a
+            # wrong platform guess degrades to a working map page rather than
+            # a dead scheme URL that opens nothing.
+            dirs = await page.eval("""
+                const m = await import('./js/map-spots.js');
+                const at = { lat: 11.238, lon: 125.004 };
+                return {
+                    android: m.directionsUrl(at, 'Mozilla/5.0 (Linux; Android 13; Pixel 7)'),
+                    iphone:  m.directionsUrl(at, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)'),
+                    mac:     m.directionsUrl(at, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'),
+                    windows: m.directionsUrl(at, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
+                };
+            """)
+            check("Apple devices get Apple Maps",
+                  "maps.apple.com" in dirs["iphone"] and "maps.apple.com" in dirs["mac"],
+                  str(dirs))
+            check("everything else gets Google Maps",
+                  "google.com/maps" in dirs["android"] and "google.com/maps" in dirs["windows"],
+                  str(dirs))
+            check("the destination is in the link",
+                  all("11.238000,125.004000" in u for u in dirs.values()), str(dirs))
+            check("no scheme URL that could open nothing",
+                  all(u.startswith("https://") for u in dirs.values()), str(dirs))
+
+            # A long press drops a pin and asks. A short press, and a press that
+            # turns into a pan, must not — panning is the gesture people make
+            # most on a map, and a popup thrown into it would be maddening.
+            press = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const r = el.getBoundingClientRect();
+                const x = Math.round(r.left + r.width / 2);
+                const y = Math.round(r.top + r.height / 2);
+                const fire = (type, cx, cy) => el.dispatchEvent(new PointerEvent(type, {
+                    bubbles: true, clientX: cx, clientY: cy, button: 0, pointerId: 1,
+                }));
+                const popupUp = () => !!document.querySelector('.spot-popup');
+
+                document.querySelector('.sheet-backdrop')?.remove();
+                document.querySelector('#fishMap')._leafletMap.closePopup();
+
+                // 1. too short
+                fire('pointerdown', x, y);
+                await new Promise(r2 => setTimeout(r2, 150));
+                fire('pointerup', x, y);
+                await new Promise(r2 => setTimeout(r2, 500));
+                const afterShort = popupUp();
+
+                // 2. held, but dragged — that's a pan
+                fire('pointerdown', x, y);
+                await new Promise(r2 => setTimeout(r2, 150));
+                fire('pointermove', x + 60, y + 10);
+                await new Promise(r2 => setTimeout(r2, 700));
+                fire('pointerup', x + 60, y + 10);
+                const afterDrag = popupUp();
+
+                // 3. a real long press
+                fire('pointerdown', x, y);
+                await new Promise(r2 => setTimeout(r2, 800));
+                const afterLong = popupUp();
+                const asks = document.querySelector('.spot-pop__name')?.textContent.trim();
+                const nearLine = document.querySelector('.spot-pop__at')?.textContent.trim();
+                fire('pointerup', x, y);
+
+                return { afterShort, afterDrag, afterLong, asks, nearLine,
+                         hasField: !!document.querySelector('.spot-pop [data-name]') };
+            """)
+            check("a short press does not drop a spot", not press["afterShort"], str(press))
+            check("a press that becomes a pan does not drop a spot",
+                  not press["afterDrag"], str(press))
+            check("a long press asks to add a spot",
+                  press["afterLong"] and press["asks"] == "Add spot?" and press["hasField"],
+                  str(press))
+            check("it says which water you are near, not coordinates",
+                  press["nearLine"].startswith("Off ") and "km" in press["nearLine"]
+                  and not re.search(r"\\d+\\.\\d{3}", press["nearLine"]),
+                  str(press["nearLine"]))
+
+            saved = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const input = document.querySelector('.spot-pop [data-name]');
+                input.value = 'The deep hole';
+                document.querySelector('.spot-pop [data-save]').click();
+                await new Promise(r => setTimeout(r, 900));
+
+                const pin = document.querySelector('.my-spot-pin');
+                pin?.closest('.leaflet-marker-icon')?.click();
+                await new Promise(r => setTimeout(r, 500));
+                const pop = document.querySelector('.spot-pop');
+                const link = pop?.querySelector('[data-directions]');
+                return {
+                    pinDropped: !!pin,
+                    popupClosed: !document.querySelector('.spot-pop [data-name]'),
+                    name: pop?.querySelector('.spot-pop__name')?.textContent.trim(),
+                    near: pop?.querySelector('.spot-pop__at')?.textContent.trim(),
+                    hasDirections: !!link,
+                    href: link?.getAttribute('href'),
+                    opensAway: link?.getAttribute('target'),
+                };
+            """)
+            check("confirming drops a pin on the map", saved["pinDropped"], str(saved))
+            check("pressing the pin names the spot",
+                  saved["name"] == "The deep hole", str(saved))
+            check("the spot's window says the nearest zone",
+                  (saved["near"] or "").startswith("Off "), str(saved))
+            check("the spot's window offers directions",
+                  saved["hasDirections"] and "maps" in (saved["href"] or "")
+                  and saved["opensAway"] == "_blank", str(saved))
+
+            # Spots belong to an account. Two users on one phone must not see
+            # each other's marks — the same rule the catch log already follows.
+            owners = await page.eval("""
+                const { store } = await import('./js/store.js');
+                await store.clearSpots();
+                const at = { regionId: 'leyte', lat: 11.0, lon: 125.0 };
+                await store.saveSpot({ ...at, userId: 'user-a', name: 'A only' });
+                await store.saveSpot({ ...at, userId: 'user-b', name: 'B only' });
+                await store.saveSpot({ ...at, userId: 'user-a', name: 'A second' });
+                const a = await store.allSpots('user-a', 'leyte');
+                const b = await store.allSpots('user-b', 'leyte');
+
+                // Another region's marks stay out of this one.
+                await store.saveSpot({ userId: 'user-a', regionId: 'elsewhere',
+                                       lat: 1, lon: 1, name: 'Away' });
+                const stillHere = await store.allSpots('user-a', 'leyte');
+
+                // Deleting leaves a tombstone that no screen shows, so the
+                // removal can sync later rather than silently coming back.
+                await store.deleteSpot(a[0].id);
+                const afterDelete = await store.allSpots('user-a', 'leyte');
+                await store.clearSpots();
+                return {
+                    aNames: a.map(s => s.name).sort(),
+                    bNames: b.map(s => s.name),
+                    regionScoped: stillHere.length,
+                    afterDelete: afterDelete.length,
+                    stamped: !!a[0].createdAt && !!a[0].updatedAt && !!a[0].id,
+                };
+            """)
+            check("a spot belongs to the account that made it",
+                  owners["aNames"] == ["A only", "A second"]
+                  and owners["bNames"] == ["B only"], str(owners))
+            check("spots are scoped to their region too",
+                  owners["regionScoped"] == 2, str(owners))
+            check("removing a spot hides it", owners["afterDelete"] == 1, str(owners))
+            check("spots carry the shape sync will need",
+                  owners["stamped"], str(owners))
+
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log")

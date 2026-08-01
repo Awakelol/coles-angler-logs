@@ -542,8 +542,10 @@ function mountGate(root, ctx) {
         }
         const isFirstAccount = listUsers().length === 0;
         const user = await signUp(username, password, String(fd.get('email') || ''));
-        // Entries logged before profiles existed would otherwise appear lost.
+        // Entries logged before profiles existed would otherwise appear lost —
+        // and so would any spots dropped on the map in that time.
         const adopted = isFirstAccount ? await store.adoptOrphans(user.id) : 0;
+        if (isFirstAccount) await store.adoptOrphanSpots(user.id);
         toast(
           adopted
             ? `Welcome, ${user.username} — ${adopted} earlier catches are yours`

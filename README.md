@@ -363,6 +363,24 @@ restores the wrong position. `mountZoneSheet` in
 [`js/zone-ui.js`](js/zone-ui.js) swaps the contents of the open one instead,
 and works unchanged in the phone sheet, the desktop sidebar and Info › Zones.
 
+### Your own spots
+
+Long-press anywhere on the map (right-click on a desktop) to drop a mark, name
+it, and get directions to it later. These are **not** `region.spots` — those
+ship with a region and are the same for everybody. These belong to one account
+and one region, live in their own IndexedDB store, and carry the same
+`createdAt` / `updatedAt` / `deleted` shape catches do, so cloud-syncing them
+later is a small change rather than a migration. Nothing syncs them yet.
+
+The long press is hand-rolled rather than using Leaflet's `contextmenu`: that
+event doesn't fire everywhere on touch, its timing isn't ours to set, and it
+can't tell a press from the start of a pan — which is the gesture people
+actually make most on a map.
+
+Directions open Apple Maps on Apple devices and Google Maps everywhere else,
+both as plain `https://` links so a wrong platform guess degrades to a working
+map page rather than a dead scheme URL.
+
 ### Where the map may go, and what counts as "here"
 
 `map.bounds` frames the region. `map.panBounds` is a second, much wider box —
@@ -470,7 +488,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 385 checks covering
+Drives real headless Chrome over the DevTools Protocol — 401 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and
