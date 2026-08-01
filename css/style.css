@@ -1249,6 +1249,10 @@ body:has(.map-screen) { padding-bottom: 0; }
   cursor: pointer; white-space: nowrap;
   transition: background .16s ease, color .16s ease;
 }
+/* The basemap switch. Its own group in the opposite corner from the zoom
+   control, so the top of the map reads left-to-right as: how close, what is
+   drawn on it, what it is drawn on. */
+.map-filters--base { left: auto; right: 12px; transform: none; }
 .map-filters__btn[aria-pressed="true"] { background: var(--sky-deep); color: var(--on-accent); }
 .map-filters__btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
 

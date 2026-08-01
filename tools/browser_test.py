@@ -3627,6 +3627,81 @@ async def main():
                   "mapShowZones" in filtered["remembered"]
                   and "mapShowSpots" in filtered["remembered"], str(filtered["remembered"]))
 
+            # --- zoom range and the basemap ----------------------------------
+            zoomable = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const d = await import('./js/data/index.js');
+                const cfg = d.getRegion(d.DEFAULT_REGION_ID).map;
+                m.setView([11.238, 125.004], m.getMaxZoom(), { animate: false });
+                await new Promise(r => setTimeout(r, 400));
+                return { declared: cfg.maxZoom, onMap: m.getMaxZoom(),
+                         reached: m.getZoom() };
+            """)
+            check("the map zooms in past street level",
+                  zoomable["declared"] >= 18 and zoomable["onMap"] == zoomable["declared"],
+                  str(zoomable))
+            check("the deepest zoom is actually reachable",
+                  zoomable["reached"] == zoomable["onMap"], str(zoomable))
+
+            base = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const m = el._leafletMap;
+                const btn = document.getElementById('basemapBtn');
+                const urls = () => {
+                    const out = [];
+                    m.eachLayer(l => { if (l._url) out.push(l._url); });
+                    return out;
+                };
+                const start = { label: btn.textContent.trim(),
+                                pressed: btn.getAttribute('aria-pressed'),
+                                urls: urls() };
+                btn.click();
+                await new Promise(r => setTimeout(r, 600));
+                const sat = { label: btn.textContent.trim(),
+                              pressed: btn.getAttribute('aria-pressed'),
+                              urls: urls(),
+                              tiles: document.querySelectorAll('.leaflet-tile').length };
+                btn.click();
+                await new Promise(r => setTimeout(r, 600));
+                const back = { urls: urls(),
+                               remembered: JSON.parse(localStorage.getItem('angler.prefs') || '{}')
+                                               .mapBasemap };
+                return { start, sat, back };
+            """)
+            check("the map starts on street tiles",
+                  any("openstreetmap" in u for u in base["start"]["urls"])
+                  and base["start"]["label"] == "Map", str(base["start"]))
+            check("the button switches to satellite imagery",
+                  any("arcgisonline" in u and "World_Imagery" in u for u in base["sat"]["urls"])
+                  and not any("openstreetmap" in u for u in base["sat"]["urls"]),
+                  str(base["sat"]))
+            # Imagery with no names on it is hard to navigate by, and on open
+            # water the names are most of what there is to go on.
+            check("satellite keeps place names on top",
+                  any("Boundaries_and_Places" in u for u in base["sat"]["urls"]),
+                  str(base["sat"]["urls"]))
+            check("the button says which mode you are in",
+                  base["sat"]["label"] == "Satellite" and base["sat"]["pressed"] == "true",
+                  str(base["sat"]))
+            check("switching back restores the street map",
+                  any("openstreetmap" in u for u in base["back"]["urls"])
+                  and not any("arcgisonline" in u for u in base["back"]["urls"]),
+                  str(base["back"]))
+            check("the basemap choice is remembered",
+                  base["back"]["remembered"] == "map", str(base["back"]))
+
+            # Esri serves row before column. Getting it the usual way round
+            # yields a plausible-looking map of somewhere else entirely, which
+            # no amount of "tiles loaded" would catch.
+            tileorder = await page.eval("""
+                const src = await (await fetch('./js/pages/map.js')).text();
+                return { esriYX: src.includes('World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+                         osmXY: src.includes('openstreetmap.org/{z}/{x}/{y}') };
+            """)
+            check("Esri tiles are addressed row-then-column",
+                  tileorder["esriYX"] and tileorder["osmXY"], str(tileorder))
+
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log")

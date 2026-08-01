@@ -56,7 +56,10 @@ export default {
     center: { lat: 10.85, lon: 125.00 },
     zoom: 9,
     minZoom: 7,
-    maxZoom: 15,
+    // 19 is as far as both tile sources go. It was 15, which is about "this
+    // bay" — not close enough to pick out the actual reef edge or wharf you
+    // meant, which is the whole point of putting a spot on a map.
+    maxZoom: 19,
     bounds: { south: 9.85, west: 124.15, north: 11.6, east: 126.0 },
 
     // How far you may pan away from the region — the Philippines, here.

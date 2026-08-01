@@ -259,6 +259,12 @@ Panaon Island's coastline falls under FMA 8. ✅
    the two overlapped on the map. I moved it to what looks like mid-basin from
    the surrounding coastline. That is **inference, not a source**: worth
    confirming it is open water and is what people mean by San Pedro Bay.
-8. **The local names on the 28 new species.** Every one is FishBase's, none
+8. **Zone pin placement, now that the map zooms to 19.** ⚠️ **Verify.** The
+   old ceiling of 15 was too coarse to see whether a pin sat on water. At 17
+   the Cancabato Bay pin (11.238 / 125.004) is clearly over Tacloban's
+   rooftops rather than the bay itself — it is the town's coordinate, not the
+   water's. San Pedro Bay has already been moved for a related reason. The
+   other nineteen have not been checked at all; the zoom now makes it possible.
+9. **The local names on the 28 new species.** Every one is FishBase's, none
    checked against Leyte usage — the least trustworthy data in the app. A
    correction means putting the local name **first**, not appending it.

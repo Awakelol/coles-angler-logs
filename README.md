@@ -378,7 +378,17 @@ drawer is covering (`--wx-visible`), or the drawer would bury the control you
 press to find yourself.
 
 Two filter buttons float over the top of the map on **both** layouts — Zones
-and Spots — and are remembered. They are over the map rather than in a row
+and Spots — and are remembered. A **Map / Satellite** switch sits opposite
+them, so the top of the map reads left to right as: how close, what is drawn
+on it, what it is drawn on.
+
+Satellite imagery is **Esri World Imagery**, which is free and needs no key,
+unlike Mapbox or Google. It is Esri's service on Esri's terms — fine for
+personal use, worth re-reading before anyone makes money from this. A second
+Esri layer puts place names back on top: imagery alone has none, and on open
+water the names are most of what there is to navigate by. Note Esri addresses
+tiles `{z}/{y}/{x}`, row before column — the usual order returns a
+plausible-looking map of somewhere else. They are over the map rather than in a row
 above it because this screen is one screenful with no page scroll, and a real
 row would cost the height the drawer exists to give back.
 
@@ -507,7 +517,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 412 checks covering
+Drives real headless Chrome over the DevTools Protocol — 421 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

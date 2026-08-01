@@ -102,6 +102,14 @@ export function render(ctx) {
           <button class="map-filters__btn" data-layer="zones" aria-pressed="true">Zones</button>
           <button class="map-filters__btn" data-layer="spots" aria-pressed="true">Spots</button>
         </div>
+        <!-- Separate from the filters on purpose: those choose what is drawn
+             ON the map, this chooses what the map IS. Same pill styling so it
+             is obviously the same class of control, its own group so the two
+             questions don't read as one list. -->
+        <div class="map-filters map-filters--base">
+          <button class="map-filters__btn" id="basemapBtn" aria-pressed="false"
+                  aria-label="Switch between street map and satellite imagery">Map</button>
+        </div>
         <div id="mapHint" class="map-hint"></div>
         ${
           geolocationSupported()
@@ -274,10 +282,71 @@ export async function mount(root, ctx) {
       : {}),
   });
 
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(map);
+  // --- basemaps ------------------------------------------------------------
+  //
+  // Street tiles are the better default: they name the towns and draw the
+  // roads you use to reach the water. Satellite is what you want once you are
+  // close in, where the drawn coastline is a generalisation and the imagery
+  // shows the actual reef edge, the sandbar and the channel through it.
+  //
+  // Esri's World Imagery is free and needs no key, unlike Mapbox or Google.
+  // It is their service on their terms, which are fine for personal use and
+  // worth re-reading before anyone makes money from this.
+  const basemaps = {
+    map: () =>
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      }),
+    satellite: () =>
+      L.layerGroup([
+        // NOTE the {z}/{y}/{x} order — Esri serves row before column, and
+        // getting it the usual way round yields a plausible-looking map of
+        // somewhere else entirely.
+        L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            attribution:
+              'Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community',
+            maxZoom: 19,
+          }
+        ),
+        // Imagery alone has no names on it. On open water that is most of the
+        // screen, and a map you cannot read place names off is hard to use for
+        // the one thing this is for — working out where you are going.
+        L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+          { maxZoom: 19, pane: 'shadowPane' }
+        ),
+      ]),
+  };
+
+  let baseName = prefs.get('mapBasemap', 'map') === 'satellite' ? 'satellite' : 'map';
+  let baseLayer = basemaps[baseName]().addTo(map);
+
+  function setBasemap(name) {
+    if (!basemaps[name] || name === baseName) return;
+    map.removeLayer(baseLayer);
+    baseName = name;
+    baseLayer = basemaps[name]().addTo(map);
+    prefs.set('mapBasemap', name);
+    const btn = root.querySelector('#basemapBtn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(name === 'satellite'));
+      btn.textContent = name === 'satellite' ? 'Satellite' : 'Map';
+    }
+  }
+
+  root.querySelector('#basemapBtn')?.addEventListener('click', () => {
+    setBasemap(baseName === 'satellite' ? 'map' : 'satellite');
+  });
+  {
+    const btn = root.querySelector('#basemapBtn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(baseName === 'satellite'));
+      btn.textContent = baseName === 'satellite' ? 'Satellite' : 'Map';
+    }
+  }
 
   const markers = zones.map((zone) => {
     const marker = L.marker([zone.coords.lat, zone.coords.lon], {
