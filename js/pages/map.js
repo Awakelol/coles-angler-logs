@@ -7,7 +7,7 @@
 // Leaflet is vendored in vendor/leaflet so the app has no CDN dependency.
 
 import { getLocation, nearestPlace, geolocationSupported, withinBounds } from '../api/geo.js';
-import { icon } from '../pixel.js';
+import { icon } from '../art.js';
 import { fetchWeather } from '../api/weather.js';
 import { placeName } from '../api/place.js';
 import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';

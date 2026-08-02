@@ -5,7 +5,7 @@ import { fetchTides, currentTideState, nextExtremes, tidesConfigured } from '../
 import { geolocationSupported } from '../api/geo.js';
 import { weatherHtml, forecastHtml, resolveCoords } from '../weather-ui.js';
 import { prefs } from '../store.js';
-import { icon } from '../pixel.js';
+import { icon } from '../art.js';
 import { esc, fmtTime, fmtWeekday, round, errorBlock, loadingBlock, toast } from '../ui.js';
 
 export function render(ctx) {

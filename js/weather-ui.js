@@ -12,7 +12,7 @@ import {
   getLocation, roundCoords, distanceKm, nearestPlace, geolocationSupported, withinBounds,
 } from './api/geo.js';
 import { prefs } from './store.js';
-import { icon } from './pixel.js';
+import { icon } from './art.js';
 import { esc, fmtTime, fmtWeekday, round } from './ui.js';
 
 export function weatherHtml(w, tz) {

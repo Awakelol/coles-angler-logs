@@ -1861,6 +1861,132 @@ async def main():
             check("the service worker cache version is set",
                   bool(bumped["cache"]), str(bumped))
 
+            # -------------------------------------------------- art mode
+            print("\nArt mode")
+
+            sets = await page.eval("""
+                const art = await import('./js/art.js');
+                const modern = art.ICON_NAMES.modern, pixel = art.ICON_NAMES.pixel;
+                // Every icon must exist in BOTH sets. A name only the pixel set
+                // has would silently fall back and look imported from another
+                // app; one only the modern set has is dead weight.
+                return {
+                    modern: modern.length, pixel: pixel.length,
+                    missingFromModern: pixel.filter(n => !modern.includes(n)),
+                    missingFromPixel: modern.filter(n => !pixel.includes(n)),
+                    // Nothing may render empty at any size.
+                    allDraw: modern.every(n => art.icon(n, { size: 24 }).includes('<svg')),
+                };
+            """)
+            check("both art sets cover the same icons",
+                  not sets["missingFromModern"] and not sets["missingFromPixel"], str(sets))
+            check("every icon draws something", sets["allDraw"], str(sets))
+
+            locked = await page.eval("""
+                const am = await import('./js/art-mode.js');
+                localStorage.removeItem('angler.retroFound');
+                localStorage.removeItem('angler.artMode');
+                const clean = { mode: am.getArtMode(), unlocked: am.isRetroUnlocked() };
+
+                // A stored 'retro' with no unlock must not resurrect the pixel
+                // art — if site data is cleared while retro is on there would
+                // be no visible way back.
+                localStorage.setItem('angler.artMode', 'retro');
+                const stray = am.getArtMode();
+                localStorage.removeItem('angler.artMode');
+                return { clean, strayStoredMode: stray };
+            """)
+            check("modern is the default", locked["clean"]["mode"] == "modern"
+                  and locked["clean"]["unlocked"] is False, str(locked))
+            check("retro cannot switch itself on without being unlocked",
+                  locked["strayStoredMode"] == "modern", str(locked))
+
+            hidden = await page.eval("""
+                location.hash = '#/settings';
+                await new Promise(r => setTimeout(r, 900));
+                return { fieldHidden: document.getElementById('retroField')?.hidden,
+                         versionTappable: !!document.getElementById('appVersion') };
+            """)
+            check("the toggle is hidden until it is found",
+                  hidden["fieldHidden"] is True and hidden["versionTappable"], str(hidden))
+
+            # Seven taps on the version number, the gesture phones already teach.
+            egg = await page.eval("""
+                const am = await import('./js/art-mode.js');
+                const v = document.getElementById('appVersion');
+                const seen = [];
+                for (let i = 0; i < am.UNLOCK_TAPS - 1; i++) {
+                    v.click();
+                    seen.push(am.isRetroUnlocked());
+                }
+                const beforeLast = am.isRetroUnlocked();
+                v.click();                       // the seventh
+                await new Promise(r => setTimeout(r, 400));
+                return {
+                    unlockedEarly: seen.some(Boolean) || beforeLast,
+                    unlocked: am.isRetroUnlocked(),
+                    mode: am.getArtMode(),
+                    fieldShown: document.getElementById('retroField')?.hidden === false,
+                    htmlAttr: document.documentElement.getAttribute('data-art'),
+                };
+            """)
+            check("six taps do nothing", not egg["unlockedEarly"], str(egg))
+            check("the seventh tap unlocks retro",
+                  egg["unlocked"] and egg["mode"] == "retro", str(egg))
+            check("unlocking reveals the toggle and flips the app",
+                  egg["fieldShown"] and egg["htmlAttr"] == "retro", str(egg))
+
+            swapped = await page.eval("""
+                const art = await import('./js/art.js');
+                const am = await import('./js/art-mode.js');
+                // The pixel engine emits <rect>; the modern set does not.
+                const isPixel = (svg) => svg.includes('shape-rendering="crispEdges"');
+                const retro = { icon: isPixel(art.icon('rain', { size: 40 })),
+                                brand: isPixel(art.brandMark({ size: 40 })) };
+                am.setArtMode('modern');
+                const modern = { icon: isPixel(art.icon('rain', { size: 40 })),
+                                 brand: isPixel(art.brandMark({ size: 40 })) };
+                am.setArtMode('retro');
+                return { retro, modern };
+            """)
+            check("retro really renders the pixel art",
+                  swapped["retro"]["icon"] and swapped["retro"]["brand"], str(swapped))
+            check("modern really renders the drawn art",
+                  not swapped["modern"]["icon"] and not swapped["modern"]["brand"], str(swapped))
+
+            # It has to survive a reload, or it is a party trick rather than a
+            # preference.
+            kept = await page.eval("""
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 600));
+                location.reload();
+                return 1;
+            """)
+            await asyncio.sleep(2.5)
+            persisted = await page.eval("""
+                const am = await import('./js/art-mode.js');
+                return { mode: am.getArtMode(), unlocked: am.isRetroUnlocked(),
+                         attr: document.documentElement.getAttribute('data-art'),
+                         markIsPixel: (document.getElementById('brandMark')?.innerHTML || '')
+                                        .includes('crispEdges') };
+            """)
+            check("retro survives a reload",
+                  persisted["mode"] == "retro" and persisted["attr"] == "retro", str(persisted))
+            check("the top-bar mark changes with it", persisted["markIsPixel"], str(persisted))
+
+            relocked = await page.eval("""
+                const am = await import('./js/art-mode.js');
+                location.hash = '#/settings';
+                await new Promise(r => setTimeout(r, 900));
+                document.getElementById('relockBtn').click();
+                await new Promise(r => setTimeout(r, 400));
+                return { unlocked: am.isRetroUnlocked(), mode: am.getArtMode(),
+                         fieldHidden: document.getElementById('retroField')?.hidden };
+            """)
+            check("it can be hidden again",
+                  not relocked["unlocked"] and relocked["mode"] == "modern"
+                  and relocked["fieldHidden"] is True, str(relocked))
+
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),

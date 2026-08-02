@@ -8,10 +8,11 @@
 import { loadOverrides, loadLocalConfig } from './config.js';
 import { watchForUpdates } from './updates.js';
 import { applyTheme, watchSystemTheme } from './theme.js';
+import { applyArtMode, onArtModeChange } from './art-mode.js';
 import { init as initAuth } from './auth.js';
 import { REGIONS, DEFAULT_REGION_ID, getRegion } from './data/index.js';
 import { prefs } from './store.js';
-import { icon } from './pixel.js';
+import { brandMark } from './art.js';
 import { esc } from './ui.js';
 
 import * as home from './pages/home.js';
@@ -208,7 +209,7 @@ function trackTopbarHeight() {
 
 function buildBrandMark() {
   const mark = document.getElementById('brandMark');
-  if (mark) mark.innerHTML = icon('hook', { size: 40, palette: 'sunset' });
+  if (mark) mark.innerHTML = brandMark({ size: 40 });
 }
 
 window.addEventListener('hashchange', render);
@@ -217,6 +218,15 @@ window.addEventListener('hashchange', render);
 // and keeps 'system' following the OS while the app is open.
 applyTheme();
 watchSystemTheme();
+
+// Which art set is in force. Re-drawn on change rather than reloaded: the mark
+// lives outside the router's view, so a re-render alone would leave the old
+// one in the top bar.
+applyArtMode();
+onArtModeChange(() => {
+  buildBrandMark();
+  render();
+});
 
 trackTopbarHeight();
 buildBrandMark();

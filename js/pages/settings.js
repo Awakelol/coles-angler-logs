@@ -6,6 +6,10 @@ import { REGIONS } from '../data/index.js';
 import { APP_VERSION, CHANGELOG } from '../data/changelog.js';
 import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
 import {
+  ART_MODES, getArtMode, setArtMode, isRetroUnlocked, unlockRetro, relockRetro,
+  UNLOCK_TAPS, UNLOCK_HINT_AT,
+} from '../art-mode.js';
+import {
   currentUser, signOut, cloudConfigured, linkProvider, unlinkProvider, linkedProviders,
 } from '../auth.js';
 import { syncNow, lastSyncedAt } from '../sync.js';
@@ -268,6 +272,26 @@ export function render() {
           </p>
           <p class="field__hint" id="buildInfo">Checking what&rsquo;s cached&hellip;</p>
 
+          <!-- Only here once found. Deliberately rendered next to the thing
+               you tapped to find it, rather than filed away under Appearance
+               where the discovery and the switch would be strangers. -->
+          <div class="field retro-field" id="retroField" ${isRetroUnlocked() ? '' : 'hidden'}>
+            <label>Art style <span class="chip chip--target">unlocked</span></label>
+            <div class="chips" id="artPicker">
+              ${ART_MODES.map(
+                (m) => `
+                <button class="chip" data-art-choice="${esc(m)}"
+                        aria-pressed="${m === getArtMode()}">
+                  ${m === 'retro' ? 'Retro pixel art' : 'Modern'}
+                </button>`
+              ).join('')}
+            </div>
+            <p class="field__hint">
+              The pixel art this app was built in. Nothing was thrown away — it is all still here.
+              <button class="linkish" id="relockBtn">Hide this again</button>
+            </p>
+          </div>
+
           <details class="version-history">
             <summary>Version history (${CHANGELOG.length} releases)</summary>
             <ol class="version-list">
@@ -447,6 +471,57 @@ export function mount(root) {
     if (!confirm('Delete every logged catch? This cannot be undone.')) return;
     await store.clearCatches();
     toast('All catches deleted');
+  });
+
+  // --- the easter egg ---
+  //
+  // Tap the version number seven times. Chosen because it is the gesture
+  // phones already teach — tapping the build number in Android's About screen
+  // — so it is guessable by anyone who has ever gone looking, and invisible to
+  // everyone else. The count is per visit, not stored: this should feel like
+  // something you did, not something the app was waiting to be told.
+  const versionEl = root.querySelector('#appVersion');
+  const retroField = root.querySelector('#retroField');
+  let taps = 0;
+
+  versionEl?.addEventListener('click', () => {
+    if (isRetroUnlocked()) return;   // nothing left to find
+    taps++;
+    const left = UNLOCK_TAPS - taps;
+
+    if (left > 0) {
+      // Silent until it is nearly done. Counting from the first tap would
+      // announce the secret to anyone who brushed the number once.
+      if (left <= UNLOCK_HINT_AT) {
+        toast(`${left} more…`);
+      }
+      return;
+    }
+
+    unlockRetro();
+    setArtMode('retro');
+    taps = 0;
+    if (retroField) retroField.hidden = false;
+    for (const b of root.querySelectorAll('[data-art-choice]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.artChoice === 'retro'));
+    }
+    toast('Retro mode unlocked — the pixel art is back');
+  });
+
+  root.querySelector('#artPicker')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-art-choice]');
+    if (!btn) return;
+    setArtMode(btn.dataset.artChoice);
+    for (const b of root.querySelectorAll('[data-art-choice]')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+  });
+
+  root.querySelector('#relockBtn')?.addEventListener('click', () => {
+    relockRetro();
+    if (retroField) retroField.hidden = true;
+    taps = 0;
+    toast('Hidden again — you know where it is');
   });
 
   // --- which build is actually installed ---

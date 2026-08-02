@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '2.0.0';
 
 export const CHANGELOG = [
+  {
+    version: '2.0.0',
+    date: '2026-08-03',
+    title: 'A new look, and a secret',
+    changes: [
+      'Modern weather icons and a redrawn app mark, on the same colours as before.',
+      'The pixel art is not gone. It is hidden — find it and it stays until you turn it off.',
+      'Nothing else moved: same palette, same layout, same type.',
+    ],
+  },
   {
     version: '1.6.0',
     date: '2026-08-02',

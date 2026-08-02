@@ -35,7 +35,7 @@
 
 import { prepareMedia, LIMITS, fmtMB } from '../media.js';
 import { getSpecies, localNames } from '../data/index.js';
-import { speciesHero, icon } from '../pixel.js';
+import { speciesHero, icon } from '../art.js';
 import { esc, toast, loadingBlock } from '../ui.js';
 
 /** The panel itself, with no page chrome — Info supplies that. */

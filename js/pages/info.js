@@ -21,7 +21,7 @@ import {
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, gearByGroup, getGear } from '../data/gear.js';
-import { speciesHero, renderSprite, icon, SPRITES } from '../pixel.js';
+import { speciesHero, renderSprite, icon, SPRITES } from '../art.js';
 import { hydratePhotos } from '../api/photos.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';

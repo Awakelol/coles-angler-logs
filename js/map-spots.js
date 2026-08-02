@@ -18,7 +18,7 @@ import { store } from './store.js';
 import { currentUser } from './auth.js';
 import { zonesFor } from './data/index.js';
 import { distanceKm } from './api/geo.js';
-import { icon } from './pixel.js';
+import { icon } from './art.js';
 import { esc, toast } from './ui.js';
 
 const LONG_PRESS_MS = 550;

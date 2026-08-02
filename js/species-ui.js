@@ -13,7 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { fishbaseUrl, localNames, zonesForSpecies } from './data/index.js';
-import { speciesHero } from './pixel.js';
+import { speciesHero } from './art.js';
 import { fetchPhoto, fetchPhotos } from './api/photos.js';
 import { esc } from './ui.js';
 

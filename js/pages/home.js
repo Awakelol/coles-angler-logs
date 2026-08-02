@@ -2,7 +2,7 @@
 
 import { allSpecies, tipsFor } from '../data/index.js';
 import { store, computeStats } from '../store.js';
-import { speciesHero, icon } from '../pixel.js';
+import { speciesHero, icon } from '../art.js';
 import { esc, round, fmtDate } from '../ui.js';
 
 export function render(ctx) {

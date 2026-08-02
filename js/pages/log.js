@@ -8,7 +8,7 @@ import {
   cloudConfigured, lastAuthError, clearAuthError, USERNAME_RULES,
 } from '../auth.js';
 import { allSpecies, getSpecies, getRegion } from '../data/index.js';
-import { speciesSprite, icon, SPRITES } from '../pixel.js';
+import { speciesSprite, icon, SPRITES } from '../art.js';
 import { prepareMedia, ACCEPT_ATTR, LIMITS, fmtMB } from '../media.js';
 import { syncNow, syncSoon, lastSyncedAt } from '../sync.js';
 import { esc, el, openSheet, toast, fmtDate, todayISO, round } from '../ui.js';

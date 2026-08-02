@@ -196,6 +196,11 @@ a { color: inherit; }
   display: block;
 }
 
+/* Modern icons. Everything .pixel gets except the pixelation — they are drawn
+   with curves and a 2px stroke, and snapping those to a grid is the one thing
+   that would make them look like a mistake rather than a choice. */
+.ico { display: block; }
+
 /* --- top bar ------------------------------------------------------------- */
 
 .topbar {
@@ -1539,4 +1544,16 @@ body.is-sheet-open {
   margin: 0; padding-left: 18px;
   font-size: 13.5px; font-weight: 600; line-height: 1.65;
   color: var(--ink-60);
+}
+
+/* The version number is the easter egg's door. It gets a pointer and stops
+   text selection turning seven taps into a highlighted blue smear, but no
+   other affordance — a button that announced itself would not be hidden. */
+#appVersion { cursor: pointer; -webkit-user-select: none; user-select: none; }
+
+.retro-field label .chip { margin-left: 8px; vertical-align: middle; }
+.linkish {
+  border: 0; background: none; padding: 0;
+  font: inherit; color: var(--sky-deep); font-weight: 800;
+  cursor: pointer; text-decoration: underline;
 }

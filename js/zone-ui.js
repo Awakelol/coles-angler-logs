@@ -8,7 +8,7 @@
 
 import { resolveSpecies, getSpecies, zonesFor } from './data/index.js';
 import { tacticsFor, lureSummary, habitatTactics } from './data/tactics.js';
-import { speciesSprite, renderSprite, SPRITES } from './pixel.js';
+import { speciesSprite, renderSprite, SPRITES } from './art.js';
 import { speciesDetailHtml, mountSheetPhoto } from './species-ui.js';
 import { esc } from './ui.js';
 
