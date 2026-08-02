@@ -20,9 +20,20 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
 
 export const CHANGELOG = [
+  {
+    version: '2.1.0',
+    date: '2026-08-03',
+    title: 'Local names first, and real photographs',
+    changes: [
+      'Species cards lead with the local name — maya-maya, not "mangrove red snapper".',
+      'The English and scientific names are still there, smaller, for looking a fish up.',
+      'Cards now carry real photographs instead of drawn art.',
+      'A species with no openly licensed photo says so, rather than showing a stand-in.',
+    ],
+  },
   {
     version: '2.0.0',
     date: '2026-08-03',

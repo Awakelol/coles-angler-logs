@@ -17,12 +17,11 @@
 // ---------------------------------------------------------------------------
 
 import {
-  allSpecies, speciesByFamily, localNames, getSpecies,
+  allSpecies, speciesByFamily, localNames, getSpecies, primaryName,
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, gearByGroup, getGear } from '../data/gear.js';
-import { speciesHero, renderSprite, icon, SPRITES } from '../art.js';
-import { hydratePhotos } from '../api/photos.js';
+import { speciesArt, renderSprite, icon, SPRITES } from '../art.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
 import { identifyPanelHtml, mountIdentifyPanel } from './identify.js';
@@ -55,22 +54,32 @@ const isTab = (v) => v === PHOTO || TABS.some((t) => t.id === v);
 // ---------------------------------------------------------------------------
 
 function speciesCard(s) {
-  const locals = localNames(s).slice(0, 2);
+  // Local name leads. Someone here knows "maya-maya"; "mangrove red snapper"
+  // is the name in the book. The English and the Latin stay, smaller, because
+  // they are what you need to look it up — just not what you need to know it.
+  const lead = primaryName(s);
+  const alsoLocal = localNames(s).slice(1, 2);
   return `
     <button class="card species-card" data-species="${esc(s.id)}">
-      <div class="species-card__art">${speciesHero(s, { size: 170 })}</div>
-      <div>
-        <h3 class="card__title">${esc(s.common)}</h3>
-        <p class="card__sub species-card__sci">${esc(s.scientific)}</p>
+      <div class="species-card__art">${speciesArt(s, { size: 170 })}</div>
+      <div class="species-card__names">
+        <h3 class="species-card__lead">${esc(lead.text)}</h3>
+        ${
+          lead.kind === 'local'
+            ? `<p class="species-card__common">${esc(s.common)}</p>`
+            : ''
+        }
+        <p class="species-card__sci">${esc(s.scientific)}</p>
       </div>
       <div class="chips">
-        ${locals.map((l) => `<span class="chip chip--local">${esc(l.name)}</span>`).join('')}
+        ${
+          lead.kind === 'local'
+            ? `<span class="chip chip--lang">${esc(lead.local.label)}</span>`
+            : ''
+        }
+        ${alsoLocal.map((l) => `<span class="chip chip--local">${esc(l.name)}</span>`).join('')}
         ${s.target ? '<span class="chip chip--target">Target</span>' : ''}
       </div>
-      <figure class="photo" data-photo="${esc(s.scientific)}" hidden>
-        <img alt="" loading="lazy" decoding="async">
-        <figcaption></figcaption>
-      </figure>
     </button>`;
 }
 
@@ -346,7 +355,7 @@ export function mount(root, ctx) {
                      .map(
                        (g) => `
                      <button class="card suggest__item" data-suggest="${esc(g.species.id)}">
-                       <div class="species-card__art">${speciesHero(g.species, { size: 140 })}</div>
+                       <div class="species-card__art">${speciesArt(g.species, { size: 140 })}</div>
                        <div>
                          <h3 class="card__title">${esc(g.species.common)}</h3>
                          <p class="card__sub species-card__sci">${esc(g.species.scientific)}</p>
@@ -410,8 +419,6 @@ export function mount(root, ctx) {
         if (s) openSpecies(s);
       });
     }
-
-    hydratePhotos(results);
   }
 
   function drawGear() {

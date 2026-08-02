@@ -13,3 +13,4 @@ __pycache__/
 
 # wrangler local secrets — never commit
 .dev.vars
+tools/_photo_work/

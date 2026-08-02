@@ -1557,3 +1557,81 @@ body.is-sheet-open {
   font: inherit; color: var(--sky-deep); font-weight: 800;
   cursor: pointer; text-decoration: underline;
 }
+
+/* --- species photos ------------------------------------------------------- */
+
+/* The photo fills the same frame the sprite did — same ratio, same chrome —
+   so the card layout is untouched and only its contents changed. Photos come
+   out of the pipeline already on white at 4:3, so object-fit has nothing to
+   crop; it is here for the one that arrives at the wrong ratio anyway. */
+.species-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+  border-radius: var(--radius-sm);
+}
+.species-photo--hero { aspect-ratio: 4 / 3; }
+
+/* Deliberately not a fish. A borrowed silhouette here would read as "this is
+   what it looks like" on a card that otherwise carries photographs, and being
+   confidently wrong about the fish in your hand is the one failure this app
+   must not have. */
+.species-photo--none {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm);
+  background: var(--art-bg);
+  border: var(--border-w-sm) dashed var(--ink-30);
+}
+.species-photo--none span {
+  font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  color: var(--ink-60); text-align: center; padding: 0 8px;
+}
+
+/* CC BY and CC BY-SA both require the photographer be named. */
+.photo-credit {
+  margin: 6px 0 14px;
+  font-size: 11px; font-weight: 700;
+  color: var(--ink-30);
+}
+.photo-credit a { color: var(--ink-60); }
+
+/* --- name hierarchy -------------------------------------------------------
+   Local name first and largest. Somebody here knows "maya-maya"; "mangrove
+   red snapper" is the name in the book. The English and the Latin stay
+   because they are what you need to look it up — just not to recognise it. */
+
+.species-card__names { display: flex; flex-direction: column; gap: 1px; }
+.species-card__lead {
+  margin: 0;
+  font-size: 17px; font-weight: 900; letter-spacing: -.01em;
+  color: var(--ink);
+}
+.species-card__common {
+  margin: 0;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--ink-60);
+}
+.species-card__sci {
+  margin: 0;
+  font-size: 11.5px; font-weight: 600; font-style: italic;
+  color: var(--ink-30);
+}
+
+.species-detail__names { margin-bottom: 10px; }
+.species-detail__lead {
+  margin: 0;
+  font-size: 24px; font-weight: 900; letter-spacing: -.02em;
+}
+.species-detail__common {
+  margin: 2px 0 0;
+  font-size: 14px; font-weight: 700; color: var(--ink-60);
+}
+
+/* Which language the headline name is, since it is now the headline. */
+.chip--lang { background: var(--band-violet); color: var(--on-accent); }

@@ -524,7 +524,7 @@ python -m http.server 8777          # terminal 1
 python tools/browser_test.py        # terminal 2
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 432 checks covering
+Drives real headless Chrome over the DevTools Protocol — 448 checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and
@@ -611,6 +611,42 @@ would eat. Photos are downscaled to 1280px on save.
 **Your data is local to the device.** There's no account and no server. Clearing
 site data or uninstalling the PWA deletes your log — use **Settings → Export
 JSON** to back up. Export omits photos, since JSON can't carry image data.
+
+---
+
+## Species photographs
+
+`tools/fish_photos.py` sources them. Four stages, each re-runnable and each
+skipping work already done, so adding a species later costs only that species:
+
+```bash
+python -m pip install "rembg[cpu]" onnxruntime pillow   # once; ~176 MB model on first build
+
+python tools/fish_photos.py fetch     # licensed candidates from iNaturalist + GBIF
+python tools/fish_photos.py score     # optional: Gemini rates the doubtful ones
+python tools/fish_photos.py review    # contact sheet — you pick one per species
+python tools/fish_photos.py build     # rembg → white background → manifest
+python tools/fish_photos.py status    # what is done, what is missing
+```
+
+**No API keys.** iNaturalist and GBIF are both open. `score` is the only stage
+that wants one (`GEMINI_API_KEY`) and the only optional stage.
+
+**What it decides and what it doesn't.** Licensing it decides completely: only
+CC0, CC BY and CC BY-SA are ever downloaded, and the credit the licence
+requires is carried into the app and shown on the card. Whether a photo is a
+clean side-profile of a whole fish out of water, it *cannot* — no API exposes
+that. It ranks on the proxies it can read (iNaturalist's "Alive or Dead"
+annotation, which is the strongest single signal since a landed fish is laid
+out in air; research-grade status; Philippine locality; image proportions) and
+scores its own confidence. The last call is yours in `review`, or Gemini's in
+`score` for the doubtful ones.
+
+Species with no entry in `js/data/species-photos.js` show **"photo not yet
+available"**. That is deliberate and not a bug: a borrowed silhouette on a card
+that otherwise carries photographs would read as *this is what it looks like*,
+and being confidently wrong about the fish in your hand is the one failure this
+app must not have.
 
 ---
 

@@ -12,8 +12,8 @@
 // already open.
 // ---------------------------------------------------------------------------
 
-import { fishbaseUrl, localNames, zonesForSpecies } from './data/index.js';
-import { speciesHero } from './art.js';
+import { fishbaseUrl, localNames, zonesForSpecies, primaryName } from './data/index.js';
+import { speciesArt, speciesPhotoCredit } from './art.js';
 import { fetchPhoto, fetchPhotos } from './api/photos.js';
 import { esc } from './ui.js';
 
@@ -26,10 +26,19 @@ export function speciesDetailHtml(s, regionId) {
       }${s.size.maxCm ? `${s.size.maxCm} cm max` : ''}`
     : '—';
 
+  const lead = primaryName(s);
+
   return `
-    <div class="species-card__art species-card__art--hero">${speciesHero(s, { size: 300 })}</div>
+    <div class="species-card__art species-card__art--hero">${speciesArt(s, { size: 300, hero: true })}</div>
+    ${speciesPhotoCredit(s)}
+
+    <div class="species-detail__names">
+      <h2 class="species-detail__lead">${esc(lead.text)}</h2>
+      ${lead.kind === 'local' ? `<p class="species-detail__common">${esc(s.common)}</p>` : ''}
+    </div>
 
     <div class="chips" style="margin-bottom:14px">
+      ${lead.kind === 'local' ? `<span class="chip chip--lang">${esc(lead.local.label)}</span>` : ''}
       <span class="chip chip--family">${esc(s.familyCommon || s.family)}</span>
       ${s.target ? '<span class="chip chip--target">Common target</span>' : ''}
     </div>

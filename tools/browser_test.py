@@ -2479,24 +2479,65 @@ async def main():
                 const heroGrid = p.HEROES[s.hero] || p.HEROES[s.sprite];
                 const spriteGrid = p.SPRITES[s.sprite];
 
+                // The retro art is checked through the API rather than the DOM.
+                // Flipping the mode here would re-render the page and take the
+                // open sheet with it, breaking every test below that needs one.
+                const fromString = (svg) => {
+                    const m = svg.match(/viewBox="0 0 (\\d+) (\\d+)"/);
+                    return m ? `${m[1]}x${m[2]}` : null;
+                };
+                const card = document.querySelector('.species-card:not(.sheet *)');
+                const cardArt = card?.querySelector('.species-card__art');
+                const sheetArt = document.querySelector('.species-card__art--hero');
+                const { photoFor } = await import('./js/data/species-photos.js');
+
                 return {
                     id: openId,
-                    sheet: vb(document.querySelector('.species-card__art--hero svg')),
-                    card: vb(document.querySelector('.species-card:not(.sheet *) .species-card__art svg')),
+                    heroVb: fromString(p.speciesHero(s, { size: 300 })),
+                    spriteVb: fromString(p.speciesSprite(s, { size: 110 })),
                     expectHero: heroGrid ? dims(heroGrid) : null,
                     expectSprite: spriteGrid ? dims(spriteGrid) : null,
+                    // What modern mode actually put on screen.
+                    sheetIsPhotoOrGap: !!sheetArt?.querySelector(
+                        'img.species-photo, .species-photo--none'),
+                    cardIsPhotoOrGap: !!cardArt?.querySelector(
+                        'img.species-photo, .species-photo--none'),
+                    noSpriteAnywhere: !cardArt?.querySelector('svg[shape-rendering="crispEdges"]')
+                        && !sheetArt?.querySelector('svg[shape-rendering="crispEdges"]'),
+                    gapSaysSo: (cardArt?.querySelector('.species-photo--none')?.textContent || '')
+                                 .includes('not yet available'),
+                    photosInManifest: [...d.SPECIES.values()].filter(x => photoFor(x.id)).length,
+                    lead: card?.querySelector('.species-card__lead')?.textContent.trim(),
+                    sci: card?.querySelector('.species-card__sci')?.textContent.trim(),
+                    leadBigger: (() => {
+                        const a = card?.querySelector('.species-card__lead');
+                        const b = card?.querySelector('.species-card__common');
+                        if (!a || !b) return null;
+                        return parseFloat(getComputedStyle(a).fontSize)
+                             > parseFloat(getComputedStyle(b).fontSize);
+                    })(),
                 };
             """)
-            check("detail sheet renders the angled hero grid",
-                  art_split["sheet"] == art_split["expectHero"],
-                  f"{art_split['id']}: got {art_split['sheet']}, hero is {art_split['expectHero']}")
+            check("the angled hero art still renders for retro",
+                  art_split["heroVb"] == art_split["expectHero"],
+                  f"{art_split['id']}: got {art_split['heroVb']}, hero is {art_split['expectHero']}")
             check("hero grid differs from the horizontal sprite",
                   art_split["expectHero"] != art_split["expectSprite"],
                   f"both {art_split['expectHero']}")
-            # Cards now use the angled art too; only small UI keeps horizontal.
-            check("species cards use the angled hero",
-                  art_split["card"] == art_split["expectHero"],
-                  f"got {art_split['card']}, hero is {art_split['expectHero']}")
+            check("the horizontal sprite still renders for retro",
+                  art_split["spriteVb"] == art_split["expectSprite"], str(art_split))
+            check("modern shows a photo or an honest gap, never a sprite",
+                  art_split["cardIsPhotoOrGap"] and art_split["sheetIsPhotoOrGap"]
+                  and art_split["noSpriteAnywhere"], str(art_split))
+            # A species with no licensed photo must SAY so. A borrowed fish here
+            # would read as "this is what it looks like", which is the one thing
+            # a species guide must never be wrong about.
+            check("a species with no photo says so rather than faking one",
+                  art_split["photosInManifest"] > 0 or art_split["gapSaysSo"],
+                  str(art_split))
+            check("the local name leads the card",
+                  bool(art_split["lead"]) and bool(art_split["sci"])
+                  and art_split["leadBigger"] is not False, str(art_split))
             await page.shot("species-detail", full=False)
 
             fb = await page.eval("""

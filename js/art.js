@@ -12,9 +12,11 @@
 // the call sites will already be pointing at this file.
 // ---------------------------------------------------------------------------
 
-import { icon as pixelIcon, ICONS as PIXEL_ICONS } from './pixel.js';
+import { icon as pixelIcon, ICONS as PIXEL_ICONS, speciesHero } from './pixel.js';
 import { modernIcon, modernBrandMark, MODERN_ICON_NAMES } from './art/modern.js';
+import { photoFor } from './data/species-photos.js';
 import { isRetro } from './art-mode.js';
+import { esc } from './ui.js';
 
 // Re-exported so a call site needs one import, not two.
 export {
@@ -39,6 +41,55 @@ export function icon(name, opts = {}) {
 export function brandMark({ size = 40 } = {}) {
   if (isRetro()) return pixelIcon('hook', { size, palette: 'sunset' });
   return modernBrandMark({ size });
+}
+
+/**
+ * The picture of a fish, for a card or a sheet.
+ *
+ * Modern mode shows a real photograph, because a photograph is what you hold
+ * a fish up against. Retro shows the sprite that used to be the only option.
+ *
+ * A species with no licensed photo gets a plainly-labelled gap, NOT a stand-in
+ * fish. A borrowed silhouette on a card that otherwise carries photographs
+ * would read as "this is what it looks like", and being confidently wrong
+ * about which fish you are holding is the one failure this app must not have.
+ */
+export function speciesArt(s, { size = 170, hero = false } = {}) {
+  if (isRetro()) return speciesHero(s, { size });
+
+  const photo = photoFor(s.id);
+  if (!photo) {
+    return `
+      <div class="species-photo species-photo--none" style="--art-size:${size}px"
+           role="img" aria-label="No photograph available for ${esc(s.common)}">
+        ${modernIcon('camera', { size: Math.round(size * 0.34), palette: 'slate' })}
+        <span>Photo not yet available</span>
+      </div>`;
+  }
+  return `
+    <img class="species-photo${hero ? ' species-photo--hero' : ''}"
+         src="${esc(photo.file)}" alt="Photograph of ${esc(s.common)}"
+         loading="lazy" decoding="async">`;
+}
+
+/** True when the species has a photo — callers that need to know, ask. */
+export function hasSpeciesPhoto(s) {
+  return Boolean(photoFor(s.id));
+}
+
+/**
+ * The credit line the licence requires. CC BY and CC BY-SA both oblige us to
+ * name the photographer, so this is not optional decoration — the card that
+ * shows the photo shows this.
+ */
+export function speciesPhotoCredit(s) {
+  const photo = photoFor(s.id);
+  if (!photo) return '';
+  return `
+    <p class="photo-credit">
+      <a href="${esc(photo.source)}" target="_blank" rel="noopener noreferrer">${esc(photo.credit)}</a>
+      &middot; ${esc(photo.licence)}
+    </p>`;
 }
 
 /** Names present in each set — the test that keeps them in step reads this. */

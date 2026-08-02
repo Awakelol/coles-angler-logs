@@ -172,3 +172,22 @@ export function localNames(species) {
   }
   return [...byName.values()].map((e) => ({ name: e.name, label: e.langs.join(' / ') }));
 }
+
+/**
+ * The name to lead a card with, and what it is.
+ *
+ * Local first. Somebody here is far more likely to recognise "maya-maya" than
+ * "mangrove red snapper", and a guide that leads with the English is a guide
+ * written for a visitor. Falls back to the common name when there is no local
+ * one at all, rather than leading with a blank.
+ *
+ * Note the caveat at the top of the species catalogue: the names on the 28
+ * species added with the island expansion come from FishBase and have not
+ * been checked locally. Promoting them to the headline makes getting them
+ * right matter more, not less.
+ */
+export function primaryName(species) {
+  const locals = localNames(species);
+  if (!locals.length) return { text: species.common, kind: 'common', local: null };
+  return { text: locals[0].name, kind: 'local', local: locals[0] };
+}
