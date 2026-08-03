@@ -89,6 +89,29 @@ LICENCE_LABEL = {
 CANDIDATES_PER_SPECIES = 10
 REQUEST_PAUSE = 1.1        # iNat asks for <=1 req/sec sustained; be a good guest
 
+# Gemini's free tier is a per-MINUTE budget, not a per-second one, and it is
+# small — around 20 requests. Pacing by "a short sleep between calls" burns it
+# in the first few seconds and every remaining photo comes back 429. Four and
+# a half seconds is ~13/min, comfortably under, and gemini_call backs off and
+# retries on top of that rather than giving up on the photo.
+GEMINI_PAUSE = 4.5
+GEMINI_RETRIES = 4
+
+# Tried in order until one answers. Hardcoding a single model is how this broke
+# first time: gemini-2.5-flash-lite is LISTED by the models endpoint and returns
+# 404 when called, and gemini-2.5-flash had spent its daily free quota — two
+# different failures that both read as "your key is wrong".
+#
+# Lite models first. This asks one small question of each photo, which is what
+# they are for, and their free-tier budget is the larger one.
+GEMINI_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-2.0-flash-lite",
+    "gemini-2.5-flash",
+]
+
 
 # --------------------------------------------------------------------------
 # the species list, read straight from the app so the two cannot drift
@@ -983,7 +1006,7 @@ def cmd_verify(args):
 
     # --- 5. the model's opinion ---------------------------------------------
     if args.gemini:
-        if gemini_verify(data, chosen, species, bad, warn):
+        if gemini_verify(data, chosen, species, bad, warn, args.limit):
             return 1
 
     # --- report -------------------------------------------------------------
@@ -1009,20 +1032,115 @@ def cmd_verify(args):
     return 0
 
 
-def gemini_verify(data, chosen, species, bad, warn):
+def gemini_call(key, model, prompt, blob, timeout=90):
+    """One vision call, with backoff on the free tier's minute budget.
+
+    Returns (parsed_json, None) or (None, "why it failed"). A 429 is not a
+    failure worth reporting to the user — it is the expected shape of a free
+    tier, and the server tells us how long to wait, so we wait.
+    """
+    import base64
+    body = json.dumps({
+        "contents": [{"parts": [
+            {"text": prompt},
+            {"inline_data": {"mime_type": "image/jpeg",
+                             "data": base64.b64encode(blob).decode()}},
+        ]}],
+        "generationConfig": {"responseMimeType": "application/json"},
+    }).encode()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+    for attempt in range(GEMINI_RETRIES):
+        try:
+            rq = urllib.request.Request(url, data=body, headers={
+                "Content-Type": "application/json", "x-goog-api-key": key})
+            with urllib.request.urlopen(rq, timeout=timeout) as r:
+                out = json.load(r)
+            return json.loads(out["candidates"][0]["content"]["parts"][0]["text"]), None
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            if e.code == 429:
+                # The message carries "Please retry in 37.1s" — believe it.
+                m = re.search(r"retry in ([\d.]+)s", detail)
+                wait = min(float(m.group(1)) + 1, 65) if m else 20 * (attempt + 1)
+                if "PerDay" in detail or "per day" in detail.lower():
+                    return None, "daily free-tier quota is spent — try again tomorrow"
+                print(f"      rate limited, waiting {wait:.0f}s")
+                time.sleep(wait)
+                continue
+            return None, f"HTTP {e.code}: {detail[:160]}"
+        except Exception as e:
+            if attempt == GEMINI_RETRIES - 1:
+                return None, f"{type(e).__name__}: {e}"
+            time.sleep(3 * (attempt + 1))
+    return None, "gave up after repeated rate limits"
+
+
+def pick_model(key):
+    """The first model that actually answers.
+
+    Costs one tiny text call per model tried, which is far cheaper than
+    discovering forty photos into a run that the model is unavailable today.
+    """
+    override = read_key("GEMINI_MODEL")
+    order = ([override] + GEMINI_MODELS) if override else GEMINI_MODELS
+    for model in order:
+        body = json.dumps({"contents": [{"parts": [{"text": "Reply with: ok"}]}]}).encode()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            rq = urllib.request.Request(url, data=body, headers={
+                "Content-Type": "application/json", "x-goog-api-key": key})
+            with urllib.request.urlopen(rq, timeout=30) as r:
+                r.read()
+            return model, None
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            why = ("not available to this key" if e.code == 404 else
+                   "daily free quota already spent"
+                   if "per day" in detail.lower() or "PerDay" in detail else f"HTTP {e.code}")
+            print(f"  {model}: {why}")
+        except Exception as e:
+            print(f"  {model}: {type(e).__name__}")
+        time.sleep(1)
+    return None, ("No candidate model would answer. Either they have all spent their daily "
+                  "free quota, or the key lacks access. Try again tomorrow, or put "
+                  "GEMINI_MODEL=<name> in .dev.vars.")
+
+
+def gemini_verify(data, chosen, species, bad, warn, limit=0):
     key = read_key("GEMINI_API_KEY")
     if not key:
         print(key_help("GEMINI_API_KEY"))
         return 1
 
-    import base64
-    model = read_key("GEMINI_MODEL") or "gemini-2.5-flash"
-    print(f"\nAsking {model} about {len(chosen)} photos - identity, framing, single fish.\n")
+    print("\nFinding a model that will answer…")
+    model, err = pick_model(key)
+    if not model:
+        print(f"\n{err}")
+        return 1
 
-    for sid, v in sorted(chosen.items()):
+    # Anything already checked is skipped. Re-running costs nothing but the
+    # photos that have not been looked at yet.
+    def done(sid, v):
         rec = data.get(sid)
         if not rec or v["index"] >= len(rec["candidates"]):
-            continue
+            return True
+        return bool(rec["candidates"][v["index"]].get("verify"))
+
+    todo = {sid: v for sid, v in chosen.items() if not done(sid, v)}
+    if limit:
+        todo = dict(sorted(todo.items())[:limit])
+    already = len(chosen) - len([1 for s, v in chosen.items() if not done(s, v)])
+
+    print(f"\nUsing {model}.")
+    print(f"  {len(todo)} photos to check, {already} already done — "
+          f"that is {len(todo)} API calls, about "
+          f"{len(todo) * (GEMINI_PAUSE + 3.5) / 60:.0f} min at a free-tier-safe pace.\n")
+    if not todo:
+        return 0
+
+    for sid, v in sorted(todo.items()):
+        rec = data.get(sid)
         c = rec["candidates"][v["index"]]
         sp = species.get(sid, {})
         try:
@@ -1030,7 +1148,10 @@ def gemini_verify(data, chosen, species, bad, warn):
             with urllib.request.urlopen(req, timeout=45) as r:
                 blob = r.read()
         except Exception as e:
-            warn(sid, f"could not download the picked photo to check it - {e}")
+            # A dead image link is a source problem, not a model problem.
+            # Saying which is the difference between "re-pick this one" and
+            # "the AI is broken".
+            warn(sid, f"photo could not be downloaded ({e}) — the source link may be dead")
             continue
 
         prompt = (
@@ -1043,26 +1164,21 @@ def gemini_verify(data, chosen, species, bad, warn):
             '"quality": 0..1, "why": "<=12 words"}\n'
             "Use null for looks_like_species only if you genuinely cannot tell."
         )
-        body = json.dumps({
-            "contents": [{"parts": [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg",
-                                 "data": base64.b64encode(blob).decode()}},
-            ]}],
-            "generationConfig": {"responseMimeType": "application/json"},
-        }).encode()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            rq = urllib.request.Request(url, data=body, headers={
-                "Content-Type": "application/json", "x-goog-api-key": key})
-            with urllib.request.urlopen(rq, timeout=90) as r:
-                out = json.load(r)
-            got = json.loads(out["candidates"][0]["content"]["parts"][0]["text"])
-        except Exception as e:
-            warn(sid, f"could not be checked by the model - {e}")
+        got, err = gemini_call(key, model, prompt, blob)
+        if err:
+            warn(sid, f"could not be checked by the model - {err}")
+            if "quota" in err:
+                print("\n  Stopping here rather than hammering a spent quota.")
+                print("  Re-run when it resets — everything checked so far is saved.")
+                break
             continue
 
         c["verify"] = got
+        # Written after EVERY photo, not at the end of the run. A call that is
+        # paid for and then lost to a crash is the one genuinely wasteful thing
+        # this could do on a free tier, and it also means a re-run resumes
+        # instead of starting over.
+        CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
         flags = []
         # Identity is the only one that makes a card actively lie, so it is the
         # only one raised as a problem rather than a warning.
@@ -1084,9 +1200,8 @@ def gemini_verify(data, chosen, species, bad, warn):
             warn(sid, ", ".join(flags) + f" - {got.get('why','')}")
         print(f"  {sid:34} {'OK' if not flags else 'HM'}  {q if isinstance(q,(int,float)) else 0:.2f}"
               f"  {got.get('setting','?'):12} {got.get('why','') if flags else ''}")
-        time.sleep(0.5)
+        time.sleep(GEMINI_PAUSE)
 
-    CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
     return 0
 
 
@@ -1261,6 +1376,8 @@ def main():
                     help="also ask a vision model about identity and framing")
     vy.add_argument("--no-taxon", action="store_true",
                     help="skip the iNaturalist identity cross-check (offline)")
+    vy.add_argument("--limit", type=int, default=0,
+                    help="check at most N photos this run (0 = all not yet done)")
     vy.set_defaults(fn=cmd_verify)
 
     b = sub.add_parser("build", help="background removal + manifest")
