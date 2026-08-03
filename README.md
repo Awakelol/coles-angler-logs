@@ -629,8 +629,16 @@ python tools/fish_photos.py build     # rembg → white background → manifest
 python tools/fish_photos.py status    # what is done, what is missing
 ```
 
-**No API keys.** iNaturalist and GBIF are both open. `score` is the only stage
-that wants one (`GEMINI_API_KEY`) and the only optional stage.
+**No API keys for the stages that matter.** iNaturalist and GBIF are both open.
+`score` is the only stage that wants a key and the only optional one; put
+`GEMINI_API_KEY=...` in **`.dev.vars`** in the project root — already
+gitignored, and the same file wrangler reads for local Worker runs, so the key
+has one home rather than one per tool.
+
+`review` serves the contact sheet on `127.0.0.1:8123` and writes each choice
+to `picks.json` the moment you click it. It used to end in a copy-and-paste,
+which over 68 species is a step too many and a chance to lose the lot to a
+mistyped paste.
 
 **What it decides and what it doesn't.** Licensing it decides completely: only
 CC0, CC BY and CC BY-SA are ever downloaded, and the credit the licence

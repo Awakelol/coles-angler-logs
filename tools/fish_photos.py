@@ -339,6 +339,7 @@ def cmd_review(args):
             f"{' checked' if picks.get(sid) == -1 else ''}> none of these</label>"
             f"<div class='row'>{''.join(cells)}</div></section>")
 
+    total = len(rows)
     REVIEW_HTML.write_text(f"""<!doctype html><meta charset=utf-8>
 <title>Pick a photo per species</title>
 <style>
@@ -370,40 +371,132 @@ def cmd_review(args):
 which the app shows honestly rather than faking.</p>
 {''.join(rows)}
 <div id=bar>
-  <button onclick="save()">Copy picks</button>
-  <textarea id=out readonly placeholder="press Copy picks, then paste into tools/_photo_work/picks.json"></textarea>
+  <strong id=count>0</strong><span>picked — saved as you go, close the tab when done</span>
+  <span id=state></span>
 </div>
 <script>
-function save() {{
-  const picks = {{}};
-  document.querySelectorAll('input:checked').forEach(i => picks[i.name] = +i.value);
-  const t = document.getElementById('out');
-  t.value = JSON.stringify(picks);
-  t.select(); document.execCommand('copy');
-  t.value = 'Copied ' + Object.keys(picks).length + ' picks — paste into tools/_photo_work/picks.json';
+const total = {total};
+async function save(name, value) {{
+  const s = document.getElementById('state');
+  s.textContent = 'saving…';
+  try {{
+    const r = await fetch('/pick', {{ method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ id: name, index: value }}) }});
+    const j = await r.json();
+    document.getElementById('count').textContent = j.picked + ' / ' + total;
+    s.textContent = 'saved';
+  }} catch (e) {{ s.textContent = 'NOT SAVED — is the review server still running?'; }}
 }}
+document.addEventListener('change', (e) => {{
+  if (e.target.matches('input[type=radio]')) save(e.target.name, +e.target.value);
+}});
+document.getElementById('count').textContent =
+  document.querySelectorAll('input:checked').length + ' / ' + total;
 </script>""", encoding="utf-8")
 
-    print(f"Wrote {REVIEW_HTML}")
-    print("Pick one per species, press Copy picks, and paste into:")
-    print(f"  {PICKS}")
-    print("Then: python tools/fish_photos.py build")
-    if not args.no_open:
-        webbrowser.open(REVIEW_HTML.as_uri())
+    if args.no_open:
+        print(f"Wrote {REVIEW_HTML} (not served)")
+        return 0
+    serve_review(args.port)
+    return 0
+
+
+def serve_review(port):
+    """Serve the sheet and take the picks straight to disk.
+
+    A file:// page cannot write anything, which is why this used to end in a
+    copy-and-paste. Over 68 species that is a step too many and a chance to
+    lose the lot to a mistyped paste, so the page posts each choice here and
+    it lands in picks.json as you click.
+    """
+    import http.server, socketserver, threading
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path in ("/", "/index.html"):
+                body = REVIEW_HTML.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_error(404)
+
+        def do_POST(self):
+            if self.path != "/pick":
+                return self.send_error(404)
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                msg = json.loads(self.rfile.read(n) or b"{}")
+                picks = json.loads(PICKS.read_text(encoding="utf-8")) if PICKS.exists() else {}
+                picks[msg["id"]] = int(msg["index"])
+                PICKS.write_text(json.dumps(picks, indent=1, sort_keys=True), encoding="utf-8")
+                out = json.dumps({"ok": True, "picked": len([v for v in picks.values() if v >= 0])})
+            except Exception as e:
+                out = json.dumps({"ok": False, "error": str(e)})
+            body = out.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass          # the picks counter in the page is the only progress worth seeing
+
+    with socketserver.TCPServer(("127.0.0.1", port), Handler) as srv:
+        url = f"http://127.0.0.1:{port}/"
+        print(f"Review sheet: {url}")
+        print(f"Picks save to {PICKS} as you click.")
+        print("Ctrl+C here when you are done, then: python tools/fish_photos.py build\n")
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            picks = json.loads(PICKS.read_text(encoding="utf-8")) if PICKS.exists() else {}
+            print(f"\nStopped. {len([v for v in picks.values() if v >= 0])} species picked.")
 
 
 # --------------------------------------------------------------------------
 # stage 2b — optional Gemini opinion on the doubtful ones
 # --------------------------------------------------------------------------
 
+def read_key(name):
+    """`.dev.vars` first, then the environment.
+
+    `.dev.vars` is where wrangler already looks for local secrets and is
+    already gitignored, so the key has one home for both the Worker and this
+    script rather than one each. An environment variable still wins nothing
+    and loses nothing — it is checked second so a one-off override works.
+    """
+    dev = ROOT / ".dev.vars"
+    if dev.exists():
+        for line in dev.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() == name:
+                return v.strip().strip('"').strip("'")
+    return os.environ.get(name, "").strip()
+
+
 def cmd_score(args):
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    key = read_key("GEMINI_API_KEY")
     if not key:
-        print("Set GEMINI_API_KEY first. In PowerShell:")
-        print('  $env:GEMINI_API_KEY = "your-key"')
+        print("No GEMINI_API_KEY found.")
+        print()
+        print("Put it in .dev.vars in the project root (already gitignored):")
+        print("    GEMINI_API_KEY=your-key-here")
+        print()
+        print("That is the same file wrangler reads for local Worker runs, so")
+        print("the key lives in one place. Or set it for this shell only:")
+        print('    $env:GEMINI_API_KEY = "your-key-here"')
         return 1
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model = read_key("GEMINI_MODEL") or "gemini-2.5-flash"
     todo = [(k, v) for k, v in data.items()
             if v["candidates"] and (v["confidence"] < args.below or args.all)]
     print(f"{len(todo)} species below confidence {args.below}\n")
@@ -586,7 +679,8 @@ def main():
 
     r = sub.add_parser("review", help="contact sheet to pick from")
     r.add_argument("--doubtful", action="store_true", help="only the low-confidence ones")
-    r.add_argument("--no-open", action="store_true")
+    r.add_argument("--no-open", action="store_true", help="write the file, don't serve it")
+    r.add_argument("--port", type=int, default=8123)
     r.set_defaults(fn=cmd_review)
 
     s = sub.add_parser("score", help="ask Gemini about the doubtful ones")
