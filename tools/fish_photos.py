@@ -503,9 +503,13 @@ def cmd_review(args):
             note = f"<div class='g'>gemini {gem['score']:.2f} · {gem['why']}</div>" if gem else ""
             dims = f"{c['width']}&times;{c['height']}" if c["width"] else "size unknown"
             sel = " is-on" if chosen.get("index") == idx else ""
+            dead = c.get("unavailable")
             cells.append(
-                f"<div class='cand{sel}' data-sp='{sid}' data-idx='{idx}'>"
-                f"<img src='{c['url']}' loading='lazy' referrerpolicy='no-referrer'>"
+                f"<div class='cand{sel}{' is-dead' if dead else ''}' "
+                f"data-sp='{sid}' data-idx='{idx}'>"
+                + (f"<div class='deadmsg'>host refuses downloads &mdash; cannot be used</div>"
+                   if dead else "")
+                + f"<img src='{c['url']}' loading='lazy' referrerpolicy='no-referrer'>"
                 f"<div class='meta'>#{idx} · rank {c['score']} · {LICENCE_LABEL[c['licence']]}"
                 f"{' · landed' if c['dead'] else ''}{' · PH' if c['scope'] == 'local' else ''}</div>"
                 f"<div class='meta dim'>{dims} · "
@@ -566,6 +570,8 @@ def cmd_review(args):
  .cand img{{width:280px;height:210px;object-fit:contain;border-radius:8px;
             border:3px solid transparent;background:#0d1117;display:block}}
  .cand.is-on img{{border-color:#3fb950}}
+ .cand.is-dead{{opacity:.4}} .cand.is-dead img{{border-color:#7d1226}}
+ .deadmsg{{font:800 10px system-ui;color:#f26430;margin-bottom:2px}}
  .cand:hover img{{border-color:#8b949e}}
  .cand.is-on .meta{{color:#3fb950}}
  .meta{{font:600 11px monospace;color:#8b949e;margin-top:4px}}
@@ -1495,7 +1501,11 @@ def cmd_build(args):
         # A photo failed in the crop review is pulled entirely — the card says
         # "photo not yet available", which is the honest state until it is
         # replaced, rather than shipping something already judged wrong.
-        cv = crops.get(sid, {})
+        cv = dict(crops.get(sid, {}))
+        # Stale verdict: it was passed on a different photo. Ignoring it is the
+        # only safe reading — the picture it judged is gone.
+        if cv.get("verdict") and cv.get("for_index") is not None and cv["for_index"] != idx:
+            cv = {k: v for k, v in cv.items() if k == "note"}
         # "Replace this" and "rotate this" together is a contradiction worth
         # surfacing rather than resolving quietly: it usually means the photo
         # was failed BECAUSE it was sideways, and straightening it is the fix.
@@ -1529,7 +1539,15 @@ def cmd_build(args):
             with urllib.request.urlopen(req, timeout=60) as r:
                 blob = r.read()
         except Exception as e:
+            # Some hosts refuse programmatic downloads outright — the French
+            # museum's media server 403s whatever you send. That is their
+            # policy, not a bug to route around, so the candidate is marked
+            # unavailable and the review sheet stops offering it.
             print(f"  {sid}: download failed — {e}")
+            if "403" in str(e) or "404" in str(e):
+                cand["unavailable"] = str(e)[:80]
+                CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
+                print(f"  {' ' * 34}marked unavailable — pick another in `review`")
             continue
 
         try:
@@ -1857,8 +1875,16 @@ def serve_crops(port):
                     verdict = msg.get("verdict")
                     if verdict:
                         entry["verdict"] = verdict
+                        # WHICH photo this verdict is about. A verdict is a
+                        # judgement of one image, not of the species — without
+                        # this, "replace" sticks to the slot and quietly kills
+                        # the replacement you then chose.
+                        pk = load_picks().get(sid, {})
+                        if pk.get("index") is not None:
+                            entry["for_index"] = pk["index"]
                     else:
                         entry.pop("verdict", None)   # a remark outlives a cleared verdict
+                        entry.pop("for_index", None)
                 if entry:
                     crops[sid] = entry
                 else:
@@ -1941,7 +1967,10 @@ def cmd_status(args):
     print(f"fetched        {len(data)}")
     print(f"no licensed photo {len(no_cands)}")
     print(f"low confidence {len(doubtful)}")
-    print(f"decided        {len(picks)} of {len(species)}")
+    # Entries, not decisions: a species can carry a remark with no verdict,
+    # and counting those as decided overstates how done you are by exactly the
+    # number of things still waiting on you.
+    print(f"decided        {decided_count(picks)} of {len(species)}")
     print(f"  picked       {counts['pick']}")
     print(f"  no good ones {counts['none']}")
     print(f"  want more    {counts['more']}   -> python tools/fish_photos.py more")
