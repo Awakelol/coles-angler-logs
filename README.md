@@ -561,8 +561,13 @@ All three give you HTTPS, which the service worker requires.
 the next load without any manual step. Offline still works — the cache is the
 fallback when the network fails.
 
-Bump `CACHE_VERSION` in [`sw.js`](sw.js) only when you want to force-evict old
-**images** (renamed icons, regenerated sprites saved as PNG).
+Bump `CACHE_VERSION` in [`sw.js`](sw.js) when you change an **image in place** —
+same filename, different pixels. Images are cache-first, so a device keeps the
+copy it already has however many times you redeploy. `tools/fish_photos.py
+build` now bumps it automatically whenever it writes a photo, because
+regenerating photos and evicting them must not be two things you can do
+separately: forgetting the second means the fix you just made is invisible on
+every device that already loaded the old one.
 
 > This used to be cache-first for everything, which meant every JS/CSS edit kept
 > serving the stale copy until `CACHE_VERSION` was bumped by hand. It silently

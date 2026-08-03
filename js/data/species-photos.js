@@ -51,7 +51,7 @@ export const SPECIES_PHOTOS = {
   'pristipomoides-multidens': { file: 'assets/photos/pristipomoides-multidens.jpg', credit: 'GBIF contributor', licence: 'CC BY', source: 'https://www.gbif.org/occurrence/1265260215' },
   'rastrelliger-brachysoma': { file: 'assets/photos/rastrelliger-brachysoma.jpg', credit: 'Wibowo Djatmiko (Wie146)', licence: 'CC BY-SA', source: 'https://commons.wikimedia.org/wiki/File:Rastrel_brachy_100812-6024_tdp.jpg' },
   'rastrelliger-kanagurta': { file: 'assets/photos/rastrelliger-kanagurta.jpg', credit: '(c) Pierre Pericard, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/308150313' },
-  'sardinella-fimbriata': { file: 'assets/photos/sardinella-fimbriata.jpg', credit: 'Muséum National d\'Histoire Naturelle / projet e-ReCoLNat', licence: 'CC BY', source: 'https://www.gbif.org/' },
+  'sardinella-fimbriata': { file: 'assets/photos/sardinella-fimbriata.jpg', credit: 'The Trustees of the Natural History Museum, London', licence: 'CC BY', source: 'https://www.gbif.org/occurrence/1055838172' },
   'sardinella-lemuru': { file: 'assets/photos/sardinella-lemuru.jpg', credit: 'NOAA Photo Library', licence: 'Public domain', source: 'https://commons.wikimedia.org/wiki/File:Harengula_jaguana.jpg' },
   'scarus-ghobban': { file: 'assets/photos/scarus-ghobban.jpg', credit: '(c) Ditch Townsend, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/201839028' },
   'scatophagus-argus': { file: 'assets/photos/scatophagus-argus.jpg', credit: '(c) Abu Hamas, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/33638588' },

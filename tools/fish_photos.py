@@ -1555,6 +1555,7 @@ def cmd_build(args):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     manifest = {}
     fitted = {}
+    wrote = 0
     # Loaded once. Building the session per photo would re-read 176 MB of model
     # forty-three times.
     session = new_session("u2net")
@@ -1683,6 +1684,7 @@ def cmd_build(args):
                 note += ", filled to frame"
             src.thumbnail((MAX_EDGE, MAX_EDGE), Image.LANCZOS)
             src.save(out, "JPEG", quality=86, optimize=True, progressive=True)
+            wrote += 1
             print(f"  {sid:34} {src.width}x{src.height}  "
                   f"{out.stat().st_size // 1024:>4} KB  {note}")
         except Exception as e:
@@ -1692,6 +1694,8 @@ def cmd_build(args):
         manifest[sid] = manifest_entry(sid, cand)
 
     write_manifest(manifest)
+    if wrote:
+        bump_cache_version(wrote)
     print()
     for note, n in sorted(fitted.items(), key=lambda kv: -kv[1]):
         print(f"  {n:>3}  {note}")
@@ -2019,6 +2023,31 @@ def serve_crops(port):
                 print("    python tools/fish_photos.py build --refresh")
             if c["fail"]:
                 print("\n  Photos to replace are excluded from the manifest on the next build.")
+
+
+def bump_cache_version(n):
+    """Force devices to drop the photos they already hold.
+
+    The service worker is cache-first for images, which is right — they are
+    large and they do not usually change. But these DO change: rebuilding a
+    photo rewrites the same URL with different pixels, so a device that cached
+    the old one keeps it forever and no amount of deploying helps.
+
+    CACHE_VERSION exists for exactly this and was being left alone, so Gabriel
+    saw a portrait fish and a tight crop that had both been fixed days earlier.
+    Bumping it here means writing photos and evicting them can no longer come
+    apart, because the same command does both.
+    """
+    sw = ROOT / "sw.js"
+    src = sw.read_text(encoding="utf-8")
+    m = re.search(r"const CACHE_VERSION = 'v(\d+)';", src)
+    if not m:
+        print("  ! could not find CACHE_VERSION in sw.js — bump it by hand")
+        return
+    nxt = int(m.group(1)) + 1
+    sw.write_text(src.replace(m.group(0), f"const CACHE_VERSION = 'v{nxt}';"), encoding="utf-8")
+    print(f"\n  {n} photo(s) changed -> CACHE_VERSION bumped to v{nxt}")
+    print("  (images are cache-first; without this, devices keep the old ones)")
 
 
 def write_manifest(manifest):
