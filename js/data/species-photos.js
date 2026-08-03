@@ -10,7 +10,6 @@
 export const SPECIES_PHOTOS = {
   'alepes-djedaba': { file: 'assets/photos/alepes-djedaba.jpg', credit: 'no rights reserved', licence: 'CC0', source: 'https://www.inaturalist.org/observations/355328351' },
   'arothron-hispidus': { file: 'assets/photos/arothron-hispidus.jpg', credit: '(c) Dan Schofield, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/28163687' },
-  'auxis-thazard': { file: 'assets/photos/auxis-thazard.jpg', credit: '(c) Navaneeth Sini George, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/208736088' },
   'caesio-cuning': { file: 'assets/photos/caesio-cuning.jpg', credit: '(c) Pierre Pericard, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/314528359' },
   'caranx-ignobilis': { file: 'assets/photos/caranx-ignobilis.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/187411947' },
   'caranx-melampygus': { file: 'assets/photos/caranx-melampygus.jpg', credit: '(c) Ben Costamagna, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/356367436' },
@@ -18,6 +17,7 @@ export const SPECIES_PHOTOS = {
   'elagatis-bipinnulata': { file: 'assets/photos/elagatis-bipinnulata.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/240505975' },
   'epinephelus-coioides': { file: 'assets/photos/epinephelus-coioides.jpg', credit: '(c) Ewout Knoester, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/22074323' },
   'epinephelus-malabaricus': { file: 'assets/photos/epinephelus-malabaricus.jpg', credit: '(c) portioid, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/190298297' },
+  'euthynnus-affinis': { file: 'assets/photos/euthynnus-affinis.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/230178446' },
   'gerres-filamentosus': { file: 'assets/photos/gerres-filamentosus.jpg', credit: '(c) Teja Yantrapalli, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/308719179' },
   'leiognathus-equulus': { file: 'assets/photos/leiognathus-equulus.jpg', credit: 'no rights reserved', licence: 'CC0', source: 'https://www.inaturalist.org/observations/58008948' },
   'lethrinus-harak': { file: 'assets/photos/lethrinus-harak.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/188311782' },
@@ -37,12 +37,16 @@ export const SPECIES_PHOTOS = {
   'scomberoides-commersonnianus': { file: 'assets/photos/scomberoides-commersonnianus.jpg', credit: '(c) portioid, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/184674738' },
   'scomberomorus-commerson': { file: 'assets/photos/scomberomorus-commerson.jpg', credit: '(c) Ewout Knoester, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/71702438' },
   'scylla-serrata': { file: 'assets/photos/scylla-serrata.jpg', credit: 'no rights reserved', licence: 'CC0', source: 'https://www.inaturalist.org/observations/190875235' },
+  'selar-crumenophthalmus': { file: 'assets/photos/selar-crumenophthalmus.jpg', credit: '(c) Ditch Townsend, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/213740282' },
   'selaroides-leptolepis': { file: 'assets/photos/selaroides-leptolepis.jpg', credit: '(c) luluchouette, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/109248443' },
   'sepioteuthis-lessoniana': { file: 'assets/photos/sepioteuthis-lessoniana.jpg', credit: '(c) Pierre Pericard, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/285864571' },
   'siganus-guttatus': { file: 'assets/photos/siganus-guttatus.jpg', credit: '(c) Pierre Pericard, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/260463309' },
   'sillago-sihama': { file: 'assets/photos/sillago-sihama.jpg', credit: '(c) renjus box, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/150735037' },
   'sphyraena-barracuda': { file: 'assets/photos/sphyraena-barracuda.jpg', credit: '(c) Dan Schofield, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/315698595' },
+  'sphyraena-obtusata': { file: 'assets/photos/sphyraena-obtusata.jpg', credit: '(c) Julien Renoult, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/19499383' },
   'terapon-jarbua': { file: 'assets/photos/terapon-jarbua.jpg', credit: '(c) Mattia Menchetti, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/195744695' },
+  'trichiurus-lepturus': { file: 'assets/photos/trichiurus-lepturus.jpg', credit: '(c) Robin White, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/200996248' },
+  'tylosurus-crocodilus': { file: 'assets/photos/tylosurus-crocodilus.jpg', credit: '(c) Kai Murphy, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/383011806' },
   'upeneus-tragula': { file: 'assets/photos/upeneus-tragula.jpg', credit: '(c) Dan Schofield, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/27138867' },
 };
 

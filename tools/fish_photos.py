@@ -1821,7 +1821,7 @@ def cmd_status(args):
     data = json.loads(CANDIDATES.read_text(encoding="utf-8")) if CANDIDATES.exists() else {}
     picks = load_picks()
     counts = pick_counts(picks)
-    built = {p.stem for p in OUT_DIR.glob("*.png")} if OUT_DIR.exists() else set()
+    built = {p.stem for p in OUT_DIR.glob("*.jpg")} if OUT_DIR.exists() else set()
 
     no_cands = [s["id"] for s in species if s["id"] in data and not data[s["id"]]["candidates"]]
     doubtful = [s["id"] for s in species
