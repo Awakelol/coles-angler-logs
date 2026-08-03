@@ -675,6 +675,15 @@ image, since a sideways fish reads as a tall thin subject and gets framed
 badly. Species carrying a verdict that changes the file rebuild automatically;
 you do not have to remember `--refresh`.
 
+**A photo no API will serve** — or one of your own — goes in
+`tools/_photo_work/manual/` as `<species-id>.jpg`, and `build` prefers it over
+anything fetched. An optional `<species-id>.json` beside it records
+`credit` / `licence` / `source`; without one the card reads *"supplied by hand
+— provenance not recorded"*, which is deliberate, because an unattributed
+image is worse than an honest gap. Some hosts refuse programmatic downloads
+outright (the French museum's media server 403s whatever you send); those
+candidates are marked unavailable and greyed out rather than routed around.
+
 `verify --gemini` adds a vision pass over the picks: does it look like the
 species, is it one fish, side-on, whole, and what is the setting. Only a
 species mismatch is raised as a *problem* — that is the one that makes a card

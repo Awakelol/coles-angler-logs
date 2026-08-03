@@ -11,6 +11,7 @@ export const SPECIES_PHOTOS = {
   'alepes-djedaba': { file: 'assets/photos/alepes-djedaba.jpg', credit: 'no rights reserved', licence: 'CC0', source: 'https://www.inaturalist.org/observations/355328351' },
   'amblygaster-sirm': { file: 'assets/photos/amblygaster-sirm.jpg', credit: 'Judgefloro', licence: 'CC0', source: 'https://commons.wikimedia.org/wiki/File:9636Tamban-tuloy_01.jpg' },
   'arothron-hispidus': { file: 'assets/photos/arothron-hispidus.jpg', credit: '(c) Dan Schofield, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/28163687' },
+  'auxis-thazard': { file: 'assets/photos/auxis-thazard.jpg', credit: '(c) Navaneeth Sini George, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/208736088' },
   'caesio-cuning': { file: 'assets/photos/caesio-cuning.jpg', credit: '(c) Pierre Pericard, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/314528359' },
   'carangoides-equula': { file: 'assets/photos/carangoides-equula.jpg', credit: 'NasserHalaweh', licence: 'CC BY-SA', source: 'https://commons.wikimedia.org/wiki/File:Carangidae_Carangoides_equula_1.jpg' },
   'caranx-ignobilis': { file: 'assets/photos/caranx-ignobilis.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/187411947' },

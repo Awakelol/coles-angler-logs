@@ -81,6 +81,10 @@ WORK = ROOT / "tools" / "_photo_work"          # gitignored scratch
 CANDIDATES = WORK / "candidates.json"
 PICKS = WORK / "picks.json"                    # your choices, kept across runs
 RAW = WORK / "raw"
+# Drop a photo in here as <species-id>.jpg and it wins over anything the
+# APIs found. For images no API will serve — a museum server that refuses
+# downloads, or your own photo of a fish you caught.
+MANUAL = WORK / "manual"
 OUT_DIR = ROOT / "assets" / "photos"
 MANIFEST_JS = ROOT / "js" / "data" / "species-photos.js"
 REVIEW_HTML = WORK / "review.html"
@@ -742,6 +746,33 @@ def pick_counts(picks):
     return counts
 
 
+def bind_server(port, handler, what):
+    """Bind, stepping past ports already in use.
+
+    A port left held by an earlier run raises WinError 10048 out of the socket
+    layer as a bare traceback, which says nothing about what to do. Stepping
+    forward and saying which port it landed on is more use than an error, and
+    SO_REUSEADDR alone does not help on Windows.
+    """
+    import socketserver
+
+    class Server(socketserver.TCPServer):
+        allow_reuse_address = True
+
+    last = None
+    for attempt in range(12):
+        try:
+            return Server(("127.0.0.1", port + attempt), handler), port + attempt
+        except OSError as e:
+            last = e
+            if attempt == 0:
+                print(f"  port {port} is in use — trying the next one")
+    raise SystemExit(
+        f"Could not bind any port from {port} to {port + 11}: {last}\n"
+        f"Something is still listening. Find it with:\n"
+        f"  Get-NetTCPConnection -LocalPort {port} -State Listen")
+
+
 def serve_review(port):
     """Serve the sheet and take each decision straight to disk.
 
@@ -815,7 +846,8 @@ def serve_review(port):
         def log_message(self, *a):
             pass          # the counters in the page are the only progress worth seeing
 
-    with socketserver.TCPServer(("127.0.0.1", port), Handler) as srv:
+    srv, port = bind_server(port, Handler, "review")
+    with srv:
         url = f"http://127.0.0.1:{port}/"
         print(f"Review sheet: {url}")
         print(f"Every decision saves to {PICKS} as you click.")
@@ -1523,6 +1555,13 @@ def cmd_build(args):
         cand = rec["candidates"][idx]
         out = OUT_DIR / f"{sid}.jpg"
 
+        # A hand-supplied photo beats anything fetched. Credit comes from a
+        # sidecar JSON if there is one — an image with no provenance recorded
+        # is worse than no image, so the default says plainly that it is
+        # unrecorded rather than inventing a licence.
+        manual = next((f for e in ("jpg", "jpeg", "png", "webp")
+                       for f in [MANUAL / f"{sid}.{e}"] if f.exists()), None)
+
         # Normally an existing file is left alone. Not when you have just said
         # its crop is wrong — the whole point of that verdict is to change the
         # file, and making you remember --refresh for it would be a trap.
@@ -1534,11 +1573,23 @@ def cmd_build(args):
             manifest[sid] = manifest_entry(sid, cand)
             continue
 
-        try:
+        if manual:
+            blob = manual.read_bytes()
+            side = MANUAL / f"{sid}.json"
+            meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
+            cand = {
+                "credit": meta.get("credit", "supplied by hand — provenance not recorded"),
+                "licence": meta.get("licence", "cc-by"),
+                "page": meta.get("source", ""),
+            }
+            if cand["licence"] not in LICENCE_LABEL:
+                cand["licence"] = "cc-by"
+        else:
+          try:
             req = urllib.request.Request(cand["url"], headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=60) as r:
                 blob = r.read()
-        except Exception as e:
+          except Exception as e:
             # Some hosts refuse programmatic downloads outright — the French
             # museum's media server 403s whatever you send. That is their
             # policy, not a bug to route around, so the candidate is marked
@@ -1547,7 +1598,8 @@ def cmd_build(args):
             if "403" in str(e) or "404" in str(e):
                 cand["unavailable"] = str(e)[:80]
                 CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
-                print(f"  {' ' * 34}marked unavailable — pick another in `review`")
+                print(f"  {' ' * 34}marked unavailable — supply it by hand in "
+                      f"tools/_photo_work/manual/, or pick another in `review`")
             continue
 
         try:
@@ -1585,6 +1637,8 @@ def cmd_build(args):
                 # reporting a failure there would send you hunting a bug that
                 # is really your own instruction being followed.
                 note = "no subject found — full frame kept"
+            if manual:
+                note += " (supplied by hand)"
             fitted[note] = fitted.get(note, 0) + 1
 
             src.thumbnail((MAX_EDGE, MAX_EDGE), Image.LANCZOS)
@@ -1903,7 +1957,8 @@ def serve_crops(port):
         def log_message(self, *a):
             pass
 
-    with socketserver.TCPServer(("127.0.0.1", port), Handler) as srv:
+    srv, port = bind_server(port, Handler, "crops")
+    with srv:
         url = f"http://127.0.0.1:{port}/"
         print(f"Crop review: {url}")
         print(f"Saves to {CROPS} as you click.")
