@@ -1594,7 +1594,9 @@ def cmd_build(args):
         # sidecar JSON if there is one — an image with no provenance recorded
         # is worse than no image, so the default says plainly that it is
         # unrecorded rather than inventing a licence.
-        manual = next((f for e in ("jpg", "jpeg", "png", "webp")
+        # Case-insensitive on the extension, because a file saved from a
+        # browser arrives as .JPG as often as .jpg.
+        manual = next((f for e in ("jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG", "WEBP")
                        for f in [MANUAL / f"{sid}.{e}"] if f.exists()), None)
 
         # Normally an existing file is left alone. Not when you have just said
