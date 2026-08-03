@@ -267,12 +267,19 @@ def rank(cands):
     """
     def score(c):
         s = 0.0
-        if c["dead"]:
-            s += 3.0          # landed, in air, laid out
+        # "Dead" USED to be worth +3, on the theory that a landed fish is laid
+        # out side-on in air. Reviewing 68 of them showed what it actually
+        # correlates with: market stalls and catch piles, which are the single
+        # most common reason a photo got rejected — "less from the market,
+        # preferrably still in water", seven times over.
+        #
+        # It is not a penalty either, because one fish laid flat on a deck is
+        # exactly right. It is simply no longer evidence in either direction,
+        # and the signals that DO track a usable photo carry the weight instead.
         if c["research"]:
-            s += 1.5
+            s += 2.5           # somebody else agreed it is this species
         if c["scope"] == "local":
-            s += 1.5          # photographed in the Philippines
+            s += 2.0          # photographed in the Philippines
         s += min(c["agreements"], 4) * 0.25
         w, h = c["width"], c["height"]
         if w and h:
@@ -372,8 +379,13 @@ def cmd_review(args):
     order = sorted(data.items(), key=lambda kv: (kv[1]["confidence"], kv[0]))
 
     rows = []
+    # Which species already have a photo on disk — the ones left are the work.
+    have = {p.stem for p in OUT_DIR.glob("*.jpg")} if OUT_DIR.exists() else set()
+
     for sid, rec in order:
         if args.doubtful and rec["confidence"] >= 0.6:
+            continue
+        if args.needed and sid in have:
             continue
         chosen = picks.get(sid, {})
         cells = []
@@ -1836,6 +1848,15 @@ def cmd_status(args):
 
 
 def main():
+    # Line-buffered, so a run redirected to a log is watchable while it works.
+    # Python block-buffers stdout when it is not a terminal, which meant a
+    # forty-minute background search wrote nothing at all until it exited —
+    # indistinguishable, from outside, from a job that had silently died.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1847,6 +1868,8 @@ def main():
 
     r = sub.add_parser("review", help="contact sheet to pick from")
     r.add_argument("--doubtful", action="store_true", help="only the low-confidence ones")
+    r.add_argument("--needed", action="store_true",
+                   help="only species that still have no photo")
     r.add_argument("--no-open", action="store_true", help="write the file, don't serve it")
     r.add_argument("--port", type=int, default=8123)
     r.set_defaults(fn=cmd_review)
