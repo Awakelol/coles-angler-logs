@@ -187,6 +187,18 @@ const ICONS = {
     <path d="M2.8 14.6h18.4l-2.6 5.2a1.6 1.6 0 0 1-1.4.8H6.8a1.6 1.6 0 0 1-1.4-.8Z"
           fill="${p[3]}" stroke="${p[0]}" stroke-width="1.8" stroke-linejoin="round"/>`,
 
+  // Faces left, like every species photograph and every sprite in the app.
+  // A fish icon pointing the other way to the fish beside it is the kind of
+  // thing nobody names but everybody feels.
+  fish: (p) => `
+    <path d="M15.6 12c0 4-3.6 6.6-7 6.6S2 16 2 12s3.2-6.6 6.6-6.6 7 2.6 7 6.6Z"
+          fill="${p[5]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="M15 8.2 21.6 4.8a.8.8 0 0 1 1.2.8L21.4 12l1.4 6.4a.8.8 0 0 1-1.2.8L15 15.8Z"
+          fill="${p[8]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="M9 5.6c1.4-2 3.2-2.6 4.6-2.2-.4 1.6-1.2 2.6-2.4 3.2"
+          fill="${p[3]}" stroke="${p[0]}" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="6.4" cy="10.6" r="1.25" fill="${p[0]}"/>`,
+
   book: (p) => `
     <path d="M3.4 5.2A13 13 0 0 1 12 7.4a13 13 0 0 1 8.6-2.2v12.6A13 13 0 0 0 12 20a13 13 0 0 0-8.6-2.2Z"
           fill="${p[5]}" stroke="${p[0]}" stroke-width="1.8" stroke-linejoin="round"/>

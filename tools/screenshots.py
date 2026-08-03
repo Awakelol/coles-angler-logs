@@ -68,6 +68,11 @@ SHOTS = [
      "const t=document.querySelector('.tip-card');"
      "t.scrollIntoView({block:'center'}); await new Promise(r=>setTimeout(r,600))"),
     ("9-settings",   "#/settings",   "#saveTides",                   None),
+    ("9b-account",   "#/account",    ".acct-name",                   None),
+    # The + open, so the quick actions and the x are in the tour rather than
+    # only in the test assertions.
+    ("9c-quick-actions", "#/",       ".fab",
+     "document.querySelector('.fab').click(); await new Promise(r=>setTimeout(r,600))"),
     # Dark theme sweep — set once, then walk the same screens.
     ("d1-home",      "#/",           ".kpi__v, .empty",
      "const t = await import('./js/theme.js'); t.setTheme('dark')"),
@@ -176,8 +181,16 @@ async def main():
                 return 1;
             """)
 
+            locked = await page.eval(
+                "const t = await import('./js/theme.js'); return !!t.THEME_LOCKED;")
+            shots = SHOTS
+            if locked:
+                shots = [x for x in SHOTS if not x[0].startswith("d")]
+                print("  (dark sweep skipped — THEME_LOCKED is on; those screens"
+                      " would come out light under dark names)")
+
             made = []
-            for name, route, sel, action in SHOTS:
+            for name, route, sel, action in shots:
                 await page.send("Page.navigate", url=f"{BASE}/index.html{route}")
                 await asyncio.sleep(0.5)
                 ok = await page.wait_for(sel)

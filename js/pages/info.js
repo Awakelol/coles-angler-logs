@@ -21,7 +21,7 @@ import {
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, gearByGroup, getGear } from '../data/gear.js';
-import { speciesArt, renderSprite, icon, SPRITES } from '../art.js';
+import { speciesArt, icon } from '../art.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
 import { identifyPanelHtml, mountIdentifyPanel } from './identify.js';
@@ -30,12 +30,12 @@ import { habitatTactics } from '../data/tactics.js';
 import { esc, openSheet } from '../ui.js';
 
 // Each tab gets its own art and palette. A shared palette made the three read
-// as one grey smear at 30px, which is exactly the size where a pixel icon has
+// as one grey smear at 30px, which is exactly the size where an icon has
 // to work hardest.
 const TABS = [
   {
     id: 'fishes', label: 'Fishes',
-    art: () => renderSprite(SPRITES.perch, 'ocean', { size: 26 }),
+    art: () => icon('fish', { size: 26, palette: 'ocean' }),
     count: (ctx) => `${allSpecies(ctx.regionId).length} species`,
   },
   {
@@ -138,7 +138,7 @@ function gearDetailHtml(g) {
 function zoneCard(z) {
   return `
     <button class="card zone-card" data-zone="${esc(z.id)}">
-      <div class="zone-card__art">${renderSprite(SPRITES.perch, zonePalette(z), { size: 130 })}</div>
+      <div class="zone-card__art">${icon('fish', { size: 130, palette: zonePalette(z) })}</div>
       <div>
         <h3 class="card__title">${esc(z.name)}</h3>
         <p class="card__sub"><span class="zone-card__type">${esc(

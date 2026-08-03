@@ -217,6 +217,25 @@ export const SPRITES = {
 
 // Icon sprites (non-species) used for section headers and empty states.
 export const ICONS = {
+  // A small fish for places that need one at icon size. SPRITES.perch used to
+  // stand in here, but a 40-row sprite squeezed to 26px is a grey smear — the
+  // detail that makes it a good hero is exactly what kills it small.
+  fish: [
+    '....................',
+    '.......OOOO.........',
+    '.....OOBBBBOO.....OO',
+    '...OOBBLLLLBBO...OAO',
+    '..OBBLLLLLLLBBO.OAAO',
+    '.OBLLLLLLLLLLBBOAAAO',
+    '.OBLEPLLLLLLLBBOAAO.',
+    'OBLLEPLLLLLLLBBOAO..',
+    '.OBLLLLLLLLLLBBOAAO.',
+    '.OBBLLLLLLLLLBBOAAAO',
+    '..OBBLLLLLLLBBO.OAAO',
+    '...OOBBLLLLBBO...OAO',
+    '.....OOBBBBOO.....OO',
+    '.......OOOO.........',
+  ],
   // Weather icons are drawn in tools/author_sprites.py and regenerated from
   // there — do not hand-edit. Render them with the 'weather' palette, which
   // carries five cloud tones (S..H) plus two golds (F rim, A core) so clouds

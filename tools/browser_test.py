@@ -1893,6 +1893,26 @@ async def main():
                     allDraw: modern.every(n => art.icon(n, { size: 24 }).includes('<svg')),
                 };
             """)
+            # The manifest paints the splash screen on install, and nothing in
+            # the app reads it — so it is the one surface that can sit on a
+            # retired palette for months without anyone noticing.
+            man = await page.eval("""
+                const [m, css] = await Promise.all([
+                    fetch('./manifest.json').then(r => r.json()),
+                    fetch('./css/style.css').then(r => r.text()),
+                ]);
+                // Plain string search rather than a built regex: the pattern
+                // has to survive Python, then the CDP JSON, and an escape lost
+                // on the way just returns nothing and looks like a real failure.
+                const at = css.indexOf('--cream:');
+                const cream = at < 0 ? ''
+                    : (css.slice(at + 8, at + 30).match(/#[0-9a-fA-F]{6}/) || [''])[0].toLowerCase();
+                return { bg: (m.background_color || '').toLowerCase(),
+                         theme: (m.theme_color || '').toLowerCase(), cream };
+            """)
+            check("the install splash uses the current page colour",
+                  man["bg"] == man["cream"] and man["theme"] == man["cream"], str(man))
+
             check("both art sets cover the same icons",
                   not sets["missingFromModern"] and not sets["missingFromPixel"], str(sets))
             check("every icon draws something", sets["allDraw"], str(sets))
