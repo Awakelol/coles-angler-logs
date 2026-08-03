@@ -476,22 +476,37 @@ async def main():
                 return { light, dark, bad, sys, persisted: localStorage.getItem('angler.theme') };
             """)
             check("light theme applies", theme["light"]["attr"] == "light" and
-                  theme["light"]["bg"].upper() == "#FFF8E7", str(theme["light"]))
-            check("dark theme applies", theme["dark"]["attr"] == "dark" and
-                  theme["dark"]["bg"].upper() == "#0D1117", str(theme["dark"]))
-            check("dark text inverts", theme["dark"]["ink"].upper() == "#E6EDF3",
-                  theme["dark"]["ink"])
-            # GitHub-style: hairline border on a lifted surface, no outline.
-            check("dark uses a hairline border", theme["dark"]["line"].upper() == "#30363D",
-                  theme["dark"]["line"])
-            check("dark drops the hard offset shadow",
-                  theme["dark"]["shadow"] == "none", str(theme["dark"]["shadow"]))
-            check("dark uses a 1px border", theme["dark"]["bw"] == "1px", str(theme["dark"]["bw"]))
-            check("theme-color follows the theme",
-                  theme["dark"]["meta"] == "#0d1117" and theme["light"]["meta"] == "#FFD23F",
-                  f"{theme['light']['meta']} / {theme['dark']['meta']}")
-            check("color-scheme is set for form controls",
-                  theme["dark"]["scheme"] == "dark", str(theme["dark"]["scheme"]))
+                  theme["light"]["bg"].upper() == "#F6F4EA", str(theme["light"]))
+            # Dark mode is deliberately locked off while the light palette is
+            # rebuilt, so setTheme('dark') no longer reaches it. The rules are
+            # still in the stylesheet and still have to be intact for the day
+            # the lock comes off — so they are read from the sheet, not the page.
+            locked = await page.eval("""
+                const t = await import('./js/theme.js');
+                const css = await (await fetch('./css/style.css')).text();
+                const block = css.split(':root[data-theme="dark"]')[1] || '';
+                const body = block.slice(0, block.indexOf('}'));
+                const val = (n) => (body.match(new RegExp(n + ':\\s*([^;]+);')) || [])[1]?.trim();
+                return {
+                    lockedOn: t.THEME_LOCKED === true,
+                    forced: t.getTheme(),
+                    darkCanvas: val('--cream'), darkInk: val('--ink'),
+                    darkLine: val('--line'), darkShadow: val('--shadow'),
+                    darkBw: val('--border-w'),
+                };
+            """)
+            check("light mode is forced while the palette is rebuilt",
+                  locked["lockedOn"] and locked["forced"] == "light", str(locked))
+            check("the dark rules survive the lock, ready to switch back on",
+                  (locked["darkCanvas"] or "").upper() == "#0D1117"
+                  and (locked["darkInk"] or "").upper() == "#E6EDF3"
+                  and (locked["darkLine"] or "").upper() == "#30363D"
+                  and locked["darkShadow"] == "none" and locked["darkBw"] == "1px",
+                  str(locked))
+            # The phone's chrome tints to the page canvas, whatever it is.
+            check("theme-color follows the canvas",
+                  theme["light"]["meta"].upper() == theme["light"]["bg"].upper(),
+                  f"meta {theme['light']['meta']} vs canvas {theme['light']['bg']}")
             check("no malformed CSS variables", not theme["bad"], ", ".join(theme["bad"]))
 
             # Real contrast maths on rendered elements. Bright accent fills
@@ -2176,10 +2191,10 @@ async def main():
                     }
                     return false;
                 };
-                const btn = (id) => document.querySelector(`.segmented__btn[data-tab="${id}"]`);
+                const btn = (id) => document.querySelector(`.bookmark[data-tab="${id}"]`);
                 const seen = {};
 
-                seen.threeTabs = document.querySelectorAll('.segmented__btn').length;
+                seen.threeTabs = document.querySelectorAll('.bookmark').length;
                 seen.familyChipsOnFishes = !document.getElementById('familyFilters').hidden;
 
                 btn('gear').click();
@@ -2338,23 +2353,76 @@ async def main():
             nav = await page.eval("""
                 document.querySelector('.sheet-backdrop')?.remove();
                 document.body.classList.remove('is-sheet-open');
-                const items = [...document.querySelectorAll('.tabbar a, .tabbar button')];
-                const account = document.querySelector('.tabbar button');
-                const before = location.hash;
+                const items = [...document.querySelectorAll('.tabbar a')];
+                const account = document.querySelector('.tabbar a[data-tab="/account"]');
                 account.click();
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, 700));
+                const bar = document.querySelector('.tabbar').getBoundingClientRect();
                 return {
                     order: items.map(e => e.querySelector('span').textContent.trim()),
-                    accountIsButton: account.tagName === 'BUTTON',
-                    accountHasHref: account.hasAttribute('href'),
-                    hashUnchanged: location.hash === before,
+                    // Five destinations. The create button is NOT one of them —
+                    // it floats above, so adding it never cost a tab its place.
+                    fabOutsideBar: !document.querySelector('.tabbar .fab'),
+                    fabExists: !!document.getElementById('quickBtn'),
+                    accountRoute: location.hash,
+                    accountRendered: !!document.querySelector('.acct-hero'),
+                    // A floating island, not a bar welded to the edge.
+                    floats: Math.round(window.innerWidth - bar.right) > 4
+                            && Math.round(window.innerHeight - bar.bottom) > 4,
                 };
             """)
             check("tab bar reads home, map, log, info, account",
                   nav["order"] == ["Home", "Map", "Log", "Info", "Account"], str(nav["order"]))
-            check("account tab is inert",
-                  nav["accountIsButton"] and not nav["accountHasHref"]
-                  and nav["hashUnchanged"], str(nav))
+            check("the create button costs no tab its place",
+                  nav["fabExists"] and nav["fabOutsideBar"], str(nav))
+            check("the nav floats clear of every edge", nav["floats"], str(nav))
+            check("account tab opens the account screen",
+                  nav["accountRoute"].startswith("#/account") and nav["accountRendered"],
+                  str(nav))
+
+            # --- the + and what it opens ------------------------------------
+            fab = await page.eval("""
+                const btn = document.getElementById('quickBtn');
+                const menu = document.getElementById('quickMenu');
+                const veil = document.getElementById('quickVeil');
+                const bars = () => [...btn.querySelectorAll('.fab__x i')]
+                    .map(i => getComputedStyle(i).transform);
+
+                const shut = { expanded: btn.getAttribute('aria-expanded'),
+                               hidden: menu.hidden, bars: bars() };
+                btn.click();
+                await new Promise(r => setTimeout(r, 450));
+                const open = { expanded: btn.getAttribute('aria-expanded'),
+                               hidden: menu.hidden,
+                               veilUp: !veil.hidden && veil.classList.contains('is-open'),
+                               items: menu.querySelectorAll('[data-quick]').length,
+                               labels: [...menu.querySelectorAll('[data-quick] span:last-child')]
+                                          .map(e => e.textContent.trim()),
+                               bars: bars(),
+                               // Opacity is what the transition animates; if the
+                               // items are up but transparent, nothing moved.
+                               visible: getComputedStyle(menu.querySelector('[data-quick]')).opacity };
+
+                veil.click();
+                await new Promise(r => setTimeout(r, 450));
+                const closed = { expanded: btn.getAttribute('aria-expanded'), hidden: menu.hidden };
+                return { shut, open, closed };
+            """)
+            check("the + opens a quick-action menu",
+                  fab["open"]["expanded"] == "true" and fab["open"]["items"] == 3
+                  and fab["open"]["veilUp"], str(fab["open"]))
+            check("it offers log, spot and photo",
+                  fab["open"]["labels"] == ["Log a catch", "Drop a spot", "Identify a photo"],
+                  str(fab["open"]["labels"]))
+            # The morph is the same two bars rotating, so the transforms must
+            # actually differ between states — a swapped glyph would not.
+            check("the + really turns into an x",
+                  fab["shut"]["bars"] != fab["open"]["bars"], str(fab))
+            check("the actions animate in rather than appearing",
+                  float(fab["open"]["visible"]) > 0.9, str(fab["open"]["visible"]))
+            check("tapping away closes it",
+                  fab["closed"]["expanded"] == "false" and fab["closed"]["hidden"] is True,
+                  str(fab["closed"]))
 
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
@@ -2944,10 +3012,15 @@ async def main():
             gap = await page.eval("""
                 const m = document.getElementById('mapWrap').getBoundingClientRect();
                 const bar = document.querySelector('.tabbar').getBoundingClientRect();
-                return { gap: Math.round(bar.top - m.bottom) };
+                return { gap: Math.round(bar.top - m.bottom),
+                         barBottomGap: Math.round(window.innerHeight - bar.bottom) };
             """)
+            # The bar floats now, so a small gap above it is the design rather
+            # than dead space — but the map must still reach it, not stop short.
             check("no dead space between map and tab bar",
-                  abs(gap["gap"]) <= 2, f"{gap['gap']}px")
+                  -4 <= gap["gap"] <= 18, f"{gap['gap']}px")
+            check("the nav floats clear of the bottom edge",
+                  gap["barBottomGap"] >= 6, f"{gap['barBottomGap']}px")
 
             # The map is the only element that could run clean off the window,
             # and did — every other surface on this screen is inset. The bottom

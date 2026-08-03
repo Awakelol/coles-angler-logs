@@ -14,13 +14,20 @@
 export const THEME_KEY = 'angler.theme';
 export const THEMES = ['light', 'dark', 'system'];
 
+// The light theme has been rebuilt on the blue/off-white palette; dark has not.
+// Rather than ship a half-retuned dark mode, the picker is hidden and light is
+// forced. The theme system itself is untouched — flip this back to false and
+// the setting returns, along with whatever dark mode currently looks like.
+export const THEME_LOCKED = true;
+
 // Matches the --cream / page background of each theme, so the phone's status
 // bar and PWA chrome tint to match instead of staying stuck on yellow.
 // Must match --cream / the page canvas for each theme, or the phone's status
 // bar sits a shade off the top of the page. Dark is GitHub's canvas colour.
-const THEME_COLOR = { light: '#FFD23F', dark: '#0d1117' };
+const THEME_COLOR = { light: '#F6F4EA', dark: '#0d1117' };
 
 export function getTheme() {
+  if (THEME_LOCKED) return 'light';
   const saved = localStorage.getItem(THEME_KEY);
   return THEMES.includes(saved) ? saved : 'system';
 }

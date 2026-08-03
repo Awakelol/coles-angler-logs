@@ -6,7 +6,7 @@
 <title>Cole's Angler Log</title>
 <meta name="description" content="A personal fishing companion — species guide, tides, weather and catch log.">
 
-<meta name="theme-color" content="#FFD23F">
+<meta name="theme-color" content="#F6F4EA">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Angler Log">
@@ -29,7 +29,7 @@
       document.documentElement.setAttribute('data-theme', resolved);
       document.documentElement.style.colorScheme = resolved;
       var m = document.querySelector('meta[name="theme-color"]');
-      if (m) m.setAttribute('content', dark ? '#0d1117' : '#FFD23F');
+      if (m) m.setAttribute('content', dark ? '#0d1117' : '#F6F4EA');
     } catch (e) {
       document.documentElement.setAttribute('data-theme', 'light');
     }
@@ -81,29 +81,59 @@
 
 <main id="main" tabindex="-1"></main>
 
+<!-- The quick-action stack the + opens. Above the nav, so the button that
+     opened it stays under your thumb while you choose. -->
+<div class="quick" id="quickMenu" hidden>
+  <a class="quick__item" href="#/log?new=1" data-quick>
+    <span class="quick__ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 5v3H9v2h3v3h2v-3h3v-2h-3V8Z"/></svg>
+    </span>
+    <span>Log a catch</span>
+  </a>
+  <a class="quick__item" href="#/map?drop=1" data-quick>
+    <span class="quick__ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7Zm0 4.5A2.5 2.5 0 1 0 12 11a2.5 2.5 0 0 0 0-4.5Z"/></svg>
+    </span>
+    <span>Drop a spot</span>
+  </a>
+  <a class="quick__item" href="#/info?tab=photo" data-quick>
+    <span class="quick__ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 3h6l1.5 2H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.5Zm3 5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Zm0 2.2a3.3 3.3 0 1 1 0 6.6 3.3 3.3 0 0 1 0-6.6Z"/></svg>
+    </span>
+    <span>Identify a photo</span>
+  </a>
+</div>
+<div class="quick-veil" id="quickVeil" hidden></div>
+
+<!-- Above the pill rather than in it. The bars are two halves of one shape,
+     rotated — which is what makes + BECOME x rather than swap for it. -->
+<button type="button" class="fab" id="quickBtn"
+        aria-expanded="false" aria-controls="quickMenu" aria-label="Add">
+  <span class="fab__x" aria-hidden="true"><i></i><i></i></span>
+</button>
+
 <nav class="tabbar" aria-label="Primary">
-  <a href="#/" data-tab="/">
+  <a href="#/" data-tab="/" aria-label="Home">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg>
     <span>Home</span>
   </a>
-  <a href="#/map" data-tab="/map">
+  <a href="#/map" data-tab="/map" aria-label="Map">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9 2 6 2.2L20.4 2c.7-.2 1.6.2 1.6 1v16c0 .5-.3.9-.7 1L15 22l-6-2.2L3.6 22c-.7.2-1.6-.2-1.6-1V5c0-.5.3-.9.7-1zm0 2.3v13.4l6 2.2V6.5z"/></svg>
     <span>Map</span>
   </a>
-  <a href="#/log" data-tab="/log">
+
+  <a href="#/log" data-tab="/log" aria-label="Log">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 5v3H9v2h3v3h2v-3h3v-2h-3V8Z"/></svg>
     <span>Log</span>
   </a>
-  <a href="#/info" data-tab="/info">
+  <a href="#/info" data-tab="/info" aria-label="Info">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h11a3 3 0 0 1 3 3v16a1 1 0 0 1-1 1H7a3 3 0 0 1-3-3V5a3 3 0 0 1 2-2.8Zm0 15.2V19a1 1 0 0 0 1 1h11v-2H7a3 3 0 0 0-1 .2ZM12 5.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4ZM11 9.5h2V15h-2Z"/></svg>
     <span>Info</span>
   </a>
-  <!-- Deliberately inert: the account screen isn't designed yet, and a tab
-       that goes somewhere half-built is worse than one that waits. -->
-  <button type="button" class="tabbar__soon" data-tab="/account" aria-disabled="true">
+  <a href="#/account" data-tab="/account" aria-label="Account">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/></svg>
     <span>Account</span>
-  </button>
+  </a>
 </nav>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

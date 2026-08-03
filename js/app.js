@@ -20,6 +20,7 @@ import * as mapPage from './pages/map.js';
 import * as conditions from './pages/conditions.js';
 import * as log from './pages/log.js';
 import * as info from './pages/info.js';
+import * as account from './pages/account.js';
 import * as settings from './pages/settings.js';
 
 // Untracked local keys first, then anything entered in Settings wins.
@@ -37,6 +38,7 @@ const ROUTES = [
   { path: '/conditions', page: conditions },
   { path: '/log', page: log },
   { path: '/info', page: info },
+  { path: '/account', page: account },
   { path: '/settings', page: settings },
 ];
 
@@ -211,6 +213,57 @@ function buildBrandMark() {
   const mark = document.getElementById('brandMark');
   if (mark) mark.innerHTML = brandMark({ size: 40 });
 }
+
+// --- the + and its quick actions -------------------------------------------
+//
+// Lives here rather than in a page module: the nav is outside the router's
+// view, so a page that owned this would take it down on every navigation.
+function wireQuickActions() {
+  const btn = document.getElementById('quickBtn');
+  const menu = document.getElementById('quickMenu');
+  const veil = document.getElementById('quickVeil');
+  if (!btn || !menu || !veil) return;
+
+  const setOpen = (open) => {
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', open ? 'Close' : 'Add');
+    // `hidden` has to come off before the class goes on, or the browser has
+    // nothing to animate from and the items simply appear.
+    if (open) {
+      menu.hidden = false;
+      veil.hidden = false;
+      requestAnimationFrame(() => {
+        menu.classList.add('is-open');
+        veil.classList.add('is-open');
+      });
+    } else {
+      menu.classList.remove('is-open');
+      veil.classList.remove('is-open');
+      // Wait for the fade before hiding, so it does not vanish mid-transition.
+      setTimeout(() => {
+        if (btn.getAttribute('aria-expanded') === 'false') {
+          menu.hidden = true;
+          veil.hidden = true;
+        }
+      }, 260);
+    }
+  };
+
+  btn.addEventListener('click', () =>
+    setOpen(btn.getAttribute('aria-expanded') !== 'true'));
+  veil.addEventListener('click', () => setOpen(false));
+  // Choosing an action navigates; the menu must not still be up when you land.
+  for (const a of menu.querySelectorAll('[data-quick]')) {
+    a.addEventListener('click', () => setOpen(false));
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') setOpen(false);
+  });
+  // Navigating any other way closes it too.
+  window.addEventListener('hashchange', () => setOpen(false));
+}
+
+wireQuickActions();
 
 window.addEventListener('hashchange', render);
 

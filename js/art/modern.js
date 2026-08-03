@@ -205,8 +205,12 @@ const ICONS = {
  * different aspect and is never asked for at icon sizes.
  */
 export function modernBrandMark({ size = 40 } = {}) {
-  const gold = PALETTES.gold[3];
-  const ink = PALETTES.gold[0];
+  // Reads the palette off the page rather than hardcoding, so the mark follows
+  // the theme instead of being the one gold thing left on a blue app.
+  const css = typeof getComputedStyle === 'function'
+    ? getComputedStyle(document.documentElement) : null;
+  const gold = css?.getPropertyValue('--blue').trim() || PALETTES.ocean[3];
+  const ink = css?.getPropertyValue('--ink').trim() || PALETTES.ocean[0];
   return `
     <svg class="ico brand-mark" viewBox="0 0 40 48" width="${size}"
          height="${Math.round((size * 48) / 40)}"

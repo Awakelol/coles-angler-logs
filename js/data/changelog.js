@@ -20,9 +20,22 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '3.0.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.0.0',
+    date: '2026-08-04',
+    title: 'A new look on mobile',
+    changes: [
+      'Blue and off-white throughout, with soft edges instead of hard outlines.',
+      'The navigation floats as an island, with a + that turns into an ×.',
+      'The + opens quick actions: log a catch, drop a spot, identify a photo.',
+      "Info's three categories are bookmarks you flip between.",
+      'An Account screen — your name, your totals, and the way out.',
+      'Dark mode is hidden while the light palette settles.',
+    ],
+  },
   {
     version: '2.2.0',
     date: '2026-08-03',

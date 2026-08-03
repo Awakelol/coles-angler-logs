@@ -33,9 +33,21 @@ import { esc, openSheet } from '../ui.js';
 // as one grey smear at 30px, which is exactly the size where a pixel icon has
 // to work hardest.
 const TABS = [
-  { id: 'fishes', label: 'Fishes', art: () => renderSprite(SPRITES.perch, 'ocean', { size: 30 }) },
-  { id: 'gear', label: 'Gear', art: () => icon('rod', { size: 30, palette: 'sunset' }) },
-  { id: 'zones', label: 'Zones', art: () => icon('wave', { size: 30, palette: 'emerald' }) },
+  {
+    id: 'fishes', label: 'Fishes',
+    art: () => renderSprite(SPRITES.perch, 'ocean', { size: 26 }),
+    count: (ctx) => `${allSpecies(ctx.regionId).length} species`,
+  },
+  {
+    id: 'gear', label: 'Gear',
+    art: () => icon('rod', { size: 26, palette: 'sunset' }),
+    count: () => `${GEAR.length} items`,
+  },
+  {
+    id: 'zones', label: 'Zones',
+    art: () => icon('wave', { size: 26, palette: 'emerald' }),
+    count: (ctx) => `${zonesFor(ctx.regionId).length} waters`,
+  },
 ];
 
 // Photo is a MODE, not a tab. It sits beside the search box rather than in
@@ -211,13 +223,14 @@ export function render(ctx) {
         <p class="subtitle">Everything worth knowing before you go: what swims here, what to bring, and where to stand.</p>
 
         <div class="card card--tight" style="gap:12px">
-          <div class="segmented" id="infoTabs" role="tablist" aria-label="Information category">
+          <div class="bookmarks" id="infoTabs" role="tablist" aria-label="Information category">
             ${TABS.map(
               (t) => `
-              <button class="segmented__btn" role="tab" data-tab="${esc(t.id)}"
+              <button class="bookmark bookmark--${esc(t.id)}" role="tab" data-tab="${esc(t.id)}"
                       aria-selected="${t.id === tab}" id="infotab-${esc(t.id)}">
-                <span class="segmented__icon">${t.art()}</span>
-                <span>${esc(t.label)}</span>
+                <span class="bookmark__icon">${t.art()}</span>
+                <span class="bookmark__label">${esc(t.label)}</span>
+                <span class="bookmark__count">${esc(t.count ? t.count(ctx) : '')}</span>
               </button>`
             ).join('')}
           </div>

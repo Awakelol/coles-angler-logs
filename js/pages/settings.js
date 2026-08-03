@@ -4,7 +4,7 @@ import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
 import { REGIONS } from '../data/index.js';
 import { APP_VERSION, CHANGELOG } from '../data/changelog.js';
-import { THEMES, getTheme, setTheme, resolvedTheme } from '../theme.js';
+import { THEMES, getTheme, setTheme, resolvedTheme, THEME_LOCKED } from '../theme.js';
 import {
   ART_MODES, getArtMode, setArtMode, isRetroUnlocked, unlockRetro, relockRetro,
   UNLOCK_TAPS, UNLOCK_HINT_AT,
@@ -141,7 +141,7 @@ export function render() {
       <div class="wrap">
         <div class="section-head"><h2>Appearance</h2><p>Follows your phone unless you choose</p></div>
         <div class="card">
-          <div class="field">
+          <div class="field" ${THEME_LOCKED ? 'hidden' : ''}>
             <label>Theme</label>
             <div class="chips" id="themePicker">
               ${THEMES.map(

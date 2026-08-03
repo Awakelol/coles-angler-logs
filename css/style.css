@@ -5,58 +5,80 @@
    ========================================================================== */
 
 :root {
-  --cream:   #FFF8E7;
-  --paper:   #FFFFFF;
-  --ink:     #10141C;
-  --ink-60:  #55606F;
-  --ink-30:  #97A1AE;
+  /* Blue and off-white, from the reference Gabriel picked.
+     NOTE the reference's own labels are crossed over — the cream swatch is
+     captioned #2B4593 and the blue one #E6E2C5. Those are the text colours on
+     each card, not the fills. The fills are the other way round and that is
+     what is used here. */
+  --blue:    #2B4593;   /* the one strong colour */
+  --blue-dk: #1E3169;   /* pressed states, and text on cream where blue is too light */
+  --blue-lt: #E8ECF7;   /* washes and selected chips */
+  --sand:    #E6E2C5;   /* the off-white */
+  --sand-lt: #F2F0E2;   /* cards on sand */
 
-  --yellow:  #FFD23F;
-  --sky:     #A8E6F0;
-  --sky-deep:#3FA9C9;
-  --coral:   #F26430;
-  --green:   #3FBF7F;
-  --violet:  #8B5CF6;
+  --cream:   #F6F4EA;   /* page canvas — sand, lifted so cards can sit on it */
+  --paper:   #FFFFFF;
+  --ink:     #16181D;
+  --ink-60:  #5A6070;
+  --ink-30:  #9AA0AF;
+
+  /* Kept as names the rest of the sheet already uses, remapped onto the new
+     palette rather than renamed — 1,900 lines reference these, and a rename
+     would be a thousand-line diff that changes nothing you can see. */
+  --yellow:  #E6C34A;
+  --sky:     var(--blue-lt);
+  --sky-deep:var(--blue);
+  --coral:   #D9643C;
+  --green:   #4C9A6A;
+  --violet:  #6B5BA8;
 
   /* Colour-blocked section backgrounds. Separate from the accent colours
      above so dark mode can deepen the bands while buttons and chips stay
      bright — a dark-yellow button would be unreadable. */
+  /* The bands were five loud colour blocks. On this palette they are near-white
+     tints instead: the references get their rhythm from cards floating on one
+     calm ground, not from the page changing colour under you. */
   --band-cream:  var(--cream);
-  --band-sky:    var(--sky);
-  --band-yellow: var(--yellow);
-  --band-green:  #BDF0D4;
-  --band-coral:  #FFD9C9;
-  --band-violet: #E4D8FF;
+  --band-sky:    #EDEFF7;
+  --band-yellow: var(--sand-lt);
+  --band-green:  #EAF1EC;
+  --band-coral:  #F7EDE8;
+  --band-violet: #EFEDF7;
 
-  /* Panel behind pixel art. */
-  --art-bg:      var(--sky);
-  --art-bg-2:    #7FD4E8;
+  /* Panel behind art and photos. */
+  --art-bg:      var(--blue-lt);
+  --art-bg-2:    #D6DDF0;
 
   /* Deliberately inverted surfaces: the "now" weather card, dark buttons,
      the toast. Named separately from --ink so flipping the text colour in
      dark mode doesn't silently turn these into light slabs. */
-  --invert-bg:   #10141C;
-  --invert-fg:   #FFF8E7;
+  --invert-bg:   var(--blue);
+  --invert-fg:   #FFFFFF;
 
-  --notice-warn:  #FFF0C2;
-  --notice-error: #FFE0E0;
-  --skeleton-a:   #EDEDED;
-  --skeleton-b:   #F7F7F7;
-  --attribution:  rgba(255, 248, 231, .85);
+  --notice-warn:  #FAF3DC;
+  --notice-error: #F9E7E3;
+  --skeleton-a:   #ECEAE0;
+  --skeleton-b:   #F6F4EA;
+  --attribution:  rgba(246, 244, 234, .88);
 
   /* Text on always-bright accent fills. Fixed dark in BOTH themes: the
      accents don't invert, so --ink would put near-white on yellow. */
-  --on-accent: #10141C;
+  --on-accent: #FFFFFF;   /* the accents are dark blue now, so text on them is white */
 
-  --line:    #10141C;
-  --border-w:    3px;
-  --border-w-sm: 2px;
-  --radius:  22px;
-  --radius-sm: 14px;
-  --shadow:  4px 4px 0 var(--line);
-  --shadow-lg: 6px 6px 0 var(--line);
+  /* Soft, not neo-brutalist. The references have no hard outlines and no
+     offset shadows — depth comes from a hairline and a diffuse drop. Keeping
+     the token NAMES means every existing rule inherits the new look. */
+  --line:    #E2DFD2;
+  --border-w:    1px;
+  --border-w-sm: 1px;
+  --radius:  24px;
+  --radius-sm: 18px;
+  --shadow:    0 2px 10px rgb(22 24 29 / .06);
+  --shadow-lg: 0 10px 30px rgb(22 24 29 / .10);
 
-  --tab-h: 64px;
+  --tab-h: 62px;
+  /* The pill plus the air above and below it. */
+  --tab-space: calc(var(--tab-h) + 24px);
   --font: "Nunito", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
   --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
 }
@@ -164,7 +186,7 @@ html, body {
 }
 
 body {
-  padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--tab-space) + 12px + env(safe-area-inset-bottom, 0px));
   overflow-x: hidden;
 }
 
@@ -245,7 +267,7 @@ a { color: inherit; }
   background: var(--paper); box-shadow: 3px 3px 0 var(--line);
   text-decoration: none;
 }
-.icon-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+.icon-btn:active { transform: scale(.94); }
 
 /* --- layout -------------------------------------------------------------- */
 
@@ -334,8 +356,8 @@ a.card, button.card {
   /* Pointer devices only — :hover on touch sticks after a tap. */
   @media (hover: hover) {
     a.card:hover, button.card:hover {
-      transform: translate(-1px, -2px);
-      box-shadow: 6px 7px 0 var(--line);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
     }
     .btn:hover { transform: translateY(-1px); }
     .chip:hover { transform: translateY(-1px); }
@@ -350,7 +372,7 @@ a.card, button.card {
 }
 
 a.card:active, button.card:active {
-  transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line);
+  transform: scale(.98);
 }
 
 @keyframes list-in {
@@ -448,10 +470,14 @@ a.card:active, button.card:active {
   border: var(--border-w-sm) solid var(--line); background: var(--paper);
   white-space: nowrap;
 }
-.chip--local  { background: var(--yellow); color: var(--on-accent); }
-.chip--target { background: var(--green); color: var(--on-accent); }
-.chip--family { background: var(--sky); color: var(--on-accent); }
-.chip--tag    { background: var(--paper); }
+/* Soft tints with dark text, not accent fills with white.
+   --on-accent went white when the accents became dark blue, which left the
+   pale chips (yellow, sky) at 1.2:1 — invisible. The tints below are backdrops
+   for near-black text and every one clears 4.5:1. */
+.chip--local  { background: #F5EFD2; color: #4A3E12; border-color: #E7DCAE; }
+.chip--target { background: #DFEDE4; color: #22503A; border-color: #C7DFD1; }
+.chip--family { background: var(--blue-lt); color: var(--blue-dk); border-color: #D3DAEE; }
+.chip--tag    { background: var(--paper); color: var(--ink-60); }
 
 button.chip { cursor: pointer; font-family: inherit; }
 button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--invert-fg); border-color: var(--line); }
@@ -470,12 +496,19 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
   border: var(--border-w) solid var(--line); background: var(--paper); color: var(--ink);
   box-shadow: var(--shadow); cursor: pointer; text-decoration: none;
 }
-.btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line); }
-.btn--primary { background: var(--yellow); color: var(--on-accent); }
-.btn--dark    { background: var(--invert-bg); color: var(--invert-fg); }
-.btn--coral   { background: var(--coral); color: #fff; }
+.btn:active { transform: scale(.97); }
+/* One strong colour, used for the thing you are meant to press. The old
+   palette made this gold; on blue-and-off-white a gold button is the loudest
+   thing on a calm page and it is not the most important. */
+.btn--primary {
+  background: var(--blue); color: #fff;
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px rgb(43 69 147 / .28);
+}
+.btn--dark    { background: var(--invert-bg); color: var(--invert-fg); border-color: var(--invert-bg); }
+.btn--coral   { background: var(--coral); color: #fff; border-color: var(--coral); }
 .btn--ghost   { box-shadow: none; background: transparent; }
-.btn--sm      { padding: 8px 14px; font-size: 13px; border-width: 2px; box-shadow: 3px 3px 0 var(--line); }
+.btn--sm      { padding: 8px 14px; font-size: 13px; box-shadow: var(--shadow); }
 .btn--block   { width: 100%; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
@@ -719,22 +752,54 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 /* Three-way switch between Fishes, Gear and Zones. A segmented control rather
    than chips: these are mutually exclusive views, not filters, and the shared
    track makes that obvious at a glance. */
-.segmented {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-  padding: 4px;
-  background: var(--art-bg);
-  border: var(--border-w) solid var(--line);
+/* --- Info categories, as bookmarks ---------------------------------------
+   Stacked cards that overlap like tabs in a filing box: the selected one
+   lifts clear and shows its count, the others tuck behind. It reads as three
+   places rather than three settings, which is what they are. */
+
+.bookmarks { display: flex; flex-direction: column; }
+.bookmark {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 15px 18px;
+  font-family: inherit; text-align: left;
+  border: 0; cursor: pointer;
   border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--sand-lt);
+  /* Each tucks under the one above, so the stack reads as depth. */
+  margin-top: -10px;
+  transition: transform .3s cubic-bezier(.34,1.2,.5,1), margin .3s cubic-bezier(.34,1.2,.5,1),
+              background-color .25s ease, color .25s ease, box-shadow .25s ease;
 }
-.segmented__btn {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 9px 4px 8px;
-  font-family: inherit; font-size: 12px; font-weight: 900; letter-spacing: .03em;
-  color: var(--ink-60); background: none; border: 0; cursor: pointer;
-  border-radius: calc(var(--radius-sm) - 4px);
-  transition: background .16s ease, color .16s ease, transform .16s ease;
+.bookmark:first-child { margin-top: 0; }
+.bookmark__icon { display: grid; place-items: center; width: 30px; flex: none; }
+.bookmark__label { font-size: 19px; font-weight: 900; letter-spacing: -.01em; flex: 1; }
+.bookmark__count {
+  font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-30);
+  transition: color .25s ease;
 }
-.segmented__btn:active { transform: scale(.97); }
+
+/* The chosen one comes to the front and takes the strong colour. */
+.bookmark[aria-selected="true"] {
+  background: var(--blue);
+  color: #fff;
+  z-index: 2;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgb(43 69 147 / .28);
+}
+.bookmark[aria-selected="true"] .bookmark__count { color: rgb(255 255 255 / .72); }
+.bookmark:not([aria-selected="true"]):active { transform: scale(.99); }
+
+/* Stacking order so each really does sit under the one above it. */
+.bookmark:nth-child(1) { z-index: 3; }
+.bookmark:nth-child(2) { z-index: 2; }
+.bookmark:nth-child(3) { z-index: 1; }
+.bookmark[aria-selected="true"] { z-index: 4; }
+
+@media (prefers-reduced-motion: reduce) { .bookmark { transition-duration: .01ms; } }
 
 /* Search box and camera on one line. They ask the same question — which fish
    is this — one from a name and one from a picture, so they read as a pair.
@@ -916,9 +981,9 @@ body:has(.map-screen) { padding-bottom: 0; }
      compromise: the panel needed room for a forecast, the map needed room to
      be a map, and on a short phone neither won. */
   grid-template-rows: minmax(0, 1fr);
-  height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-h) - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-space) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
-  margin-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
+  margin-bottom: calc(var(--tab-space) + env(safe-area-inset-bottom, 0px));
 }
 
 .map-screen__info {
@@ -1322,7 +1387,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   box-shadow: 3px 3px 0 var(--line);
   cursor: pointer;
 }
-.map-locate:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+.map-locate:active { transform: scale(.94); }
 .map-locate.is-busy { opacity: .55; pointer-events: none; }
 .map-locate.is-busy svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -1384,23 +1449,127 @@ body:has(.map-screen) { padding-bottom: 0; }
 
 /* --- tab bar ------------------------------------------------------------- */
 
+/* A floating island rather than a bar welded to the bottom edge. It sits above
+   the page with the canvas visible around it, which is what makes it read as
+   an object you could pick up rather than a strip of chrome. */
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  position: fixed; z-index: 50;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100% - 24px), 460px);
+  height: var(--tab-h);
   display: grid; grid-template-columns: repeat(5, 1fr);
-  background: var(--paper); border-top: var(--border-w) solid var(--line);
+  align-items: center;
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgb(22 24 29 / .14);
 }
 .tabbar a, .tabbar button {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  text-decoration: none; color: var(--ink-60); font-size: 10px; font-weight: 800;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  text-decoration: none; color: var(--ink-30); font-size: 9.5px; font-weight: 800;
   letter-spacing: .03em;
   font-family: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  transition: color .2s ease, transform .2s ease;
+}
+.tabbar a:active { transform: scale(.92); }
+
+/* The + . Lifted out of the row so it reads as the primary action, and given
+   the one strong colour in the palette so nothing else competes with it. */
+.fab {
+  position: fixed; z-index: 52;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + var(--tab-h) + 14px + env(safe-area-inset-bottom, 0px));
+  width: 56px; height: 56px;
+  border: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgb(43 69 147 / .42);
+  transition: transform .28s cubic-bezier(.34,1.4,.5,1), box-shadow .2s ease,
+              background-color .25s ease;
+}
+.fab:active { transform: translateX(-50%) scale(.9); }
+
+/* The map puts a drawer grip at centre-bottom, which is exactly where the +
+   floats. Two pieces of furniture wanting the same spot, so on that one screen
+   the + sits a notch higher — clear of the grip when the drawer is down. It
+   keeps its horizontal place, because a button that moves sideways between
+   screens is harder to find than one that shifts up. */
+body:has(.map-screen) .fab {
+  bottom: calc(12px + var(--tab-h) + 14px + 58px + env(safe-area-inset-bottom, 0px));
+}
+body:has(.map-screen) .quick {
+  bottom: calc(12px + var(--tab-h) + 14px + 58px + 56px + 12px + env(safe-area-inset-bottom, 0px));
+}
+.fab:focus-visible { outline: 3px solid var(--blue-dk); outline-offset: 3px; }
+.fab[aria-expanded="true"] { background: var(--ink); }
+
+/* Two bars that rotate into an x. Rotating the SAME shape is what sells it —
+   swapping one glyph for another reads as a flicker, not a movement. */
+.fab__x { position: relative; display: block; width: 20px; height: 20px; }
+.fab__x i {
+  position: absolute; left: 50%; top: 50%;
+  width: 18px; height: 2.4px; border-radius: 2px; background: currentColor;
+  transition: transform .3s cubic-bezier(.65,0,.35,1);
+}
+.fab__x i:first-child  { transform: translate(-50%, -50%) rotate(0deg); }
+.fab__x i:last-child   { transform: translate(-50%, -50%) rotate(90deg); }
+.fab[aria-expanded="true"] .fab__x i:first-child { transform: translate(-50%, -50%) rotate(135deg); }
+.fab[aria-expanded="true"] .fab__x i:last-child  { transform: translate(-50%, -50%) rotate(45deg); }
+
+/* --- the quick-action stack --------------------------------------------- */
+
+.quick {
+  position: fixed; z-index: 51;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + var(--tab-h) + 14px + 56px + 12px + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100% - 48px), 300px);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.quick__item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 16px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  box-shadow: 0 6px 20px rgb(22 24 29 / .14);
+  color: var(--ink); text-decoration: none;
+  font-size: 14.5px; font-weight: 800;
+  /* Each one rises a beat after the one below it. */
+  opacity: 0; transform: translateY(14px) scale(.96);
+  transition: opacity .22s ease, transform .28s cubic-bezier(.34,1.3,.5,1);
+}
+.quick.is-open .quick__item { opacity: 1; transform: none; }
+.quick.is-open .quick__item:nth-last-child(1) { transition-delay: 0ms; }
+.quick.is-open .quick__item:nth-last-child(2) { transition-delay: 45ms; }
+.quick.is-open .quick__item:nth-last-child(3) { transition-delay: 90ms; }
+.quick__item:active { transform: scale(.96); }
+.quick__ico {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border-radius: 50%;
+  background: var(--blue-lt); color: var(--blue);
+}
+.quick__ico svg { width: 19px; height: 19px; }
+
+/* Dims the page and catches the tap that closes the menu. */
+.quick-veil {
+  position: fixed; inset: 0; z-index: 49;
+  background: rgb(22 24 29 / .28);
+  opacity: 0; transition: opacity .24s ease;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.quick-veil.is-open { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .quick__item, .fab, .fab__x i, .quick-veil { transition-duration: .01ms; }
 }
 .tabbar a svg, .tabbar button svg { width: 22px; height: 22px; }
 @media (max-width: 360px) { .tabbar a, .tabbar button { font-size: 9px; } }
 .tabbar a[aria-current="page"] { color: var(--ink); }
-.tabbar a[aria-current="page"] svg { color: var(--coral); }
+.tabbar a[aria-current="page"] svg { color: var(--blue); }
 
 /* The account tab has nowhere to go yet — say so rather than look broken. */
 .tabbar__soon { opacity: .45; cursor: default; }
@@ -1644,7 +1813,7 @@ body.is-sheet-open {
    NOT --band-violet: the band tints are near-black in dark mode and --on-accent
    is near-black in both, so that pairing rendered an invisible chip. The accent
    is vivid in both themes, which is what --on-accent is designed to sit on. */
-.chip--lang { background: var(--violet); color: var(--on-accent); }
+.chip--lang { background: #E7E3F4; color: #3B3168; border-color: #D6D0EC; }
 
 /* The "why do I need an account" line in the sign-in prompt. Short on purpose:
    it answers the question the popup raises and then gets out of the way. */
@@ -1653,4 +1822,70 @@ body.is-sheet-open {
   font-size: 12.5px; font-weight: 600; line-height: 1.5;
   color: var(--ink-60);
   max-width: 30ch;
+}
+
+/* --- account ------------------------------------------------------------- */
+
+.acct-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.acct-hero__who { min-width: 0; }
+.acct-avatar {
+  flex: none;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--blue); color: #fff;
+  font-size: 26px; font-weight: 900;
+  box-shadow: 0 6px 18px rgb(43 69 147 / .3);
+}
+.acct-avatar--empty { background: var(--blue-lt); color: var(--blue); box-shadow: none; }
+.acct-name {
+  margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -.02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acct-sub { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: var(--ink-60); }
+
+.acct-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.acct-stat {
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 10px;
+  text-align: center;
+}
+.acct-stat__v { display: block; font-size: 24px; font-weight: 900; letter-spacing: -.02em; }
+.acct-stat__k {
+  display: block; margin-top: 2px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-30);
+}
+
+.acct-rows { gap: 0; }
+.acct-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+.acct-row:first-child { border-top: 0; padding-top: 0; }
+.acct-row__k { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .05em;
+               text-transform: uppercase; color: var(--ink-30); }
+.acct-row__v { margin: 2px 0 0; font-size: 15.5px; font-weight: 800; }
+.acct-row__v--muted { color: var(--ink-30); font-weight: 700; }
+/* Visibly waiting rather than visibly broken. */
+.acct-row--soon { opacity: .62; }
+.acct-row--soon .btn[disabled] { cursor: not-allowed; }
+
+/* Everything that moves, moves at one speed. Without this the palette change
+   lands but the app still feels like the old one — the references are calm
+   largely because nothing in them snaps. */
+a.card, button.card, .btn, .chip, .icon-btn, .bookmark, .acct-stat,
+.species-photo, .gallery__item, .search-row__cam, .map-filters__btn {
+  transition: transform .2s cubic-bezier(.34,1.2,.5,1),
+              box-shadow .2s ease, background-color .2s ease,
+              border-color .2s ease, color .2s ease, opacity .2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  a.card, button.card, .btn, .chip, .icon-btn, .bookmark, .acct-stat,
+  .species-photo, .gallery__item, .search-row__cam, .map-filters__btn {
+    transition-duration: .01ms;
+  }
 }
