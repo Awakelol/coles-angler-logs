@@ -726,8 +726,17 @@ def cmd_more(args):
         fresh += gbif_candidates(rec["scientific"])
         new = [c for c in rank(fresh) if c["url"].split("?")[0] not in have]
         rec["candidates"] = (rec["candidates"] + new)[:CANDIDATES_PER_SPECIES * 3]
-        # It has been dug into; drop the flag so the sheet stops asking.
-        picks.pop(sid, None)
+        # Drop the "give me more" flag, since it has now been dug into — but
+        # ONLY that flag. With --only this runs over species that already have
+        # a chosen photo, and popping the entry would throw the choice away.
+        if picks.get(sid, {}).get("verdict") == "more":
+            entry = dict(picks[sid])
+            entry.pop("verdict", None)
+            entry.pop("index", None)
+            if entry:
+                picks[sid] = entry        # keeps any remark
+            else:
+                picks.pop(sid, None)
         if new:
             print(f"  {sid}: +{len(new)} new (now {len(rec['candidates'])})")
         else:

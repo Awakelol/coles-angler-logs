@@ -20,9 +20,21 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.2.0';
 
 export const CHANGELOG = [
+  {
+    version: '2.2.0',
+    date: '2026-08-03',
+    title: 'Real photographs, and spots need an account',
+    changes: [
+      '43 species now show a real photograph instead of drawn art.',
+      'Every photo is openly licensed and credits its photographer.',
+      'The rest still say "photo not yet available" rather than showing a stand-in.',
+      'Dropping a spot now asks you to sign in — spots belong to your account.',
+      'Fixed: signed out, you could see other accounts’ spots on a shared phone.',
+    ],
+  },
   {
     version: '2.1.0',
     date: '2026-08-03',

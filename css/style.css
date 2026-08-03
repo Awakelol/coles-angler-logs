@@ -1633,5 +1633,17 @@ body.is-sheet-open {
   font-size: 14px; font-weight: 700; color: var(--ink-60);
 }
 
-/* Which language the headline name is, since it is now the headline. */
-.chip--lang { background: var(--band-violet); color: var(--on-accent); }
+/* Which language the headline name is, since it is now the headline.
+   NOT --band-violet: the band tints are near-black in dark mode and --on-accent
+   is near-black in both, so that pairing rendered an invisible chip. The accent
+   is vivid in both themes, which is what --on-accent is designed to sit on. */
+.chip--lang { background: var(--violet); color: var(--on-accent); }
+
+/* The "why do I need an account" line in the sign-in prompt. Short on purpose:
+   it answers the question the popup raises and then gets out of the way. */
+.spot-pop__why {
+  margin: 0 0 10px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  color: var(--ink-60);
+  max-width: 30ch;
+}

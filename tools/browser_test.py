@@ -3727,6 +3727,75 @@ async def main():
             check("spots carry the shape sync will need",
                   owners["stamped"], str(owners))
 
+            # --- spots belong to an account ---------------------------------
+            # Two things at once. Signing out must stop you ADDING a spot with
+            # nobody to own it, and must stop you SEEING other people's — a
+            # signed-out lookup used to mean "every user's", which on a shared
+            # phone handed over somebody's fishing marks.
+            gated = await page.eval("""
+                const el = document.querySelector('#fishMap');
+                const auth = await import('./js/auth.js');
+                const { store } = await import('./js/store.js');
+                const map = el._leafletMap;
+                map.closePopup();
+
+                // A spot owned by somebody else entirely.
+                await store.clearSpots();
+                await store.saveSpot({ userId: 'someone-else', regionId: 'leyte',
+                                       lat: 11.1, lon: 125.0, name: 'Not yours' });
+
+                // Put the session back afterwards rather than really signing
+                // out and leaving every later test signed out too.
+                const savedSession = localStorage.getItem('angler.session');
+                const wasSignedIn = auth.isSignedIn();
+                localStorage.removeItem('angler.session');
+                await el._userSpots.reload();
+                await new Promise(r => setTimeout(r, 300));
+                const otherVisible = document.querySelectorAll('.my-spot-pin').length;
+
+                // Long-press with nobody signed in.
+                const r = el.getBoundingClientRect();
+                const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+                const fire = (t, cx, cy) => el.dispatchEvent(new PointerEvent(t, {
+                    bubbles: true, clientX: cx, clientY: cy, button: 0, pointerId: 3 }));
+                fire('pointerdown', x, y);
+                await new Promise(r2 => setTimeout(r2, 800));
+                const pop = document.querySelector('.spot-pop');
+                const out = {
+                    otherVisible,
+                    prompted: !!pop,
+                    heading: pop?.querySelector('.spot-pop__name')?.textContent.trim(),
+                    // The gesture must not silently do nothing — that reads as
+                    // broken rather than as a rule.
+                    noNameField: !pop?.querySelector('[data-name]'),
+                    offersSignIn: !!pop?.querySelector('a[href="#/log"]'),
+                    saysWhy: (pop?.querySelector('.spot-pop__why')?.textContent || '')
+                               .includes('account'),
+                };
+                fire('pointerup', x, y);
+                map.closePopup();
+
+                // Nothing may have been written by that.
+                out.nothingSaved = (await store.allSpots(null, 'leyte'))
+                                     .filter(s => s.name !== 'Not yours').length === 0;
+                await store.clearSpots();
+                if (savedSession) localStorage.setItem('angler.session', savedSession);
+                out.restored = auth.isSignedIn() === wasSignedIn;
+                await el._userSpots.reload();
+                return { ...out, wasSignedIn };
+            """)
+            check("signed out, you cannot see another account's spots",
+                  gated["otherVisible"] == 0, str(gated))
+            check("signed out, a long press asks you to sign in",
+                  gated["prompted"] and gated["noNameField"]
+                  and gated["heading"] == "Save this spot?", str(gated))
+            check("the sign-in prompt says why and offers a way",
+                  gated["offersSignIn"] and gated["saysWhy"], str(gated))
+            check("no spot is written while signed out",
+                  gated["nothingSaved"], str(gated))
+            check("the test put the session back", gated["restored"], str(gated))
+
+
             # --- the weather drawer, and the layer filters -------------------
             print("\nMap drawer and filters")
 

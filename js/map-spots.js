@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import { store } from './store.js';
-import { currentUser } from './auth.js';
+import { currentUser, isSignedIn } from './auth.js';
 import { zonesFor } from './data/index.js';
 import { distanceKm } from './api/geo.js';
 import { icon } from './art.js';
@@ -93,6 +93,16 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
 
   const userId = () => currentUser()?.id || null;
 
+  // A spot belongs to an account. Signed out there is no account for it to
+  // belong to, so there is nothing to show and nothing to add.
+  //
+  // Not showing them is a fix in its own right and the more serious of the
+  // two: store.allSpots(null) means "every user's", so a signed-out person on
+  // a shared phone was being shown everybody's marks. That is somebody's
+  // fishing spots, which is exactly the kind of thing people keep to
+  // themselves.
+  const signedIn = () => isSignedIn();
+
   // --- rendering -----------------------------------------------------------
 
   function popupFor(spot) {
@@ -121,6 +131,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
 
   async function reload() {
     layer.clearLayers();
+    if (!signedIn()) return 0;
     const spots = await store.allSpots(userId(), regionId);
     for (const spot of spots) {
       const marker = L.marker([spot.lat, spot.lon], {
@@ -143,7 +154,38 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
 
   // --- adding --------------------------------------------------------------
 
+  /**
+   * What a long press does when there is nobody to save the spot for.
+   *
+   * It still opens where you pressed, and still says what you were about to
+   * do, because the alternative — nothing happening — reads as the gesture
+   * not working rather than as a rule.
+   */
+  function askToSignIn(latlng) {
+    const el = document.createElement('div');
+    el.className = 'spot-pop';
+    el.innerHTML = `
+      <h3 class="spot-pop__name">Save this spot?</h3>
+      <p class="spot-pop__at">${esc(nearZone(regionId, { lat: latlng.lat, lon: latlng.lng }))}</p>
+      <p class="spot-pop__why">
+        Spots are saved to your account, so they follow you between devices and
+        stay yours on a shared phone.
+      </p>
+      <div class="spot-pop__row">
+        <a class="btn btn--sm btn--primary" href="#/log">Sign in or sign up</a>
+        <button class="btn btn--sm" data-cancel>Not now</button>
+      </div>`;
+    el.querySelector('[data-cancel]').addEventListener('click', () => map.closePopup());
+    L.DomEvent.disableClickPropagation(el);
+    L.popup({ className: 'spot-popup', closeButton: false, autoPan: true })
+      .setLatLng(latlng)
+      .setContent(el)
+      .openOn(map);
+  }
+
   function askToAdd(latlng) {
+    if (!signedIn()) return askToSignIn(latlng);
+
     const el = document.createElement('div');
     el.className = 'spot-pop';
     el.innerHTML = `
