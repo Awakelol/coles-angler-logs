@@ -1373,12 +1373,21 @@ def cmd_build(args):
         # A photo failed in the crop review is pulled entirely — the card says
         # "photo not yet available", which is the honest state until it is
         # replaced, rather than shipping something already judged wrong.
-        if crops.get(sid, {}).get("verdict") == "fail":
+        cv = crops.get(sid, {})
+        # "Replace this" and "rotate this" together is a contradiction worth
+        # surfacing rather than resolving quietly: it usually means the photo
+        # was failed BECAUSE it was sideways, and straightening it is the fix.
+        # Building it keeps the choice open; pulling it would throw away a
+        # photo the remark says is fine.
+        if cv.get("verdict") == "fail" and not int(cv.get("rotate", 0)):
             out_dead = OUT_DIR / f"{sid}.jpg"
             if out_dead.exists():
                 out_dead.unlink()
             print(f"  {sid:34} pulled — marked 'replace' in the crop review")
             continue
+        if cv.get("verdict") == "fail":
+            print(f"  {sid:34} marked 'replace' BUT rotated — building it rotated "
+                  f"so you can judge it straightened")
         cand = rec["candidates"][idx]
         out = OUT_DIR / f"{sid}.jpg"
 
@@ -1430,7 +1439,11 @@ def cmd_build(args):
                     note = "centred on fish"
                 else:
                     note = "fish too long to frame — full frame kept"
-            else:
+            elif crops.get(sid, {}).get("verdict") != "full":
+                # Only say the detector found nothing when it actually looked.
+                # For a "use whole photo" verdict it was never asked, and
+                # reporting a failure there would send you hunting a bug that
+                # is really your own instruction being followed.
                 note = "no subject found — full frame kept"
             fitted[note] = fitted.get(note, 0) + 1
 
