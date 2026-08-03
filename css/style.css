@@ -1560,16 +1560,23 @@ body.is-sheet-open {
 
 /* --- species photos ------------------------------------------------------- */
 
-/* The photo fills the same frame the sprite did — same ratio, same chrome —
-   so the card layout is untouched and only its contents changed. Photos come
-   out of the pipeline already on white at 4:3, so object-fit has nothing to
-   crop; it is here for the one that arrives at the wrong ratio anyway. */
+/* The photo fills the same frame the sprite did — same ratio, same chrome — so
+   the card layout is untouched and only its contents changed.
+
+   `contain`, not `cover`, and the two are the same thing for almost every
+   photo: the pipeline already crops to 4:3 centred on the fish, so there is
+   nothing left to fit. It matters for the handful too long to frame that way,
+   which ship whole — there `contain` letterboxes them and `cover` would take
+   the tail off, which is the one outcome worth avoiding.
+   The backing is the app's own art panel, not white: these are photographs
+   with their own backgrounds now, and white bars around an underwater shot
+   read as a mistake rather than a frame. */
 .species-photo {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: contain;
-  background: #fff;
+  background: var(--art-bg);
   border-radius: var(--radius-sm);
 }
 .species-photo--hero { aspect-ratio: 4 / 3; }

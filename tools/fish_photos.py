@@ -46,10 +46,20 @@ wrangler looks for local Worker secrets, so it has one home:
 Read as utf-8-sig, because PowerShell redirection and Notepad both write a
 byte-order mark by default and a BOM would make the first key unmatchable.
 
-Background removal uses rembg (u2net). First run downloads ~176 MB to
-~/.u2net. Install with:
+PHOTOS SHIP AS THEY WERE TAKEN
+------------------------------
+No background removal, no cut-outs, no compositing. `build` downloads the
+original, corrects its EXIF orientation, scales it down and saves it. That is
+all.
 
-    python -m pip install "rembg[cpu]" onnxruntime pillow
+Cutting the fish out was tried and dropped. It looked consistent in principle
+and was not in practice: some fish came back with a halo, some lost a fin the
+matting decided was background, and an underwater shot with the water removed
+stops looking like a fish in the sea. A real photograph in a consistent FRAME
+is steadier than a processed one, and the frame is a CSS rule rather than a
+permanent edit to the file.
+
+    python -m pip install pillow
 """
 
 import argparse
@@ -1218,12 +1228,114 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
 # stage 3 — build
 # --------------------------------------------------------------------------
 
-CARD_W, CARD_H = 800, 600      # 4:3, the ratio the species card frame uses
+# The longest edge a shipped photo may have. Big enough to stay sharp on a
+# hero card at 2x, small enough that 68 of them are not a download.
+#
+# NOTE there is no card width or height here any more, and that is the point:
+# nothing is cropped or composited. The whole original frame ships and the card
+# gives it a consistent shape in CSS. A crop decided here would be permanent
+# and could take a fin with it; a crop decided in CSS is a stylesheet edit.
+MAX_EDGE = 1400
+
+
+CARD_ASPECT = 4 / 3
+# Breathing room around the fish, as a fraction of its own size. Cropped hard
+# to the fish it looks like a mugshot; this leaves enough water or deck around
+# it to read as a photograph.
+FISH_MARGIN = 1.22
+
+
+def find_fish(img, session):
+    """Where the fish is, as a box in the original image.
+
+    u2net is a salient-object detector — the thing rembg uses to decide what to
+    keep. We want only its opinion of WHERE the subject is, not its cut-out, so
+    this takes the mask and throws the matting away. The pixels that ship are
+    the photographer's, untouched.
+
+    Returns (x0, y0, x1, y1) or None if it cannot find a subject.
+    """
+    from rembg import remove
+    mask = remove(img, session=session, only_mask=True)
+    # Threshold before measuring. A raw mask has a faint halo of low-confidence
+    # pixels around the subject, and getbbox() counts any non-zero pixel, so
+    # the untresholded box creeps outward towards the whole frame.
+    mask = mask.point(lambda p: 255 if p > 96 else 0)
+    box = mask.getbbox()
+    if not box:
+        return None
+    x0, y0, x1, y1 = box
+    # Something that fills almost everything is the detector shrugging, not a
+    # fish; and something tiny is usually a speck of noise.
+    frac = ((x1 - x0) * (y1 - y0)) / float(img.width * img.height)
+    if frac > 0.97 or frac < 0.01:
+        return None
+    return box
+
+
+def frame_on_fish(img, box):
+    """A CARD_ASPECT window centred on the fish that contains all of it.
+
+    Crops the picture, never the fish. If the fish is so long that no window of
+    this shape can hold it inside the photo, this gives up and returns None —
+    the whole frame ships and the card letterboxes it. Cutting a tail off to
+    make the shape work would be the one thing worth avoiding here.
+    """
+    W, H = img.width, img.height
+    x0, y0, x1, y1 = box
+    fw, fh = x1 - x0, y1 - y0
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+
+    need_w, need_h = fw * FISH_MARGIN, fh * FISH_MARGIN
+    if need_w / need_h > CARD_ASPECT:
+        cw = need_w
+        ch = cw / CARD_ASPECT
+    else:
+        ch = need_h
+        cw = ch * CARD_ASPECT
+
+    if cw > W or ch > H:
+        # Shrink to what the photo can give while keeping the shape...
+        scale = min(W / cw, H / ch)
+        cw, ch = cw * scale, ch * scale
+        # ...but not if that would start eating the fish.
+        if cw < fw or ch < fh:
+            return None
+
+    left = cx - cw / 2
+    top = cy - ch / 2
+    left = max(0, min(left, W - cw))
+    top = max(0, min(top, H - ch))
+
+    # The fish must be wholly inside. Clamping to the edge can push the window
+    # off it, so nudge back if so.
+    if x0 < left:
+        left = x0
+    if y0 < top:
+        top = y0
+    if x1 > left + cw:
+        left = x1 - cw
+    if y1 > top + ch:
+        top = y1 - ch
+    left, top = max(0, left), max(0, top)
+    if left + cw > W or top + ch > H:
+        return None
+
+    return (int(left), int(top), int(left + cw), int(top + ch))
+
+
+def manifest_entry(sid, cand):
+    return {
+        "file": f"assets/photos/{sid}.jpg",
+        "credit": re.sub(r"\s+", " ", cand["credit"]).strip()[:120],
+        "licence": LICENCE_LABEL[cand["licence"]],
+        "source": cand["page"],
+    }
 
 
 def cmd_build(args):
-    from PIL import Image
-    from rembg import remove, new_session
+    import io
+    from PIL import Image, ImageOps
 
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
     picks = load_picks()
@@ -1241,55 +1353,70 @@ def cmd_build(args):
     if unsure:
         print(f"Building {len(unsure)} still marked unsure: {', '.join(sorted(unsure))}\n")
 
-    RAW.mkdir(parents=True, exist_ok=True)
+    from rembg import new_session
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    session = new_session("u2net")
     manifest = {}
+    fitted = {}
+    # Loaded once. Building the session per photo would re-read 176 MB of model
+    # forty-three times.
+    session = new_session("u2net")
 
     for sid, idx in sorted(chosen.items()):
         rec = data.get(sid)
         if not rec or idx is None or idx < 0 or idx >= len(rec["candidates"]):
             continue
         cand = rec["candidates"][idx]
-        out_png = OUT_DIR / f"{sid}.png"
-        raw_path = RAW / f"{sid}{Path(urllib.parse.urlparse(cand['url']).path).suffix or '.jpg'}"
+        out = OUT_DIR / f"{sid}.jpg"
 
-        if not raw_path.exists() or args.refresh:
-            try:
-                req = urllib.request.Request(cand["url"], headers={"User-Agent": UA})
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    raw_path.write_bytes(r.read())
-            except Exception as e:
-                print(f"  {sid}: download failed — {e}")
-                continue
+        if out.exists() and not args.refresh:
+            manifest[sid] = manifest_entry(sid, cand)
+            continue
 
-        if not out_png.exists() or args.refresh:
-            try:
-                src = Image.open(raw_path).convert("RGBA")
-                cut = remove(src, session=session)
-                # Trim to what is left, so every fish fills its frame the same
-                # way regardless of how much sea the photographer included.
-                bbox = cut.getbbox()
-                if bbox:
-                    cut = cut.crop(bbox)
-                cut.thumbnail((CARD_W - 40, CARD_H - 40), Image.LANCZOS)
-                canvas = Image.new("RGB", (CARD_W, CARD_H), "white")
-                canvas.paste(cut, ((CARD_W - cut.width) // 2,
-                                   (CARD_H - cut.height) // 2), cut)
-                canvas.save(out_png, "PNG", optimize=True)
-                print(f"  {sid}: {out_png.name}  {out_png.stat().st_size // 1024} KB")
-            except Exception as e:
-                print(f"  {sid}: background removal failed — {e}")
-                continue
+        try:
+            req = urllib.request.Request(cand["url"], headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                blob = r.read()
+        except Exception as e:
+            print(f"  {sid}: download failed — {e}")
+            continue
 
-        manifest[sid] = {
-            "file": f"assets/photos/{sid}.png",
-            "credit": re.sub(r"\s+", " ", cand["credit"]).strip()[:120],
-            "licence": LICENCE_LABEL[cand["licence"]],
-            "source": cand["page"],
-        }
+        try:
+            src = Image.open(io.BytesIO(blob))
+            # EXIF orientation is a flag, not applied pixels. Without this a
+            # phone photo taken in portrait arrives on its side.
+            src = ImageOps.exif_transpose(src).convert("RGB")
+
+            # Find the fish and frame on it. The pixels that ship are the
+            # photographer's — the detector only decides WHERE to cut the
+            # picture, never what to erase from it.
+            note = "full frame"
+            box = find_fish(src, session)
+            if box:
+                window = frame_on_fish(src, box)
+                if window:
+                    src = src.crop(window)
+                    note = "centred on fish"
+                else:
+                    note = "fish too long to frame — full frame kept"
+            else:
+                note = "no subject found — full frame kept"
+            fitted[note] = fitted.get(note, 0) + 1
+
+            src.thumbnail((MAX_EDGE, MAX_EDGE), Image.LANCZOS)
+            src.save(out, "JPEG", quality=86, optimize=True, progressive=True)
+            print(f"  {sid:34} {src.width}x{src.height}  "
+                  f"{out.stat().st_size // 1024:>4} KB  {note}")
+        except Exception as e:
+            print(f"  {sid}: could not be processed — {e}")
+            continue
+
+        manifest[sid] = manifest_entry(sid, cand)
 
     write_manifest(manifest)
+    print()
+    for note, n in sorted(fitted.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:>3}  {note}")
     print(f"\n{len(manifest)} photos in {OUT_DIR}")
     print(f"Manifest: {MANIFEST_JS}")
     return 0

@@ -626,7 +626,7 @@ python tools/fish_photos.py fetch     # licensed candidates from iNaturalist + G
 python tools/fish_photos.py score     # optional: Gemini rates the doubtful ones
 python tools/fish_photos.py review    # contact sheet — you pick one per species
 python tools/fish_photos.py verify    # check the picks before committing to them
-python tools/fish_photos.py build     # rembg → white background → manifest
+python tools/fish_photos.py build     # crop centred on the fish → manifest
 python tools/fish_photos.py status    # what is done, what is missing
 ```
 
@@ -637,6 +637,22 @@ allowed and attribution present where the licence demands it; and an
 actually identified as and compares that to the species. That last one catches
 a photo taken from the wrong species' page, which no amount of looking would
 reveal if the two fish resemble each other.
+
+**Photos ship as they were taken.** No cut-outs, no background removal, no
+compositing. `build` downloads the original, fixes its EXIF rotation, finds the
+fish, crops the *picture* to 4:3 centred on it, and scales it down. The pixels
+are the photographer's throughout — the detector only decides where to cut the
+frame, never what to erase from it.
+
+Finding the fish uses `rembg`'s u2net, but only for its mask's bounding box;
+the matting is thrown away. **The fish is never cropped.** If a fish is so long
+that no 4:3 window can hold it inside the photo, the whole frame ships instead
+and the card letterboxes it — 4 of 43 land there. Cutting a tail off to make
+the shape work is the one outcome worth avoiding.
+
+Cut-outs were tried first and dropped: they looked consistent in principle and
+were not in practice — halos on some, a fin lost to the matting on others, and
+an underwater shot with the water removed stops looking like a fish in the sea.
 
 `verify --gemini` adds a vision pass over the picks: does it look like the
 species, is it one fish, side-on, whole, and what is the setting. Only a

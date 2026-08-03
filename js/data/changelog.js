@@ -29,6 +29,7 @@ export const CHANGELOG = [
     title: 'Real photographs, and spots need an account',
     changes: [
       '43 species now show a real photograph instead of drawn art.',
+      'Photos are as taken — cropped and centred on the fish, never cut out of them.',
       'Every photo is openly licensed and credits its photographer.',
       'The rest still say "photo not yet available" rather than showing a stand-in.',
       'Dropping a spot now asks you to sign in — spots belong to your account.',
