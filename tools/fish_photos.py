@@ -36,8 +36,15 @@ and it ranks by those. The last call is yours in `review`, or Gemini's in
 SOURCES AND KEYS
 ----------------
 iNaturalist and GBIF are both open and need no key or account.
-Gemini is optional; only `score` uses it, via GEMINI_API_KEY in the
-environment. Everything else runs without it.
+
+Gemini is optional and only `score` and `verify --gemini` use it. Put the key
+in `.dev.vars` in the project root, which is gitignored and is also where
+wrangler looks for local Worker secrets, so it has one home:
+
+    GEMINI_API_KEY=your-key-here
+
+Read as utf-8-sig, because PowerShell redirection and Notepad both write a
+byte-order mark by default and a BOM would make the first key unmatchable.
 
 Background removal uses rembg (u2net). First run downloads ~176 MB to
 ~/.u2net. Install with:
@@ -757,7 +764,11 @@ def read_key(name):
     """
     dev = ROOT / ".dev.vars"
     if dev.exists():
-        for line in dev.read_text(encoding="utf-8").splitlines():
+        # utf-8-sig, not utf-8. PowerShell's redirection and Notepad both write
+        # a byte-order mark by default, and a BOM makes the first key
+        # "﻿GEMINI_API_KEY", which matches nothing and looks for all the
+        # world like the file was ignored.
+        for line in dev.read_text(encoding="utf-8-sig").splitlines():
             line = line.strip()
             if line.startswith("#") or "=" not in line:
                 continue
@@ -767,17 +778,44 @@ def read_key(name):
     return os.environ.get(name, "").strip()
 
 
+def key_help(name):
+    """Why the key wasn't found, specifically.
+
+    "Not found" covers three different mistakes — no file, an empty file, a
+    file without that line — and they have three different fixes. An empty
+    .dev.vars in particular is what a failed write leaves behind, which is
+    exactly the case that looks like the tool is at fault.
+    """
+    dev = ROOT / ".dev.vars"
+    lines = [f"No {name} found."]
+    if not dev.exists():
+        lines.append(f"  {dev} does not exist.")
+    elif dev.stat().st_size == 0:
+        lines.append(f"  {dev} exists but is EMPTY — the write didn't land.")
+        lines.append("  (A disk with no free space produces exactly this.)")
+    else:
+        keys = [l.split("=", 1)[0].strip()
+                for l in dev.read_text(encoding="utf-8-sig").splitlines()
+                if "=" in l and not l.strip().startswith("#")]
+        lines.append(f"  {dev} has: {', '.join(keys) or '(no KEY=VALUE lines)'}")
+    lines += [
+        "",
+        "Fix it with one line — from the project root:",
+        f'    "{name}=your-key-here" | Out-File -Encoding utf8 .dev.vars',
+        "",
+        "Or open .dev.vars in your editor and paste:",
+        f"    {name}=your-key-here",
+        "",
+        "Or set it for this shell only:",
+        f'    $env:{name} = "your-key-here"',
+    ]
+    return "\n".join(lines)
+
+
 def cmd_score(args):
     key = read_key("GEMINI_API_KEY")
     if not key:
-        print("No GEMINI_API_KEY found.")
-        print()
-        print("Put it in .dev.vars in the project root (already gitignored):")
-        print("    GEMINI_API_KEY=your-key-here")
-        print()
-        print("That is the same file wrangler reads for local Worker runs, so")
-        print("the key lives in one place. Or set it for this shell only:")
-        print('    $env:GEMINI_API_KEY = "your-key-here"')
+        print(key_help("GEMINI_API_KEY"))
         return 1
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
     model = read_key("GEMINI_MODEL") or "gemini-2.5-flash"
@@ -974,13 +1012,7 @@ def cmd_verify(args):
 def gemini_verify(data, chosen, species, bad, warn):
     key = read_key("GEMINI_API_KEY")
     if not key:
-        print("No GEMINI_API_KEY found.")
-        print()
-        print("Put it in .dev.vars in the project root (already gitignored):")
-        print("    GEMINI_API_KEY=your-key-here")
-        print()
-        print("Or set it for this shell only:")
-        print('    $env:GEMINI_API_KEY = "your-key-here"')
+        print(key_help("GEMINI_API_KEY"))
         return 1
 
     import base64
