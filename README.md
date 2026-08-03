@@ -627,6 +627,7 @@ python tools/fish_photos.py score     # optional: Gemini rates the doubtful ones
 python tools/fish_photos.py review    # contact sheet — you pick one per species
 python tools/fish_photos.py verify    # check the picks before committing to them
 python tools/fish_photos.py build     # crop centred on the fish → manifest
+python tools/fish_photos.py crops     # pass or fail each finished crop
 python tools/fish_photos.py status    # what is done, what is missing
 ```
 
@@ -653,6 +654,26 @@ the shape work is the one outcome worth avoiding.
 Cut-outs were tried first and dropped: they looked consistent in principle and
 were not in practice — halos on some, a fin lost to the matting on others, and
 an underwater shot with the water removed stops looking like a fish in the sea.
+
+`crops` is the last look, and the only one that can catch a bad crop: the
+framing is decided by a saliency model, and a saliency model sometimes locks
+onto the diver, a hand, or the brightest rock. Each photo is shown exactly as
+the card shows it — same ratio, same fit, same backing — with four controls:
+
+| | |
+|---|---|
+| **Crop is good** | keep it |
+| **Bad crop — use whole photo** | keeps the photo, ships the uncropped frame |
+| **Bad photo — replace it** | pulls it; the card says "photo not yet available" |
+| **Rotate ↺ / ↻** | straightens a sideways photo, independent of the verdict |
+
+Plus a remarks box. "Bad crop" is the one that earns its keep — most bad crops
+are a good photograph framed badly, and re-picking a fine photo to fix a crop
+would be wasted work. Rotation is separate from the verdict because a photo can
+be good *and* on its side, and it is applied before the detector looks at the
+image, since a sideways fish reads as a tall thin subject and gets framed
+badly. Species carrying a verdict that changes the file rebuild automatically;
+you do not have to remember `--refresh`.
 
 `verify --gemini` adds a vision pass over the picks: does it look like the
 species, is it one fish, side-on, whole, and what is the setting. Only a

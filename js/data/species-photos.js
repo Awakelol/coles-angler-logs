@@ -21,7 +21,6 @@ export const SPECIES_PHOTOS = {
   'epinephelus-coioides': { file: 'assets/photos/epinephelus-coioides.jpg', credit: '(c) Ewout Knoester, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/22074323' },
   'epinephelus-malabaricus': { file: 'assets/photos/epinephelus-malabaricus.jpg', credit: '(c) portioid, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/190298297' },
   'gerres-filamentosus': { file: 'assets/photos/gerres-filamentosus.jpg', credit: '(c) Teja Yantrapalli, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/308719179' },
-  'gerres-oyena': { file: 'assets/photos/gerres-oyena.jpg', credit: '(c) Ewout Knoester, some rights reserved (CC BY-SA)', licence: 'CC BY-SA', source: 'https://www.inaturalist.org/observations/71702426' },
   'katsuwonus-pelamis': { file: 'assets/photos/katsuwonus-pelamis.jpg', credit: '(c) Antoine MARNAT, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/349928221' },
   'leiognathus-equulus': { file: 'assets/photos/leiognathus-equulus.jpg', credit: 'no rights reserved', licence: 'CC0', source: 'https://www.inaturalist.org/observations/58008948' },
   'lethrinus-harak': { file: 'assets/photos/lethrinus-harak.jpg', credit: '(c) Nicola Crockford, some rights reserved (CC BY)', licence: 'CC BY', source: 'https://www.inaturalist.org/observations/188311782' },

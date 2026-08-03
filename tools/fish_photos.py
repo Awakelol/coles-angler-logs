@@ -16,6 +16,7 @@ Optional, driven by what you flag while reviewing:
     python tools/fish_photos.py score --unsure  # ask Gemini about the ones you flagged
     python tools/fish_photos.py verify          # check the picks before building
     python tools/fish_photos.py verify --gemini # ...and have a model look at them
+    python tools/fish_photos.py crops           # pass or fail each finished crop
 
 In `review` each species takes one of five states: a chosen photo, "no good
 ones", "give me more", "unsure" (which may still name a favourite), or nothing
@@ -83,6 +84,7 @@ RAW = WORK / "raw"
 OUT_DIR = ROOT / "assets" / "photos"
 MANIFEST_JS = ROOT / "js" / "data" / "species-photos.js"
 REVIEW_HTML = WORK / "review.html"
+CROPS_HTML = WORK / "crops.html"
 
 UA = "ColesAnglerLog/2.0 (personal fishing app; contact via github.com/Awakelol)"
 
@@ -1362,14 +1364,32 @@ def cmd_build(args):
     # forty-three times.
     session = new_session("u2net")
 
+    crops = load_crops()
+
     for sid, idx in sorted(chosen.items()):
         rec = data.get(sid)
         if not rec or idx is None or idx < 0 or idx >= len(rec["candidates"]):
             continue
+        # A photo failed in the crop review is pulled entirely — the card says
+        # "photo not yet available", which is the honest state until it is
+        # replaced, rather than shipping something already judged wrong.
+        if crops.get(sid, {}).get("verdict") == "fail":
+            out_dead = OUT_DIR / f"{sid}.jpg"
+            if out_dead.exists():
+                out_dead.unlink()
+            print(f"  {sid:34} pulled — marked 'replace' in the crop review")
+            continue
         cand = rec["candidates"][idx]
         out = OUT_DIR / f"{sid}.jpg"
 
-        if out.exists() and not args.refresh:
+        # Normally an existing file is left alone. Not when you have just said
+        # its crop is wrong — the whole point of that verdict is to change the
+        # file, and making you remember --refresh for it would be a trap.
+        # A rotation you have just asked for has to be applied, so a species
+        # carrying one always rebuilds. There are only ever a handful.
+        turn = int(crops.get(sid, {}).get("rotate", 0)) % 360
+        recrop = crops.get(sid, {}).get("verdict") == "full" or turn
+        if out.exists() and not args.refresh and not recrop:
             manifest[sid] = manifest_entry(sid, cand)
             continue
 
@@ -1386,12 +1406,23 @@ def cmd_build(args):
             # EXIF orientation is a flag, not applied pixels. Without this a
             # phone photo taken in portrait arrives on its side.
             src = ImageOps.exif_transpose(src).convert("RGB")
+            # Straighten it before anything else looks at it — the detector
+            # reads a sideways fish as a tall thin subject and frames it badly.
+            if turn:
+                src = src.rotate(-turn, expand=True)
 
             # Find the fish and frame on it. The pixels that ship are the
             # photographer's — the detector only decides WHERE to cut the
             # picture, never what to erase from it.
             note = "full frame"
-            box = find_fish(src, session)
+            # "Bad crop, good photo" — ship the whole frame and skip detection
+            # entirely. Re-running the detector would only find the same wrong
+            # thing again.
+            box = None if crops.get(sid, {}).get("verdict") == "full"                 else find_fish(src, session)
+            if crops.get(sid, {}).get("verdict") == "full":
+                note = "whole frame (your call)"
+            if turn:
+                note += f", rotated {turn}°"
             if box:
                 window = frame_on_fish(src, box)
                 if window:
@@ -1420,6 +1451,318 @@ def cmd_build(args):
     print(f"\n{len(manifest)} photos in {OUT_DIR}")
     print(f"Manifest: {MANIFEST_JS}")
     return 0
+
+
+# --------------------------------------------------------------------------
+# stage 3b — pass or fail the crops
+# --------------------------------------------------------------------------
+#
+# The crop is decided by a saliency model, and a saliency model is sometimes
+# looking at the diver, the hand, or the brightest rock. Nothing in the build
+# can tell you it got the wrong thing — only looking can.
+#
+# Three verdicts, because "fail" alone would not say what to do about it:
+#
+#   pass  the crop is good
+#   full  the crop is wrong but the PHOTO is fine — ship the whole frame
+#   fail  the photo itself is no good — pull it and find another
+#
+# `full` is the useful one. Most bad crops are a good photograph framed badly,
+# and re-picking a perfectly good photo to fix a crop would be wasted work.
+
+CROPS = WORK / "crops.json"
+
+
+def load_crops():
+    if not CROPS.exists():
+        return {}
+    try:
+        raw = json.loads(CROPS.read_text(encoding="utf-8"))
+        return {k: v for k, v in raw.items() if isinstance(v, dict)}
+    except Exception:
+        return {}
+
+
+def crop_counts(crops):
+    c = {"pass": 0, "full": 0, "fail": 0}
+    for v in crops.values():
+        if v.get("verdict") in c:
+            c[v["verdict"]] += 1
+    return c
+
+
+def cmd_crops(args):
+    species = {s["id"]: s for s in load_species()}
+    crops = load_crops()
+    built = sorted(p for p in OUT_DIR.glob("*.jpg")) if OUT_DIR.exists() else []
+    if not built:
+        print("Nothing built yet. Run `build` first.")
+        return 1
+
+    # How each one was framed, so a letterboxed card is obviously a decision
+    # rather than a mistake.
+    data = json.loads(CANDIDATES.read_text(encoding="utf-8")) if CANDIDATES.exists() else {}
+
+    rows = []
+    for p in built:
+        sid = p.stem
+        sp = species.get(sid, {})
+        v = crops.get(sid, {})
+        verdict = v.get("verdict", "")
+        from PIL import Image
+        with Image.open(p) as im:
+            w, h = im.size
+        shape = "4:3, centred on the fish" if abs((w / h) - CARD_ASPECT) < 0.02 \
+            else f"whole frame, {w}x{h} — letterboxed on the card"
+
+        btn = lambda kind, label: (
+            f"<button class='v v--{kind}{' is-on' if verdict == kind else ''}' "
+            f"data-sp='{sid}' data-verdict='{kind}'>{label}</button>")
+        rows.append(
+            f"<section id='{sid}' data-sp='{sid}' data-verdict='{verdict}'>"
+            f"<div class='shot'><img src='/photo/{sid}.jpg' loading='lazy'></div>"
+            f"<div class='side'>"
+            f"<h2>{html_escape(sp.get('common', sid))}"
+            f"<small>{html_escape(sp.get('scientific', ''))}</small></h2>"
+            f"<p class='shape'>{html_escape(shape)}</p>"
+            f"<div class='verdicts'>"
+            f"{btn('pass', 'Crop is good')}"
+            f"{btn('full', 'Bad crop — use whole photo')}"
+            f"{btn('fail', 'Bad photo — replace it')}"
+            f"<button class='v v--clear' data-sp='{sid}' data-verdict='clear'>Clear</button>"
+            f"<span class='state' data-state='{sid}'></span>"
+            f"</div>"
+            # Rotation is not a verdict — a photo can be good AND on its side.
+            # Kept separate so you can pass it and straighten it in one go.
+            f"<div class='verdicts'>"
+            f"<span class='rotlabel'>Rotate</span>"
+            f"<button class='v v--rot' data-sp='{sid}' data-rot='-90'>&#8634; left</button>"
+            f"<button class='v v--rot' data-sp='{sid}' data-rot='90'>&#8635; right</button>"
+            f"<span class='rotnow' data-rotnow='{sid}'>"
+            f"{(str(v.get('rotate', 0)) + '&deg;') if v.get('rotate') else ''}</span>"
+            f"</div>"
+            f"<textarea class='note' data-sp='{sid}' rows='2' "
+            f"placeholder='Remarks — what is wrong with this crop or photo'>"
+            f"{html_escape(v.get('note', ''))}</textarea>"
+            f"</div></section>")
+
+    total = len(rows)
+    CROPS_HTML.write_text(f"""<!doctype html><meta charset=utf-8>
+<title>Pass or fail the crops</title>
+<style>
+ body{{font:14px/1.5 system-ui;margin:0;padding:16px 20px 96px;background:#10141c;color:#e6edf3}}
+ h1{{font-size:19px;margin:0 0 4px}}
+ .lede{{color:#8b949e;margin:0 0 14px;max-width:74ch}}
+ section{{display:flex;gap:18px;border-top:1px solid #30363d;padding:16px 0;align-items:flex-start}}
+ section[data-verdict="fail"]{{opacity:.5}}
+ section[data-verdict="full"]{{box-shadow:inset 3px 0 0 #d29922;padding-left:12px}}
+ /* Shown exactly as the card shows it: same ratio, same fit, same backing.
+    A crop judged in a different frame is judged against the wrong thing. */
+ .shot{{flex:0 0 340px}}
+ .shot img{{width:340px;aspect-ratio:4/3;object-fit:contain;
+            background:#10202e;border-radius:10px;display:block}}
+ .side{{flex:1;min-width:0}}
+ h2{{font-size:17px;margin:0 0 2px}}
+ h2 small{{display:block;font-weight:400;font-style:italic;color:#8b949e;font-size:13px}}
+ .shape{{margin:0 0 10px;font:600 11px monospace;color:#6e7681}}
+ .verdicts{{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}}
+ .v{{font:800 12px system-ui;padding:6px 12px;border-radius:99px;cursor:pointer;
+     border:1px solid #30363d;background:#161b22;color:#8b949e}}
+ .v:hover{{border-color:#8b949e}}
+ .v--pass.is-on{{background:#3fb950;border-color:#3fb950;color:#0d1117}}
+ .v--full.is-on{{background:#d29922;border-color:#d29922;color:#0d1117}}
+ .v--fail.is-on{{background:#7d1226;border-color:#7d1226;color:#fff}}
+ .state{{font:700 11px monospace;color:#3fb950}}
+ .rotlabel{{font:800 11px system-ui;color:#6e7681;text-transform:uppercase;letter-spacing:.06em}}
+ .rotnow{{font:800 12px monospace;color:#d29922}}
+ .note{{width:100%;font:13px/1.5 system-ui;background:#0d1117;color:#e6edf3;
+        border:1px solid #30363d;border-radius:8px;padding:8px 10px;resize:vertical;
+        box-sizing:border-box}}
+ .note:focus{{outline:none;border-color:#58a6ff}}
+ .note:not(:placeholder-shown){{border-color:#d29922;background:#14120c}}
+ #bar{{position:fixed;left:0;right:0;bottom:0;background:#161b22;border-top:1px solid #30363d;
+       padding:12px 20px;display:flex;gap:16px;align-items:center;font:700 13px system-ui}}
+ #bar b{{font-size:16px}} #bar .sp{{flex:1}}
+ .tag{{font:700 11px monospace;padding:3px 8px;border-radius:99px;background:#30363d;color:#8b949e}}
+</style>
+<h1>Pass or fail each crop</h1>
+<p class=lede>Each photo is shown exactly as the species card shows it — same ratio, same fit,
+same backing. <b>Crop is good</b> keeps it. <b>Bad crop</b> keeps the photo but ships the whole
+frame instead, which is the right answer when the framing is off but the picture is fine.
+<b>Bad photo</b> pulls it entirely and the card says "photo not yet available" until it is
+replaced. Everything saves as you click.</p>
+{''.join(rows)}
+<div id=bar>
+  <span class=sp><b id=count>0</b> / {total} judged</span>
+  <span class=tag id=t-pass>0 good</span>
+  <span class=tag id=t-full>0 use whole</span>
+  <span class=tag id=t-fail>0 replace</span>
+  <span class=tag id=t-note>0 with remarks</span>
+  <span id=state></span>
+</div>
+<script>
+async function post(path, body, sp) {{
+  const cell = sp ? document.querySelector(`.state[data-state="${{sp}}"]`) : null;
+  if (cell) cell.textContent = 'saving…';
+  try {{
+    const r = await fetch(path, {{ method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify(body) }});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'refused');
+    if (cell) {{ cell.textContent = 'saved'; setTimeout(() => cell.textContent = '', 1200); }}
+    document.getElementById('count').textContent = j.judged;
+    document.getElementById('t-pass').textContent = j.counts.pass + ' good';
+    document.getElementById('t-full').textContent = j.counts.full + ' use whole';
+    document.getElementById('t-fail').textContent = j.counts.fail + ' replace';
+    document.getElementById('t-note').textContent = j.notes + ' with remarks';
+    if (j.rotate !== undefined && sp) {{
+      const cell = document.querySelector(`.rotnow[data-rotnow="${{sp}}"]`);
+      if (cell) cell.textContent = j.rotate ? j.rotate + '°' : '';
+    }}
+    document.getElementById('state').textContent = '';
+  }} catch (e) {{
+    if (cell) cell.textContent = '';
+    document.getElementById('state').textContent = 'NOT SAVED — is the server still running?';
+  }}
+}}
+
+document.addEventListener('click', (e) => {{
+  const rot = e.target.closest('.v--rot');
+  if (rot) {{
+    const sp = rot.dataset.sp;
+    post('/croprot', {{ id: sp, by: +rot.dataset.rot }}, sp).then(() => {{}});
+    return;
+  }}
+  const v = e.target.closest('.v');
+  if (!v) return;
+  const sp = v.dataset.sp, verdict = v.dataset.verdict;
+  const already = v.classList.contains('is-on');
+  const next = (already || verdict === 'clear') ? 'clear' : verdict;
+  const sec = document.getElementById(sp);
+  sec.dataset.verdict = next === 'clear' ? '' : next;
+  sec.querySelectorAll('.v').forEach(b =>
+    b.classList.toggle('is-on', b.dataset.verdict === next && next !== 'clear'));
+  post('/crop', {{ id: sp, verdict: next === 'clear' ? null : next }}, sp);
+}});
+
+const timers = {{}};
+document.addEventListener('input', (e) => {{
+  const n = e.target.closest('.note');
+  if (!n) return;
+  const sp = n.dataset.sp;
+  clearTimeout(timers[sp]);
+  timers[sp] = setTimeout(() => post('/cropnote', {{ id: sp, note: n.value }}, sp), 600);
+}});
+</script>""", encoding="utf-8")
+
+    if args.no_open:
+        print(f"Wrote {CROPS_HTML} (not served)")
+        return 0
+    serve_crops(args.port)
+    return 0
+
+
+def serve_crops(port):
+    import http.server, socketserver, threading
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def _json(self, obj, status=200):
+            body = json.dumps(obj).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path in ("/", "/index.html"):
+                body = CROPS_HTML.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            # Served from here rather than by file:// path, so the sheet works
+            # the same whichever directory it is opened from.
+            if self.path.startswith("/photo/"):
+                name = os.path.basename(self.path)
+                f = OUT_DIR / name
+                if f.exists() and f.suffix == ".jpg":
+                    body = f.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+            self.send_error(404)
+
+        def do_POST(self):
+            if self.path not in ("/crop", "/cropnote", "/croprot"):
+                return self.send_error(404)
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                msg = json.loads(self.rfile.read(n) or b"{}")
+                crops = load_crops()
+                sid = msg["id"]
+                entry = dict(crops.get(sid, {}))
+                if self.path == "/croprot":
+                    now = int(entry.get("rotate", 0))
+                    entry["rotate"] = (now + int(msg.get("by", 0))) % 360
+                    if entry["rotate"] == 0:
+                        entry.pop("rotate", None)
+                elif self.path == "/cropnote":
+                    note = (msg.get("note") or "").strip()
+                    if note:
+                        entry["note"] = note[:500]
+                    else:
+                        entry.pop("note", None)
+                else:
+                    verdict = msg.get("verdict")
+                    if verdict:
+                        entry["verdict"] = verdict
+                    else:
+                        entry.pop("verdict", None)   # a remark outlives a cleared verdict
+                if entry:
+                    crops[sid] = entry
+                else:
+                    crops.pop(sid, None)
+                CROPS.write_text(json.dumps(crops, indent=1, sort_keys=True), encoding="utf-8")
+                self._json({
+                    "ok": True,
+                    "judged": len([1 for v in crops.values() if v.get("verdict")]),
+                    "counts": crop_counts(crops),
+                    "notes": len([1 for v in crops.values() if (v.get("note") or "").strip()]),
+                    "rotate": crops.get(sid, {}).get("rotate", 0),
+                })
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 400)
+
+        def log_message(self, *a):
+            pass
+
+    with socketserver.TCPServer(("127.0.0.1", port), Handler) as srv:
+        url = f"http://127.0.0.1:{port}/"
+        print(f"Crop review: {url}")
+        print(f"Saves to {CROPS} as you click.")
+        print("Ctrl+C here when done.\n")
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            crops = load_crops()
+            c = crop_counts(crops)
+            notes = {k: v["note"] for k, v in crops.items() if (v.get("note") or "").strip()}
+            print(f"\nStopped. {c['pass']} good, {c['full']} use-whole, {c['fail']} replace, "
+                  f"{len(notes)} with remarks.")
+            for sid, note in sorted(notes.items()):
+                print(f"    {sid}: {note}")
+            if c["full"]:
+                print("\n  Re-run build to ship those whole:")
+                print("    python tools/fish_photos.py build --refresh")
+            if c["fail"]:
+                print("\n  Photos to replace are excluded from the manifest on the next build.")
 
 
 def write_manifest(manifest):
@@ -1516,7 +1859,12 @@ def main():
                     help="check at most N photos this run (0 = all not yet done)")
     vy.set_defaults(fn=cmd_verify)
 
-    b = sub.add_parser("build", help="background removal + manifest")
+    cr = sub.add_parser("crops", help="pass or fail each built crop")
+    cr.add_argument("--no-open", action="store_true")
+    cr.add_argument("--port", type=int, default=8124)
+    cr.set_defaults(fn=cmd_crops)
+
+    b = sub.add_parser("build", help="crop centred on the fish + manifest")
     b.add_argument("--refresh", action="store_true")
     b.set_defaults(fn=cmd_build)
 
