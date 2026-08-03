@@ -680,7 +680,7 @@ species, is it one fish, side-on, whole, and what is the setting. Only a
 species mismatch is raised as a *problem* — that is the one that makes a card
 actively lie. The rest are warnings.
 
-**No API keys for the stages that matter.** iNaturalist and GBIF are both open.
+**No API keys for the stages that matter.** iNaturalist, Wikimedia Commons and GBIF are all open.
 `score` is the only stage that wants a key and the only optional one; put
 `GEMINI_API_KEY=...` in **`.dev.vars`** in the project root — already
 gitignored, and the same file wrangler reads for local Worker runs, so the key
@@ -707,8 +707,15 @@ Thumbnails are **uncropped** (`object-fit: contain`) with the pixel dimensions
 and a full-size link under each. Cover-cropping hid exactly the tails and fins
 you need to judge a fish by.
 
+Three sources, and they are genuinely different pools: iNaturalist is field
+observations with voted identifications, **Wikimedia Commons** is files curated
+onto species pages (searched by `Category:<Scientific name>` first, then by
+plain search), and GBIF is the backstop. Commons ranks slightly below
+research-grade iNaturalist — well organised, but nobody voted on the ID — and
+its range maps and cladograms are filtered out by title.
+
 **What it decides and what it doesn't.** Licensing it decides completely: only
-CC0, CC BY and CC BY-SA are ever downloaded, and the credit the licence
+CC0, CC BY, CC BY-SA and public domain are ever downloaded, and the credit the licence
 requires is carried into the app and shown on the card. Whether a photo is a
 clean side-profile of a whole fish out of water, it *cannot* — no API exposes
 that. It ranks on the proxies it can read (iNaturalist's "Alive or Dead"

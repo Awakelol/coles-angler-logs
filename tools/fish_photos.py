@@ -91,11 +91,15 @@ UA = "ColesAnglerLog/2.0 (personal fishing app; contact via github.com/Awakelol)
 # The only licences that may ship. Anything else is skipped outright rather
 # than downloaded and sorted out later — a file on disk is a file that can be
 # published by accident.
-OK_LICENCES = {"cc0", "cc-by", "cc-by-sa"}
+OK_LICENCES = {"cc0", "cc-by", "cc-by-sa", "pd"}
 LICENCE_LABEL = {
     "cc0": "CC0",
     "cc-by": "CC BY",
     "cc-by-sa": "CC BY-SA",
+    # Only reachable via Commons. Strictly freer than the three the brief
+    # named, and the licence most of the old scientific plates carry, so
+    # excluding it would rule out material on a technicality.
+    "pd": "Public domain",
 }
 
 CANDIDATES_PER_SPECIES = 10
@@ -257,6 +261,107 @@ def gbif_candidates(sci):
     return out
 
 
+COMMONS = "https://commons.wikimedia.org/w/api.php"
+
+# Commons holds far more than photographs. Range maps and taxonomy diagrams
+# match a species search perfectly and are useless on a card.
+NOT_A_PHOTO = re.compile(
+    r"(map|range|distribution|diagram|chart|graph|logo|icon|stamp|coin|"
+    r"signature|locator|phylogen|cladogram)", re.I)
+
+
+def commons_licence(meta):
+    """Commons records licences as free text; this maps it to our codes.
+
+    Anything not confidently free returns None and the file is skipped. The
+    default has to be "no" — a permissive guess here puts a file we may not
+    have the right to publish into the repository.
+    """
+    short = (meta.get("LicenseShortName", {}).get("value") or "").lower()
+    terms = (meta.get("UsageTerms", {}).get("value") or "").lower()
+    text = f"{short} {terms}"
+
+    # EXCLUSIONS FIRST, and this order is the whole point. "CC BY-NC-SA"
+    # contains "share alike", so a share-alike test placed above this returns
+    # cc-by-sa for a non-commercial licence and ships a file we have no right
+    # to publish. It did exactly that until a test caught it.
+    if re.search(r"\bnc\b|non-?commercial", text):
+        return None
+    if re.search(r"\bnd\b|no-?deriv", text):
+        return None
+    # GFDL and the various "fair use" tags are not free enough for this.
+    if "gfdl" in text or "fair use" in text or "all rights reserved" in text:
+        return None
+
+    if "cc0" in text:
+        return "cc0"
+    if "public domain" in text or re.match(r"^pd[-\s]", short):
+        return "pd"
+    if re.search(r"share.?alike|by-sa", text):
+        return "cc-by-sa"
+    if re.search(r"cc.?by|attribution", text):
+        return "cc-by"
+    return None
+
+
+def commons_candidates(sci):
+    """Wikimedia Commons, licence-filtered here rather than at the API.
+
+    Two passes: the species category first, because Commons files a species'
+    images under `Category:<Scientific name>` and that is curated, then a plain
+    search for species whose category is missing or differently named.
+    """
+    out = []
+    queries = [
+        {"generator": "categorymembers", "gcmtitle": f"Category:{sci}",
+         "gcmtype": "file", "gcmlimit": "40"},
+        {"generator": "search", "gsrsearch": f"filetype:bitmap {sci}",
+         "gsrnamespace": "6", "gsrlimit": "40"},
+    ]
+    seen = set()
+    for extra in queries:
+        params = {"action": "query", "prop": "imageinfo",
+                  "iiprop": "url|extmetadata|size", "iiurlwidth": "1600",
+                  "format": "json", **extra}
+        data = get_json(COMMONS + "?" + urllib.parse.urlencode(params))
+        time.sleep(0.4)
+        for page in ((data or {}).get("query", {}).get("pages", {}) or {}).values():
+            title = page.get("title", "")
+            info = (page.get("imageinfo") or [{}])[0]
+            url = info.get("thumburl") or info.get("url")
+            if not url or url in seen or NOT_A_PHOTO.search(title):
+                continue
+            code = commons_licence(info.get("extmetadata") or {})
+            if code not in OK_LICENCES:
+                continue
+            seen.add(url)
+            artist = re.sub(r"<[^>]*>", "", (info.get("extmetadata", {})
+                            .get("Artist", {}).get("value") or "")).strip()
+            # Commons wraps the artist in nested markup, and stripping tags can
+            # leave the same name twice ("Unknown authorUnknown author").
+            half = len(artist) // 2
+            if artist and len(artist) % 2 == 0 and artist[:half] == artist[half:]:
+                artist = artist[:half]
+            artist = re.sub(r"\s+", " ", artist).strip()
+            out.append({
+                "source": "commons",
+                "scope": "global",
+                "url": url,
+                "licence": code,
+                "credit": artist or "Wikimedia Commons",
+                "page": info.get("descriptionurl") or
+                        f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title)}",
+                "width": info.get("thumbwidth") or info.get("width") or 0,
+                "height": info.get("thumbheight") or info.get("height") or 0,
+                "dead": False,
+                "research": False,
+                "agreements": 0,
+            })
+        if len(out) >= CANDIDATES_PER_SPECIES * 2:
+            break
+    return out
+
+
 def rank(cands):
     """Order by the signals we can actually read.
 
@@ -292,6 +397,8 @@ def rank(cands):
                 s += 0.5
         if c["source"] == "inaturalist":
             s += 0.5
+        elif c["source"] == "commons":
+            s += 0.4        # curated onto a species page, but nobody voted on the ID
         return s
 
     for c in cands:
@@ -345,7 +452,9 @@ def cmd_fetch(args):
             print(f"[{i}/{len(species)}] {sp['id']}: already fetched, skipping")
             continue
         print(f"[{i}/{len(species)}] {sp['id']}  ({sp['scientific']})")
-        cands = rank(inat_candidates(sp["scientific"], place) + gbif_candidates(sp["scientific"]))
+        cands = rank(inat_candidates(sp["scientific"], place)
+                     + commons_candidates(sp["scientific"])
+                     + gbif_candidates(sp["scientific"]))
         conf = confidence(cands)
         existing[sp["id"]] = {
             "scientific": sp["scientific"], "common": sp["common"],
@@ -747,6 +856,7 @@ def cmd_more(args):
         fresh = []
         for order_by, page in (("created_at", 1), ("votes", 2), ("created_at", 2)):
             fresh += inat_deeper(rec["scientific"], place, order_by, page)
+        fresh += commons_candidates(rec["scientific"])
         fresh += gbif_candidates(rec["scientific"])
         new = [c for c in rank(fresh) if c["url"].split("?")[0] not in have]
         rec["candidates"] = (rec["candidates"] + new)[:CANDIDATES_PER_SPECIES * 3]
