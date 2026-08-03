@@ -517,6 +517,76 @@ grep -n "art: 'placeholder'" js/data/species/indo-pacific.js
 
 ---
 
+## The look
+
+Blue and off-white, one strong colour and a lot of quiet around it. The whole
+palette is nine custom properties at the top of
+[`css/style.css`](css/style.css):
+
+```css
+--blue:    #2B4593;   /* the one strong colour: nav, buttons, links, selection */
+--blue-dk: #1E3169;   /* pressed states, headings on pale grounds */
+--blue-lt: #E8ECF7;   /* tinted fills — chips, empty avatars, quiet cards */
+--sand:    #E6E2C5;   /* the warm counterweight */
+--cream:   #F6F4EA;   /* the page itself */
+--line:    #E2DFD2;   /* hairline borders */
+```
+
+**The token names are historical and deliberately not renamed.** `--yellow`,
+`--sky` and `--coral` still exist and now point into the palette above. The
+stylesheet is ~1,900 lines; renaming every use would have been a large diff
+that changed nothing you can see, and the names are load-bearing in the sense
+that they mean "the accent", "the cool ground", "the warning" — which is still
+true. Change the six values above and the app follows.
+
+**Contrast is tested, not eyeballed.** When the accents went from gold to dark
+blue, `--on-accent` had to flip to white, which left the pale chips at 1.2:1 —
+technically coloured, practically invisible. The suite now computes WCAG ratios
+for every text-on-fill pair and holds them at 4.5:1.
+
+### The navigation
+
+A floating island: a pill lifted off the bottom edge, and a **+ above it**
+rather than notched into it. The reference design notches it in, and the first
+attempt did too — but the app has five destinations, six slots were needed for
+five plus a create button, and the tab that lost its place was **Log**. In a
+fishing-log app, the records screen has to stay reachable, so the + floats
+clear instead.
+
+Pressing it rotates two bars into an ×. Both bars are the same shape rotating,
+not one glyph swapped for another — a swap reads as a flicker at this size.
+The three quick actions rise in sequence behind a veil, and close on the ×, the
+veil, Escape, or any navigation.
+
+On the map the + would land exactly on the weather drawer's grip; both are
+centre-bottom furniture. It sits a notch higher on that screen only, keeping
+its horizontal position, because a button that moves sideways between screens
+is harder to find again than one that shifts up.
+
+### Dark mode is off
+
+`THEME_LOCKED` in [`js/theme.js`](js/theme.js) forces light and hides the theme
+picker while the light palette settles. **The dark rules are untouched**, and a
+test reads them out of the stylesheet so they cannot rot while unreachable.
+Set `THEME_LOCKED = false` to bring the picker back — then retune the dark
+palette, because it still answers to the old gold.
+
+### Retro mode
+
+The pixel art is not gone; it is an easter egg. **Tap the version number at the
+foot of Settings seven times.** A hint appears at three taps so it is findable
+by someone poking at it, and not before.
+
+The switch is one module — [`js/art.js`](js/art.js) is a façade over
+[`js/art/modern.js`](js/art/modern.js) and the pixel renderer, so pages ask for
+`icon('hook')` and get whichever mode is on. The mode lives in `localStorage`
+and re-renders in place.
+
+Species **photographs** are unaffected: those show in both modes, and retro
+mode only changes icons and the fish that still have no photograph.
+
+---
+
 ## Testing
 
 ```bash
@@ -581,13 +651,18 @@ every device that already loaded the old one.
 ## How it's built
 
 ```
-index.html            app shell, tab bar
-css/style.css         all styling
+index.html            app shell, floating nav, quick-action menu
+css/style.css         all styling, palette tokens at the top
 js/
-  app.js              hash router, region switching
+  app.js              hash router, region switching, quick actions
   config.js           API keys + provider settings
-  store.js            IndexedDB (catches) + localStorage (prefs) + stats
-  pixel.js            sprite grids, palettes, SVG renderer
+  store.js            IndexedDB (catches + spots) + localStorage (prefs) + stats
+  theme.js            light/dark, and the lock that pins it to light
+  art.js              icon façade — hands off to modern or pixel
+  art-mode.js         which mode is on, and the seven-tap unlock
+  art/modern.js       the line icons and the brand mark
+  pixel.js            sprite grids, palettes, SVG renderer (retro mode)
+  map-spots.js        long-press to drop a spot, per account
   ui.js               esc/format/toast/modal-sheet helpers
   api/weather.js      Open-Meteo + OpenWeather, one normalised shape
   api/tides.js        WorldTides + Stormglass, 6-hour cache
@@ -597,7 +672,7 @@ js/
     tactics.js        lure + retrieve advice by family and habitat
     species/          the fish themselves, region-independent
     regions/          places; reference species by id
-  pages/              home, map, conditions, log, info, identify, settings
+  pages/              home, map, conditions, log, info, identify, account, settings
   auth/               sign-in, and the PBKDF2 derivation behind username accounts
 worker/               Cloudflare Worker — /api/* only; keys live here, not in js/
 vendor/leaflet/       Leaflet 1.9.4, vendored so there's no CDN dependency
@@ -613,9 +688,12 @@ and redirect to the matching tab.
 Blobs, and `localStorage` is strings-only with a ~5 MB cap that one phone photo
 would eat. Photos are downscaled to 1280px on save.
 
-**Your data is local to the device.** There's no account and no server. Clearing
-site data or uninstalling the PWA deletes your log — use **Settings → Export
-JSON** to back up. Export omits photos, since JSON can't carry image data.
+**Your data is local to the device by default.** An account is optional, and a
+device-only one is a real choice rather than a lesser one — see
+[Accounts and cloud sync](#accounts-and-cloud-sync). Without cloud sync,
+clearing site data or uninstalling the PWA deletes your log, so use
+**Settings → Export JSON** to back up. Export omits photos, since JSON can't
+carry image data.
 
 ---
 
