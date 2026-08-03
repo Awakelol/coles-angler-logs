@@ -1486,6 +1486,41 @@ def frame_on_fish(img, box):
     return (int(left), int(top), int(left + cw), int(top + ch))
 
 
+def fill_to_card(img):
+    """Pad a photo out to the card's shape using a blurred copy of itself.
+
+    Some fish cannot be framed to 4:3 without cutting a tail off, so those ship
+    whole — which left bars down the sides of the card. Gabriel asked for the
+    container to be filled by the image.
+
+    The two obvious answers are both bad. Cropping to fit takes the fin off,
+    which is the one thing this pipeline refuses to do. A flat colour behind it
+    is still a bar, just a tidier one. Blurring an enlarged copy of the photo
+    behind the photo fills the frame with the picture's own colours and light,
+    so the card reads as one image and nothing is lost.
+    """
+    from PIL import Image, ImageFilter, ImageEnhance
+    w, h = img.width, img.height
+    if abs((w / h) - CARD_ASPECT) < 0.02:
+        return img, False
+
+    if w / h > CARD_ASPECT:
+        cw, ch = w, round(w / CARD_ASPECT)
+    else:
+        ch, cw = h, round(h * CARD_ASPECT)
+
+    # Cover the canvas with the photo, blur it hard enough that no detail reads
+    # as a second fish, and dim it so the real photo stays the subject.
+    scale = max(cw / w, ch / h) * 1.08
+    back = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+    left, top = (back.width - cw) // 2, (back.height - ch) // 2
+    back = back.crop((left, top, left + cw, top + ch))
+    back = back.filter(ImageFilter.GaussianBlur(radius=max(cw, ch) // 28))
+    back = ImageEnhance.Brightness(back).enhance(0.62)
+    back.paste(img, ((cw - w) // 2, (ch - h) // 2))
+    return back, True
+
+
 def manifest_entry(sid, cand):
     return {
         "file": f"assets/photos/{sid}.jpg",
@@ -1641,6 +1676,9 @@ def cmd_build(args):
                 note += " (supplied by hand)"
             fitted[note] = fitted.get(note, 0) + 1
 
+            src, padded = fill_to_card(src)
+            if padded:
+                note += ", filled to frame"
             src.thumbnail((MAX_EDGE, MAX_EDGE), Image.LANCZOS)
             src.save(out, "JPEG", quality=86, optimize=True, progressive=True)
             print(f"  {sid:34} {src.width}x{src.height}  "

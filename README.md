@@ -647,9 +647,10 @@ frame, never what to erase from it.
 
 Finding the fish uses `rembg`'s u2net, but only for its mask's bounding box;
 the matting is thrown away. **The fish is never cropped.** If a fish is so long
-that no 4:3 window can hold it inside the photo, the whole frame ships instead
-and the card letterboxes it — 4 of 43 land there. Cutting a tail off to make
-the shape work is the one outcome worth avoiding.
+that no 4:3 window can hold it inside the photo, the whole frame is kept and
+padded out to the card's shape with a *blurred, dimmed copy of the photo
+itself*, so the frame is filled without losing a fin. A flat colour would still
+be a bar; cropping would take the tail. Seven of 67 land there.
 
 Cut-outs were tried first and dropped: they looked consistent in principle and
 were not in practice — halos on some, a fin lost to the matting on others, and
