@@ -625,9 +625,23 @@ python -m pip install "rembg[cpu]" onnxruntime pillow   # once; ~176 MB model on
 python tools/fish_photos.py fetch     # licensed candidates from iNaturalist + GBIF
 python tools/fish_photos.py score     # optional: Gemini rates the doubtful ones
 python tools/fish_photos.py review    # contact sheet — you pick one per species
+python tools/fish_photos.py verify    # check the picks before committing to them
 python tools/fish_photos.py build     # rembg → white background → manifest
 python tools/fish_photos.py status    # what is done, what is missing
 ```
+
+`verify` runs four checks that need **no key**: every species accounted for;
+no photo picked twice (which would mean one card shows the wrong fish); licence
+allowed and attribution present where the licence demands it; and an
+**identity cross-check** — it asks iNaturalist what each photo's observation is
+actually identified as and compares that to the species. That last one catches
+a photo taken from the wrong species' page, which no amount of looking would
+reveal if the two fish resemble each other.
+
+`verify --gemini` adds a vision pass over the picks: does it look like the
+species, is it one fish, side-on, whole, and what is the setting. Only a
+species mismatch is raised as a *problem* — that is the one that makes a card
+actively lie. The rest are warnings.
 
 **No API keys for the stages that matter.** iNaturalist and GBIF are both open.
 `score` is the only stage that wants a key and the only optional one; put

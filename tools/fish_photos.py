@@ -14,6 +14,8 @@ Optional, driven by what you flag while reviewing:
 
     python tools/fish_photos.py more            # dig deeper where you said "give me more"
     python tools/fish_photos.py score --unsure  # ask Gemini about the ones you flagged
+    python tools/fish_photos.py verify          # check the picks before building
+    python tools/fish_photos.py verify --gemini # ...and have a model look at them
 
 In `review` each species takes one of five states: a chosen photo, "no good
 ones", "give me more", "unsure" (which may still name a favourite), or nothing
@@ -836,6 +838,227 @@ def cmd_score(args):
 
 
 # --------------------------------------------------------------------------
+# stage 2c — verify what you picked
+# --------------------------------------------------------------------------
+
+# What a good species photo is, in this app — decided by reviewing 68 of them
+# rather than assumed up front.
+#
+# The brief started as "out of water, laid flat, skip underwater". The review
+# disagreed on both counts: market piles are worse than clean in-water shots,
+# and more than one fish in frame is disqualifying however good the fish are.
+# This wording is what goes to the model AND what the ranking leans on, so the
+# two cannot drift apart.
+GOOD_PHOTO = (
+    "A good photo shows ONE fish, side-on, whole - snout to tail fin, no part "
+    "cropped - sharp, against a background that does not compete with it. "
+    "A clean underwater or aquarium shot of a single fish is GOOD. "
+    "A market stall or catch pile is BAD even when the fish are clear, because "
+    "several fish in frame make it useless for identification. Also bad: "
+    "blurry, extreme close-ups, fish facing the camera, hands or gear covering "
+    "the body, and anything where a fin or the tail is cut off."
+)
+
+
+def norm_sci(name):
+    """Genus + species, lowercased. Enough to catch a photo taken from the
+    wrong species' page, while tolerating subspecies and authorship suffixes."""
+    parts = re.sub(r"[^A-Za-z ]", " ", str(name or "")).split()
+    return " ".join(parts[:2]).lower()
+
+
+def cmd_verify(args):
+    data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
+    picks = load_picks()
+    species = {s["id"]: s for s in load_species()}
+    chosen = {sid: v for sid, v in picks.items()
+              if v.get("verdict") in ("pick", "unsure") and v.get("index") is not None}
+
+    problems, warnings = [], []
+    bad = lambda sid, msg: problems.append(f"{sid}: {msg}")
+    warn = lambda sid, msg: warnings.append(f"{sid}: {msg}")
+
+    print(f"Verifying {len(chosen)} picked photos.\n")
+
+    # --- 1. coverage --------------------------------------------------------
+    for sid in species:
+        if sid not in picks:
+            warn(sid, "never decided - will ship with no photo")
+    for sid, v in picks.items():
+        if not v.get("verdict"):
+            warn(sid, "has a remark but no verdict")
+
+    # --- 2. the same photo used twice ---------------------------------------
+    # Easy to do when browsing quickly, and it means one of the two cards shows
+    # the wrong fish - the exact failure this app must not have.
+    seen = {}
+    for sid, v in chosen.items():
+        rec = data.get(sid)
+        if not rec or v["index"] >= len(rec["candidates"]):
+            bad(sid, f"pick #{v['index']} no longer exists - re-run review")
+            continue
+        url = rec["candidates"][v["index"]]["url"].split("?")[0]
+        if url in seen:
+            bad(sid, f"same photo as {seen[url]} - one of them is the wrong fish")
+        seen[url] = sid
+
+    # --- 3. licence, attribution, resolution --------------------------------
+    for sid, v in chosen.items():
+        rec = data.get(sid)
+        if not rec or v["index"] >= len(rec["candidates"]):
+            continue
+        c = rec["candidates"][v["index"]]
+        if c["licence"] not in OK_LICENCES:
+            bad(sid, f"licence {c['licence']!r} is not one we may ship")
+        if c["licence"] in ("cc-by", "cc-by-sa") and not (c["credit"] or "").strip():
+            bad(sid, f"{LICENCE_LABEL[c['licence']]} requires attribution, credit is empty")
+        if c["width"] and max(c["width"], c["height"]) < 800:
+            warn(sid, f"only {c['width']}x{c['height']} - will look soft on a card")
+        if c["width"] and c["height"] and c["width"] / c["height"] < 0.8:
+            warn(sid, f"portrait {c['width']}x{c['height']} - often a held-up or cropped fish")
+
+    # --- 4. does the observation actually say this species? -----------------
+    # The strongest identity check available without a model: ask iNaturalist
+    # what the observation is identified as, and compare. Catches a photo taken
+    # from the wrong species' page, which no amount of looking would reveal if
+    # the two fish resemble each other.
+    if not args.no_taxon:
+        print("Cross-checking each photo's observation against the species name...")
+        for sid, v in sorted(chosen.items()):
+            rec = data.get(sid)
+            if not rec or v["index"] >= len(rec["candidates"]):
+                continue
+            c = rec["candidates"][v["index"]]
+            m = re.search(r"/observations/(\d+)", c.get("page") or "")
+            if not m:
+                continue                       # a GBIF record; nothing to ask
+            obs = get_json(f"https://api.inaturalist.org/v1/observations/{m.group(1)}")
+            time.sleep(REQUEST_PAUSE)
+            got = ((obs or {}).get("results") or [{}])[0].get("taxon", {}).get("name", "")
+            want = species.get(sid, {}).get("scientific", "")
+            if not got or norm_sci(got) == norm_sci(want):
+                continue
+            same_genus = norm_sci(got).split(" ")[:1] == norm_sci(want).split(" ")[:1]
+            (warn if same_genus else bad)(
+                sid, f"photo is identified as {got!r}, not {want!r}"
+                     + (" (same genus)" if same_genus else ""))
+
+    # --- 5. the model's opinion ---------------------------------------------
+    if args.gemini:
+        if gemini_verify(data, chosen, species, bad, warn):
+            return 1
+
+    # --- report -------------------------------------------------------------
+    print()
+    if problems:
+        print(f"PROBLEMS ({len(problems)}) - worth fixing before building:")
+        for p in problems:
+            print(f"  ! {p}")
+    if warnings:
+        print(f"\nWorth a look ({len(warnings)}):")
+        for w in warnings:
+            print(f"  - {w}")
+    if not problems and not warnings:
+        print("Nothing to report. Ready to build.")
+    else:
+        print(f"\n{len(problems)} problems, {len(warnings)} warnings.")
+
+    notes = {sid: v["note"] for sid, v in picks.items() if (v.get("note") or "").strip()}
+    if notes:
+        print(f"\nYour remarks ({len(notes)}):")
+        for sid, n in sorted(notes.items()):
+            print(f"  {sid}: {n}")
+    return 0
+
+
+def gemini_verify(data, chosen, species, bad, warn):
+    key = read_key("GEMINI_API_KEY")
+    if not key:
+        print("No GEMINI_API_KEY found.")
+        print()
+        print("Put it in .dev.vars in the project root (already gitignored):")
+        print("    GEMINI_API_KEY=your-key-here")
+        print()
+        print("Or set it for this shell only:")
+        print('    $env:GEMINI_API_KEY = "your-key-here"')
+        return 1
+
+    import base64
+    model = read_key("GEMINI_MODEL") or "gemini-2.5-flash"
+    print(f"\nAsking {model} about {len(chosen)} photos - identity, framing, single fish.\n")
+
+    for sid, v in sorted(chosen.items()):
+        rec = data.get(sid)
+        if not rec or v["index"] >= len(rec["candidates"]):
+            continue
+        c = rec["candidates"][v["index"]]
+        sp = species.get(sid, {})
+        try:
+            req = urllib.request.Request(c["url"], headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=45) as r:
+                blob = r.read()
+        except Exception as e:
+            warn(sid, f"could not download the picked photo to check it - {e}")
+            continue
+
+        prompt = (
+            f"This photo is meant to illustrate {sp.get('scientific','')} "
+            f"({sp.get('common','')}) in a fishing field guide.\n\n{GOOD_PHOTO}\n\n"
+            "Answer as JSON only:\n"
+            '{"looks_like_species": true/false/null, "identity_note": "<=10 words", '
+            '"single_fish": true/false, "side_on": true/false, "whole_fish": true/false, '
+            '"setting": "in water"|"held"|"flat surface"|"market pile"|"other", '
+            '"quality": 0..1, "why": "<=12 words"}\n'
+            "Use null for looks_like_species only if you genuinely cannot tell."
+        )
+        body = json.dumps({
+            "contents": [{"parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "image/jpeg",
+                                 "data": base64.b64encode(blob).decode()}},
+            ]}],
+            "generationConfig": {"responseMimeType": "application/json"},
+        }).encode()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            rq = urllib.request.Request(url, data=body, headers={
+                "Content-Type": "application/json", "x-goog-api-key": key})
+            with urllib.request.urlopen(rq, timeout=90) as r:
+                out = json.load(r)
+            got = json.loads(out["candidates"][0]["content"]["parts"][0]["text"])
+        except Exception as e:
+            warn(sid, f"could not be checked by the model - {e}")
+            continue
+
+        c["verify"] = got
+        flags = []
+        # Identity is the only one that makes a card actively lie, so it is the
+        # only one raised as a problem rather than a warning.
+        if got.get("looks_like_species") is False:
+            bad(sid, f"model says this is not {sp.get('scientific','')} "
+                     f"- {got.get('identity_note','')}")
+        if got.get("single_fish") is False:
+            flags.append("more than one fish")
+        if got.get("whole_fish") is False:
+            flags.append("fish is cut off")
+        if got.get("side_on") is False:
+            flags.append("not side-on")
+        if got.get("setting") == "market pile":
+            flags.append("market pile")
+        q = got.get("quality")
+        if isinstance(q, (int, float)) and q < 0.45:
+            flags.append(f"quality {q:.2f}")
+        if flags:
+            warn(sid, ", ".join(flags) + f" - {got.get('why','')}")
+        print(f"  {sid:34} {'OK' if not flags else 'HM'}  {q if isinstance(q,(int,float)) else 0:.2f}"
+              f"  {got.get('setting','?'):12} {got.get('why','') if flags else ''}")
+        time.sleep(0.5)
+
+    CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
+    return 0
+
+
+# --------------------------------------------------------------------------
 # stage 3 — build
 # --------------------------------------------------------------------------
 
@@ -1000,6 +1223,13 @@ def main():
     m = sub.add_parser("more", help="dig deeper for species flagged 'give me more'")
     m.add_argument("--only", nargs="*", help="species ids, default whatever is flagged")
     m.set_defaults(fn=cmd_more)
+
+    vy = sub.add_parser("verify", help="check the photos you picked before building")
+    vy.add_argument("--gemini", action="store_true",
+                    help="also ask a vision model about identity and framing")
+    vy.add_argument("--no-taxon", action="store_true",
+                    help="skip the iNaturalist identity cross-check (offline)")
+    vy.set_defaults(fn=cmd_verify)
 
     b = sub.add_parser("build", help="background removal + manifest")
     b.add_argument("--refresh", action="store_true")
