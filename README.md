@@ -635,10 +635,26 @@ python tools/fish_photos.py status    # what is done, what is missing
 gitignored, and the same file wrangler reads for local Worker runs, so the key
 has one home rather than one per tool.
 
-`review` serves the contact sheet on `127.0.0.1:8123` and writes each choice
-to `picks.json` the moment you click it. It used to end in a copy-and-paste,
-which over 68 species is a step too many and a chance to lose the lot to a
-mistyped paste.
+`review` serves the contact sheet on `127.0.0.1:8123` and writes every decision
+to `picks.json` the moment you make it. Each species takes one of five states:
+
+| | |
+|---|---|
+| **a chosen photo** | click it — click again to unchoose |
+| **No good ones** | ships the honest "photo not yet available" card |
+| **Give me more** | `python tools/fish_photos.py more` digs deeper for these |
+| **Unsure** | `python tools/fish_photos.py score --unsure` asks Gemini; may still name a favourite |
+| **nothing** | undecided, comes back next time |
+
+Every species also has a **remarks** box — free text, saved on a pause, for
+anything the verdict can't carry: what's wrong with the candidates, what to
+look for instead, a name that needs correcting. Remarks show in `status` and
+when `build` runs, and they survive clearing a pick, because changing your mind
+about a photo isn't retracting what you said about it.
+
+Thumbnails are **uncropped** (`object-fit: contain`) with the pixel dimensions
+and a full-size link under each. Cover-cropping hid exactly the tails and fins
+you need to judge a fish by.
 
 **What it decides and what it doesn't.** Licensing it decides completely: only
 CC0, CC BY and CC BY-SA are ever downloaded, and the credit the licence
