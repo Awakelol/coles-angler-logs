@@ -180,6 +180,23 @@ def static_checks():
     check("no precached module has been deleted", not stale, ", ".join(stale))
 
 
+async def ev_pile(page):
+    """Measure the pile: how many, are they sticky, do they step, are they
+    different colours."""
+    return await page.eval("""
+        const fs = [...document.querySelectorAll('.folder')];
+        const tops = fs.map(f => parseFloat(getComputedStyle(f).top));
+        const bgs = new Set(fs.map(f => getComputedStyle(f).backgroundColor));
+        return {
+            folders: fs.length,
+            cards: document.querySelectorAll('.species-card').length,
+            sticky: fs.every(f => getComputedStyle(f).position === 'sticky'),
+            stepped: tops.every((t, i) => i === 0 || t > tops[i - 1]),
+            distinctColours: bgs.size,
+        };
+    """)
+
+
 async def main():
     if not CHROME:
         sys.exit("No Chrome or Edge found.")
@@ -744,6 +761,13 @@ async def main():
             grouped = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
+                // Phone width opens Info as a pile of folders. "Everything" is
+                // the one at the bottom of it, and it carries the ALL sentinel
+                // rather than an empty string — empty means "nothing open".
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
                 return { heads, cards: document.querySelectorAll('.zone-card').length };
@@ -1506,6 +1530,8 @@ async def main():
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
                 const box = document.getElementById('infoSearch');
 
@@ -1522,6 +1548,8 @@ async def main():
 
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
                     backTo: document.querySelector('[data-tab][aria-selected="true"]')
                             ?.dataset.tab,
@@ -1893,6 +1921,28 @@ async def main():
                 return { rows: document.querySelectorAll(".set-row").length,
                          back: !!document.querySelector(".set-back") };
             """)
+            # The refresh button. It exists for the exact case Gabriel hit:
+            # pushed a change, still looking at the old one.
+            await page.goto(f"{BASE}/index.html#/settings?p=about")
+            await page.wait_for("document.querySelector('#refreshBtn')", label="about panel")
+            refresh = await page.eval("""
+                const up = await import("./js/updates.js");
+                const btn = document.getElementById("refreshBtn");
+                // Offline it must REFUSE: with no network the cache is the app,
+                // and clearing it leaves a blank screen on the next load.
+                const real = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+                Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
+                const offline = await up.forceRefresh();
+                if (real) Object.defineProperty(Navigator.prototype, "onLine", real);
+                else delete navigator.onLine;
+                return { present: !!btn,
+                         nearCache: !!document.getElementById("buildInfo"),
+                         offlineRefused: offline.ok === false && offline.reason === "offline" };
+            """)
+            check("settings offers a refresh", refresh["present"] and refresh["nearCache"],
+                  str(refresh))
+            check("refresh refuses when offline", refresh["offlineRefused"], str(refresh))
+
             check("an unknown panel falls back to the index",
                   fallback["rows"] >= 6 and not fallback["back"], str(fallback))
 
@@ -2110,13 +2160,13 @@ async def main():
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
                 "identify": ("#/identify", "#takePhoto"),
-                "info-fishes": ("#/info", ".species-card"),
-                "info-gear": ("#/info?tab=gear", ".gear-card"),
-                "info-zones": ("#/info?tab=zones", ".zone-card"),
+                "info-fishes": ("#/info", ".folder, .species-card"),
+                "info-gear": ("#/info?tab=gear", ".folder, .gear-card"),
+                "info-zones": ("#/info?tab=zones", ".folder, .zone-card"),
                 "conditions": ("#/conditions", ".now-card__temp, .notice--error"),
                 "log": ("#/log", ".kpi__v, #authForm"),
-                "legacy-species": ("#/species", ".species-card"),
-                "legacy-tips": ("#/tips", ".tip-card"),
+                "legacy-species": ("#/species", ".folder, .species-card"),
+                "legacy-tips": ("#/tips", ".folder, .tip-card"),
                 "settings": ("#/settings", ".set-row"),
                 "settings-panel": ("#/settings?p=tides", "#saveTides"),
             }
@@ -2285,6 +2335,10 @@ async def main():
             # -------------------------------------------------- info page
             print("\nInfo page")
             await page.goto(f"{BASE}/index.html#/info")
+            # Phone width lands on the pile of folders. Open Everything so the
+            # rest of this block sees the cards it is about.
+            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
+            await page.eval("return document.querySelector('.folder--all').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
 
             tabs = await page.eval("""
@@ -2297,12 +2351,20 @@ async def main():
                     return false;
                 };
                 const btn = (id) => document.querySelector(`.bookmark[data-tab="${id}"]`);
+                // Each tab has its own pile and its own open folder, so
+                // switching tabs lands on that tab's pile — the cards are one
+                // press further in.
+                const openAll = async () => {
+                    document.querySelector('.folder--all')?.click();
+                    await new Promise(r => setTimeout(r, 350));
+                };
                 const seen = {};
 
                 seen.threeTabs = document.querySelectorAll('.bookmark').length;
                 seen.familyChipsOnFishes = !document.getElementById('familyFilters').hidden;
 
                 btn('gear').click();
+                await openAll();
                 seen.gear = await wait('.gear-card');
                 seen.gearCount = document.querySelectorAll('.gear-card').length;
                 // Family filters belong to Fishes only; a class that sets
@@ -2312,13 +2374,81 @@ async def main():
                 seen.hashFollowsTab = location.hash.includes('tab=gear');
 
                 btn('zones').click();
+                await openAll();
                 seen.zones = await wait('.zone-card');
                 seen.zoneCount = document.querySelectorAll('.zone-card').length;
 
                 btn('fishes').click();
+                await openAll();
                 seen.backToFishes = await wait('.species-card');
                 return seen;
             """)
+            # --- the pile of folders ----------------------------------------
+            await page.goto(f"{BASE}/index.html#/info")
+            await page.wait_for("document.querySelector('.folder--all')", label="pile")
+            await asyncio.sleep(0.6)
+
+            pile = await ev_pile(page)
+            check("info opens as a pile of folders",
+                  pile["folders"] >= 6 and not pile["cards"], str(pile))
+            # Sticky at stepped offsets is what makes it a pile rather than a
+            # list: each one parks lower than the last, leaving a strip of the
+            # one behind showing.
+            check("each folder parks lower than the last",
+                  pile["sticky"] and pile["stepped"], str(pile))
+            # Colour is the only thing telling them apart once piled.
+            check("the folders are colour-coded",
+                  pile["distinctColours"] >= 5, str(pile))
+
+            opened = await page.eval("""
+                const f = [...document.querySelectorAll(".folder")].find(x => x.dataset.folder !== "*");
+                const label = f.querySelector(".folder__k").textContent.trim();
+                f.click();
+                await new Promise(r => setTimeout(r, 600));
+                const head = document.querySelector(".folder-head");
+                return {
+                    label,
+                    headLabel: head?.querySelector(".folder-head__k")?.textContent.trim(),
+                    // The way out sits BESIDE the name of what you are in.
+                    hasX: !!head?.querySelector("[data-close-folder]"),
+                    cards: document.querySelectorAll(".species-card").length,
+                    pileGone: document.querySelectorAll(".folder").length === 0,
+                    // The header wears the folder’s colour, so the thing you
+                    // opened and the thing you are in are visibly the same.
+                    headTint: head?.getAttribute("style") || "",
+                };
+            """)
+            check("pressing a folder opens it",
+                  opened["cards"] > 0 and opened["pileGone"], str(opened))
+            check("the open folder says which one it is",
+                  opened["headLabel"] == opened["label"], str(opened))
+            check("the way out is beside the name",
+                  opened["hasX"], str(opened))
+            check("the header wears the folder colour",
+                  "--tint" in opened["headTint"], str(opened))
+
+            closed = await page.eval("""
+                document.querySelector("[data-close-folder]").click();
+                await new Promise(r => setTimeout(r, 600));
+                return { folders: document.querySelectorAll(".folder").length,
+                         cards: document.querySelectorAll(".species-card").length };
+            """)
+            check("the x goes back to the pile",
+                  closed["folders"] >= 6 and not closed["cards"], str(closed))
+
+            # A query is a request to SEE matches. Hiding them behind a folder
+            # you have to open first would make the search box a decoration.
+            searched = await page.eval("""
+                const box = document.getElementById("infoSearch");
+                box.value = "tuna";
+                box.dispatchEvent(new Event("input", { bubbles: true }));
+                await new Promise(r => setTimeout(r, 700));
+                return { cards: document.querySelectorAll(".species-card").length,
+                         folders: document.querySelectorAll(".folder").length };
+            """)
+            check("searching goes straight to the matches",
+                  searched["cards"] > 0 and not searched["folders"], str(searched))
+
             check("info offers three tabs", tabs["threeTabs"] == 3, str(tabs))
             check("gear tab lists gear", tabs["gear"] and tabs["gearCount"] >= 20, str(tabs))
             check("zones tab lists waters", tabs["zones"] and tabs["zoneCount"] >= 18, str(tabs))
@@ -2333,6 +2463,10 @@ async def main():
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
                 await new Promise(r => setTimeout(r, 500));
                 const before = document.querySelector('.sheet__head h2').textContent;
@@ -2378,6 +2512,8 @@ async def main():
             gear_sheet = await page.eval("""
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
                 await new Promise(r => setTimeout(r, 500));
                 const s = document.querySelector('.sheet');
@@ -2417,6 +2553,8 @@ async def main():
                 document.body.classList.remove('is-sheet-open');
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
                 return { heads, cards: document.querySelectorAll('.tip-card').length };
@@ -2428,6 +2566,8 @@ async def main():
             cross = await page.eval("""
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
                 i.value = 'baitcasting';
                 i.dispatchEvent(new Event('input', {bubbles:true}));
@@ -2447,6 +2587,8 @@ async def main():
             legacy = await page.eval("""
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
                          sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
             """)
@@ -2554,6 +2696,8 @@ async def main():
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
             await page.goto(f"{BASE}/index.html#/info")
+            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
+            await page.eval("return document.querySelector('.folder--all').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
@@ -3182,6 +3326,8 @@ async def main():
             print()
             print("Sheet")
             await page.goto(f"{BASE}/index.html#/info")
+            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
+            await page.eval("return document.querySelector('.folder--all').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -4363,6 +4509,8 @@ async def main():
                 const rolled = bar.classList.contains('is-rolled');
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 800));
+                document.querySelector('.folder--all')?.click();
+                await new Promise(r => setTimeout(r, 350));
                 return { rolled, offMap: bar.classList.contains('is-rolled'),
                          tabbable: [...bar.querySelectorAll('a')]
                              .every(a => !a.hasAttribute('tabindex')) };

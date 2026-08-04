@@ -244,12 +244,6 @@ export function render(ctx) {
             </button>
           </div>
 
-          <!-- Folders on a phone, chips on a desktop. Same state, same click
-               handler, one shown at a time by a media query — the folder
-               metaphor is a phone answer, and a wide window has room to show
-               every subcategory at once, which is what chips are for. -->
-          <div class="folders" id="infoFolders"></div>
-
           <div class="chips" id="familyFilters">
             <button class="chip" data-family="" aria-pressed="true">All</button>
             ${groups
@@ -301,23 +295,63 @@ function foldersFor(tab, ctx, species, zones) {
   }));
 }
 
-function foldersHtml(items, active, allCount) {
-  return (
-    `<button class="folder${active ? '' : ' is-open'}" data-folder="" aria-pressed="${!active}">
-       <span class="folder__k">All</span>
-       <span class="folder__n">${allCount}</span>
-     </button>` +
-    items
-      .map(
-        (f) => `
-      <button class="folder${f.key === active ? ' is-open' : ''}" data-folder="${esc(f.key)}"
-              aria-pressed="${f.key === active}">
-        <span class="folder__k">${esc(f.label)}</span>
-        <span class="folder__n">${f.count}</span>
-      </button>`
-      )
-      .join('')
-  );
+// Six tints, cycled. Colour is the only thing telling one folder from another
+// once they are piled and all you can see is a strip, so it has to be a real
+// difference rather than a shade — but tints rather than the reference's
+// saturated blocks, because dark text has to stay readable on all six.
+const FOLDER_TINTS = 6;
+
+/** The pile, opened onto everything rather than onto one folder. */
+const ALL = '*';
+
+/**
+ * The pile.
+ *
+ * Each folder is `position: sticky` at a slightly lower offset than the one
+ * before, so scrolling parks them one on top of the next and leaves a strip of
+ * each showing — a wheel you turn by scrolling, with a first and a last. No
+ * JS, no wrap-around, and the scrollbar tells you where you are in it.
+ */
+function folderStackHtml(items, allCount, allLabel) {
+  return `
+    <div class="folder-stack" id="folderStack">
+      <button class="folder folder--all" data-folder="${ALL}" style="--i:0">
+        <span class="folder__k">${esc(allLabel)}</span>
+        <span class="folder__n">${allCount}</span>
+      </button>
+      ${items
+        .map(
+          (f, i) => `
+        <button class="folder" data-folder="${esc(f.key)}"
+                style="--i:${i + 1};--tint:${i % FOLDER_TINTS}">
+          <span class="folder__k">${esc(f.label)}</span>
+          <span class="folder__n">${f.count}</span>
+        </button>`
+        )
+        .join('')}
+    </div>`;
+}
+
+/**
+ * The open folder: the same shape, with its bill grown to hold the name and the
+ * way out. Closed, the bill is a blank tab you grab; opened, it is the label
+ * and the x — so the thing you pressed is the thing that now says where you are
+ * and how to leave.
+ */
+function folderHeadHtml(label, count, tint) {
+  return `
+    <div class="folder-head" ${tint == null ? '' : `style="--tint:${tint}"`}>
+      <div class="folder-head__bill">
+        <p class="folder-head__k">${esc(label)}</p>
+        <button class="folder-head__x" data-close-folder aria-label="Back to all folders">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+                  d="M6 6l12 12M18 6L6 18"/>
+          </svg>
+        </button>
+      </div>
+      <p class="folder-head__n">${esc(count)}</p>
+    </div>`;
 }
 
 export function mount(root, ctx) {
@@ -329,17 +363,20 @@ export function mount(root, ctx) {
   const tabBar = root.querySelector('#infoTabs');
   const filterBar = root.querySelector('#familyFilters');
 
-  const folderBar = root.querySelector('#infoFolders');
-
   let tab = isTab(ctx.params.get('tab')) ? ctx.params.get('tab') : 'fishes';
   let query = '';
   // One open folder PER TAB, not one shared. Switching to Gear and back should
   // return you to the family you were reading, not to everything.
+  //
+  // THREE STATES, not two. '' is the pile with nothing open; ALL is the pile
+  // opened onto everything; anything else is one folder. Using '' for both
+  // "nothing open" and "browsing everything" meant pressing Everything set the
+  // state it was already in and simply redrew the pile.
   const open = { fishes: ctx.params.get('family') || '', gear: '', zones: '' };
 
   if (open.fishes) {
     for (const b of filterBar.querySelectorAll('[data-family]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.family === open.fishes));
+      b.setAttribute('aria-pressed', String((b.dataset.family || ALL) === (open.fishes || ALL)));
     }
   }
 
@@ -356,7 +393,7 @@ export function mount(root, ctx) {
   function syncHash() {
     const params = new URLSearchParams();
     params.set('tab', tab);
-    if (tab === 'fishes' && open.fishes) params.set('family', open.fishes);
+    if (tab === 'fishes' && open.fishes && open.fishes !== ALL) params.set('family', open.fishes);
     const next = `#/info?${params}`;
     if (location.hash !== next) history.replaceState(null, '', next);
   }
@@ -407,8 +444,20 @@ export function mount(root, ctx) {
     releasePhoto = mountIdentifyPanel(results);
   }
 
+  /** The open folder's header, or nothing when browsing everything. */
+  const noun = () => (tab === 'gear' ? 'items' : tab === 'zones' ? 'waters' : 'species');
+
+  /** Exactly one folder open, as opposed to Everything or the pile. */
+  const soloFolder = () => phone() && open[tab] && open[tab] !== ALL;
+
+  function headHtml(count) {
+    if (!phone() || !open[tab]) return '';
+    const meta = openFolderMeta();
+    return meta ? folderHeadHtml(meta.label, `${count} ${noun()}`, meta.tint) : '';
+  }
+
   function drawFishes() {
-    const shown = species.filter((s) => (!open.fishes || s.family === open.fishes) && matchesSpecies(s, query));
+    const shown = species.filter((s) => (!open.fishes || open.fishes === ALL || s.family === open.fishes) && matchesSpecies(s, query));
     const trivia = triviaFor(ctx.regionId, 'fishes').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -469,11 +518,12 @@ export function mount(root, ctx) {
     }
 
     results.innerHTML =
+      headHtml(shown.length) +
       elsewhereHtml() +
       [...groups.entries()]
         .map(
           ([fam, items]) => `
-          <div class="section-head" style="margin-top:8px">
+          <div class="section-head" style="margin-top:8px" ${soloFolder() ? 'hidden' : ''}>
             <h2>${esc(items[0].familyCommon || fam)}</h2>
             <p><em>${esc(fam)}</em> &middot; ${items.length} species</p>
           </div>
@@ -493,7 +543,7 @@ export function mount(root, ctx) {
   }
 
   function drawGear() {
-    const shown = GEAR.filter((g) => (!open.gear || g.group === open.gear) && matchesGear(g, query));
+    const shown = GEAR.filter((g) => (!open.gear || open.gear === ALL || g.group === open.gear) && matchesGear(g, query));
     const trivia = triviaFor(ctx.regionId, 'gear').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -503,11 +553,12 @@ export function mount(root, ctx) {
     }
 
     results.innerHTML =
+      headHtml(shown.length) +
       elsewhereHtml() +
       gearByGroup(shown)
         .map(
           (g) => `
-          <div class="section-head" style="margin-top:8px">
+          <div class="section-head" style="margin-top:8px" ${soloFolder() ? 'hidden' : ''}>
             <h2>${esc(g.name)}</h2>
             <p>${esc(g.blurb)}</p>
           </div>
@@ -527,7 +578,7 @@ export function mount(root, ctx) {
   }
 
   function drawZones() {
-    const shown = zones.filter((z) => (!open.zones || z.water === open.zones) && matchesZone(z, query));
+    const shown = zones.filter((z) => (!open.zones || open.zones === ALL || z.water === open.zones) && matchesZone(z, query));
     const trivia = triviaFor(ctx.regionId, 'zones').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -546,11 +597,12 @@ export function mount(root, ctx) {
       .filter((g) => g.zones.length);
 
     results.innerHTML =
+      headHtml(shown.length) +
       elsewhereHtml() +
       groups
         .map(
           (g) => `
-          <div class="section-head" style="margin-top:8px">
+          <div class="section-head" style="margin-top:8px" ${soloFolder() ? 'hidden' : ''}>
             <h2>${esc(g.water)}</h2>
             <p>${g.zones.length} spot${g.zones.length === 1 ? '' : 's'} &middot; tap for tactics</p>
           </div>
@@ -571,6 +623,25 @@ export function mount(root, ctx) {
     }
   }
 
+  const phone = () => matchMedia('(max-width: 899px)').matches;
+
+  /** The pile, with nothing open. */
+  function drawFolderStack() {
+    const items = foldersFor(tab, ctx, species, zones);
+    const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
+    const noun = tab === 'gear' ? 'items' : tab === 'zones' ? 'waters' : 'species';
+    results.innerHTML = folderStackHtml(items, `${all} ${noun}`, 'Everything');
+  }
+
+  /** The label and colour of whatever is open, so its header can match its card. */
+  function openFolderMeta() {
+    if (open[tab] === ALL) return { label: 'Everything', tint: null };
+    const items = foldersFor(tab, ctx, species, zones);
+    const i = items.findIndex((f) => f.key === open[tab]);
+    if (i < 0) return null;
+    return { label: items[i].label, tint: i % FOLDER_TINTS };
+  }
+
   function draw() {
     const photo = tab === PHOTO;
 
@@ -579,17 +650,6 @@ export function mount(root, ctx) {
     // empty row, and worse, took away the obvious way out — typing a name is
     // how you leave photo mode, which only works if the box is still there.
     filterBar.hidden = photo || tab !== 'fishes';
-
-    // Rebuilt rather than pre-rendered: the folders belong to the tab, and
-    // every tab has a different set of them.
-    if (folderBar) {
-      folderBar.hidden = photo;
-      if (!photo) {
-        const items = foldersFor(tab, ctx, species, zones);
-        const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
-        folderBar.innerHTML = foldersHtml(items, open[tab] || '', all);
-      }
-    }
     for (const b of tabBar.querySelectorAll('[data-tab]')) {
       b.setAttribute('aria-selected', String(!photo && b.dataset.tab === tab));
     }
@@ -600,6 +660,15 @@ export function mount(root, ctx) {
     if (!photo && releasePhoto) {
       releasePhoto();
       releasePhoto = null;
+    }
+
+    // The stack IS the browse surface on a phone: with nothing open you get
+    // the pile, not a list. Searching bypasses it — a query is a request to
+    // see matches, and hiding them behind a folder you have to open first
+    // would make the search box a decoration.
+    if (!photo && phone() && !open[tab] && !query) {
+      drawFolderStack();
+      return;
     }
 
     if (photo) drawPhoto();
@@ -673,7 +742,7 @@ export function mount(root, ctx) {
   filterBar.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-family]');
     if (!btn) return;
-    open.fishes = btn.dataset.family;
+    open.fishes = btn.dataset.family || ALL;
     for (const b of filterBar.querySelectorAll('[data-family]')) {
       b.setAttribute('aria-pressed', String(b === btn));
     }
@@ -681,20 +750,35 @@ export function mount(root, ctx) {
     draw();
   });
 
-  // Pressing the open folder again closes it, which is the only way back to
-  // "all" without hunting for a separate reset.
-  folderBar?.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-folder]');
-    if (!btn) return;
-    const key = btn.dataset.folder;
-    open[tab] = open[tab] === key ? '' : key;
-    if (tab === 'fishes') {
-      for (const b of filterBar.querySelectorAll('[data-family]')) {
-        b.setAttribute('aria-pressed', String(b.dataset.family === open.fishes));
+  // Delegated on the results pane, because the stack and the open folder's
+  // header are both drawn into it and replaced on every redraw.
+  results.addEventListener('click', (e) => {
+    const folder = e.target.closest('[data-folder]');
+    if (folder) {
+      open[tab] = folder.dataset.folder;
+      if (tab === 'fishes') {
+        for (const b of filterBar.querySelectorAll('[data-family]')) {
+          b.setAttribute('aria-pressed', String((b.dataset.family || ALL) === (open.fishes || ALL)));
+        }
       }
+      // Straight to the top: the folder you just opened is above the fold, and
+      // landing mid-list reads as nothing having happened.
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      syncHash();
+      draw();
+      return;
     }
-    syncHash();
-    draw();
+
+    if (e.target.closest('[data-close-folder]')) {
+      open[tab] = '';
+      if (tab === 'fishes') {
+        for (const b of filterBar.querySelectorAll('[data-family]')) {
+          b.setAttribute('aria-pressed', String(!b.dataset.family));
+        }
+      }
+      syncHash();
+      draw();
+    }
   });
 
   draw();

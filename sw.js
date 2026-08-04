@@ -15,7 +15,7 @@
 // CACHE_VERSION now only needs bumping to force-evict old assets.
 // ---------------------------------------------------------------------------
 
-const CACHE_VERSION = 'v27';
+const CACHE_VERSION = 'v28';
 const CACHE_NAME = `angler-log-${CACHE_VERSION}`;
 
 const SHELL = [
@@ -67,6 +67,7 @@ const SHELL = [
   './vendor/leaflet/leaflet.css',
   './js/pages/conditions.js',
   './js/pages/log.js',
+  './js/auth-ui.js',
   './js/pages/account.js',
   './js/pages/settings.js',
   './icons/icon-192.png',
@@ -90,6 +91,14 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+// Settings' refresh button can ask a waiting worker to take over now rather
+// than after every tab has closed. install() already calls skipWaiting(), so
+// this is a second door to the same room — cheap, and it means the button
+// still works if that ever changes.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // Big, rarely-changing binaries are worth serving straight from cache.

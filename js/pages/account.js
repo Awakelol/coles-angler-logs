@@ -22,6 +22,7 @@ import { currentUser, signOut, linkedProviders, cloudConfigured } from '../auth.
 import { store, computeStats, profiles, shownName } from '../store.js';
 import { prepareAvatar } from '../media.js';
 import { esc, toast } from '../ui.js';
+import { authCardHtml, mountAuthCard, authHeading } from '../auth-ui.js';
 
 const PROVIDER_LABEL = {
   local: 'Username & password',
@@ -66,15 +67,18 @@ export function render(ctx) {
               <h1 class="acct-name">Not signed in</h1>
               <p class="acct-sub">Your catches and spots live on this device</p>
             </div>
+            <a class="icon-btn acct-cog" href="#/settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor"><g><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(45 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(90 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(135 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(180 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(225 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(270 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(315 12 12)"/></g><path fill-rule="evenodd" d="M12 5.4a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2Zm0 3.9a2.7 2.7 0 1 1 0 5.4 2.7 2.7 0 0 1 0-5.4Z"/></svg></a>
           </div>
-          <div class="card">
-            <p class="card__body">
-              An account keeps your log yours on a shared phone, and carries it to
-              another device. Nothing is lost by waiting &mdash; anything you record
-              now is adopted by the first account you make.
-            </p>
-            <a class="btn btn--primary btn--block" href="#/log">Sign in or create an account</a>
-          </div>
+          <p class="card__body" style="margin-bottom:16px">
+            An account keeps your log yours on a shared phone, and carries it to
+            another device. Nothing is lost by waiting &mdash; anything you record
+            now is adopted by the first account you make.
+          </p>
+
+          <!-- The form itself, not a link to it. This is the screen ABOUT your
+               account; sending someone to the catch log to get one made the two
+               screens that exist for this the two that could not do it. -->
+          ${authCardHtml()}
         </div>
       </section>`;
   }
@@ -103,6 +107,11 @@ export function render(ctx) {
             <p class="acct-handle">@${esc(user.username)}</p>
             <p class="acct-sub">${user.syncs ? 'Synced to the cloud' : 'On this device only'}</p>
           </div>
+
+          <!-- The cog lives here now, not in the top bar. It was on every
+               screen, which put a link to configuration in front of someone
+               looking at a fish. This is the screen it belongs to. -->
+          <a class="icon-btn acct-cog" href="#/settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor"><g><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(45 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(90 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(135 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(180 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(225 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(270 12 12)"/><rect x="10.7" y="1.7" width="2.6" height="4.6" rx="1.1" transform="rotate(315 12 12)"/></g><path fill-rule="evenodd" d="M12 5.4a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2Zm0 3.9a2.7 2.7 0 1 1 0 5.4 2.7 2.7 0 0 1 0-5.4Z"/></svg></a>
         </div>
 
         <div class="acct-stats" id="acctStats">
@@ -207,13 +216,19 @@ export function render(ctx) {
 export async function mount(root, ctx) {
   const user = currentUser();
 
+  // Signed out, the whole screen is the sign-in card. No guest button: looking
+  // around without an account is something you choose on the way to the log,
+  // not on the screen about your account.
+  if (!user) {
+    mountAuthCard(root, { onDone: () => ctx.navigate('/account'), allowGuest: false });
+    return;
+  }
+
   root.querySelector('#acctSignOut')?.addEventListener('click', async () => {
     await signOut();
     toast('Signed out');
     location.hash = '#/';
   });
-
-  if (!user) return;
 
   const fill = root.querySelector('#avatarFill');
   const nameEl = root.querySelector('#acctName');

@@ -20,9 +20,20 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.5.0';
+export const APP_VERSION = '3.6.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.6.0',
+    date: '2026-08-05',
+    title: 'Folders you can flip through',
+    changes: [
+      'Info opens as a pile of colour-coded folders — scroll through, tap to open, × to come back.',
+      'Sign in from the Account screen or Settings, without going to the log first.',
+      'A Refresh button in Settings, for when the app is showing you an old copy of itself.',
+      'The settings cog moved to Account, off every other screen.',
+    ],
+  },
   {
     version: '3.5.0',
     date: '2026-08-05',

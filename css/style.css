@@ -2161,57 +2161,143 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* --- info: subcategories as folders -------------------------------------- */
+/* --- info: subcategories as a pile of folders ---------------------------- */
 /*
-   Phone only. A wide window has room to show every subcategory at once, which
-   is what the chips are for; a folder is a phone answer to a phone problem —
-   twenty-odd families do not fit on one line, and a wrapping row of chips
-   turns into a wall of text with no shape to it.
+   Phone only. A wide window has room for every subcategory at once, which is
+   what the chips are for; a pile is a phone answer to a phone problem.
 
-   The silhouette is a clip-path, not a border plus a pseudo-element tab. Two
-   shapes meeting is two edges to line up and a seam that shows at every zoom
-   level; one polygon has neither.
+   THE PILE IS `position: sticky`, NOT A TRANSFORM. Each folder parks a little
+   lower than the one before, so scrolling walks them one on top of the next and
+   leaves a strip of each showing. No JS, no wrap-around — it has a first and a
+   last, the scrollbar says where you are in it, and a screen reader gets a
+   plain list of buttons. Faking the same effect with transforms would have
+   meant owning the scroll, and owning the scroll on a touch device means
+   fighting momentum you cannot feel from a desktop.
 */
-.folders { display: none; }
-
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
 
-  .folders {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 9px;
+  .folder-stack {
+    display: flex; flex-direction: column;
+    /* Room under the last one so it can reach its own sticky offset — without
+       it the bottom of the pile never parks and the last folder feels stuck. */
+    padding-bottom: 46vh;
   }
 
   .folder {
-    position: relative;
-    display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
-    min-height: 62px;
-    padding: 22px 12px 11px;
-    border: 0;
-    background: var(--sand-lt);
+    position: sticky;
+    /* Each one lands 13px below the last, which is the strip you see of the
+       folders already behind it. */
+    top: calc(var(--topbar-h, 68px) + 10px + var(--i) * 12px);
+    z-index: calc(var(--i) + 1);
+
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    /* Tall enough to read as a card, short enough that four or five are on
+       screen at once — a pile you cannot see the shape of is just a list. */
+    min-height: 86px;
+    margin-bottom: 9px;
+    /* Top padding clears the bill. */
+    padding: 30px 18px 14px;
+    border: 0; border-radius: 18px;
+    /* THE BILL. One polygon rather than a tab drawn as a separate element:
+       two shapes meeting is two edges to line up and a seam that shows at
+       every zoom level. The corners stay rounded because border-radius is
+       applied before the clip. */
+    clip-path: polygon(0 0, 34% 0, 40% 15px, 100% 15px, 100% 100%, 0 100%);
+    background: var(--folder-bg, var(--sand-lt));
     color: var(--ink);
     font-family: inherit;
     text-align: left;
     cursor: pointer;
-    /* Tab on the left, body below it. */
-    clip-path: polygon(0 0, 38% 0, 44% 11px, 100% 11px, 100% 100%, 0 100%);
-    border-radius: 12px;
-    transition: background-color .2s ease, transform .2s ease, color .2s ease;
+    /* Same reason as the header: a box-shadow is clipped away with the shape. */
+    filter: drop-shadow(0 -6px 12px rgb(22 24 29 / .09));
+    transition: transform .2s ease;
   }
-  .folder:active { transform: scale(.97); }
-  .folder.is-open { background: var(--blue); color: #fff; }
+  .folder:active { transform: scale(.985); }
+  .folder:last-child { margin-bottom: 0; }
 
   .folder__k {
-    font-size: 13.5px; font-weight: 800; line-height: 1.2;
-    letter-spacing: -.01em;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 19px; font-weight: 900; letter-spacing: -.02em; line-height: 1.15;
   }
   .folder__n {
-    font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    flex: none;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .03em;
     color: var(--ink-60);
   }
-  .folder.is-open .folder__n { color: rgb(255 255 255 / .82); }
+
+  /* Colour is the only thing telling one folder from another once they are
+     piled and all you can see is a strip. Tints rather than the reference's
+     saturated blocks, because the label has to stay dark and readable on all
+     six — a set of six saturated fills that all clear 4.5:1 against one text
+     colour is a much narrower palette than it sounds. */
+  .folder[style*="--tint:0"] { --folder-bg: #DDE5F6; }
+  .folder[style*="--tint:1"] { --folder-bg: #E9E4C6; }
+  .folder[style*="--tint:2"] { --folder-bg: #D6E7DC; }
+  .folder[style*="--tint:3"] { --folder-bg: #F6DED9; }
+  .folder[style*="--tint:4"] { --folder-bg: #E2DBEF; }
+  .folder[style*="--tint:5"] { --folder-bg: #CFE4EA; }
+
+  /* Everything sits at the bottom of the pile and reads as the ground the
+     others are stacked on. */
+  .folder--all { --folder-bg: var(--paper); }
+
+  /* --- the open folder ---------------------------------------------------- */
+
+  /* Open, the bill GROWS: wide enough and tall enough to carry the label and
+     the x. Same silhouette, same colour — the folder you pressed, opened. */
+  .folder-head {
+    position: sticky;
+    top: calc(var(--topbar-h, 68px) + 8px);
+    z-index: 6;
+    margin-bottom: 16px;
+    padding: 6px 18px 14px;
+    border-radius: 18px;
+    background: var(--folder-bg, var(--sand-lt));
+    clip-path: polygon(0 0, 76% 0, 82% 46px, 100% 46px, 100% 100%, 0 100%);
+    /* clip-path cuts the shadow off with the shape, so the lift comes from a
+       filter instead — it follows the silhouette. */
+    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .12));
+  }
+  .folder-head__bill {
+    display: flex; align-items: center; gap: 6px;
+    height: 46px;
+    /* Inside the bill, which the clip narrows to 76%. */
+    max-width: 74%;
+  }
+  .folder-head__k {
+    margin: 0; min-width: 0;
+    font-size: 19px; font-weight: 900; letter-spacing: -.02em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .folder-head__n {
+    margin: 6px 0 0;
+    font-size: 12.5px; font-weight: 800; color: var(--ink-60);
+  }
+
+  /* In the bill, beside the name — where it reads as "close THIS" rather than
+     as a general back button parked in a corner. */
+  .folder-head__x {
+    flex: none;
+    display: grid; place-items: center;
+    width: 32px; height: 32px;
+    border: 0; border-radius: 50%;
+    background: rgb(255 255 255 / .65); color: var(--ink);
+    cursor: pointer;
+    transition: background-color .2s ease, transform .2s ease;
+  }
+  .folder-head__x:hover { background: #fff; }
+  .folder-head__x:active { transform: scale(.9); }
+
+  .folder-head[style*="--tint:0"] { --folder-bg: #DDE5F6; }
+  .folder-head[style*="--tint:1"] { --folder-bg: #E9E4C6; }
+  .folder-head[style*="--tint:2"] { --folder-bg: #D6E7DC; }
+  .folder-head[style*="--tint:3"] { --folder-bg: #F6DED9; }
+  .folder-head[style*="--tint:4"] { --folder-bg: #E2DBEF; }
+  .folder-head[style*="--tint:5"] { --folder-bg: #CFE4EA; }
+}
+
+@media (max-width: 899px) and (prefers-reduced-motion: reduce) {
+  .folder { transition: none; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */
@@ -2344,6 +2430,9 @@ body.is-sheet-open {
 /* --- account ------------------------------------------------------------- */
 
 .acct-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+/* Pushed to the far end of the hero row rather than given a column of its own,
+   so it lands in the same corner whether or not there is an account. */
+.acct-cog { margin-left: auto; flex: none; }
 .acct-hero__who { min-width: 0; }
 .acct-avatar {
   flex: none;

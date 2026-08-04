@@ -13,6 +13,8 @@ import {
   currentUser, signOut, cloudConfigured, linkProvider, unlinkProvider, linkedProviders,
 } from '../auth.js';
 import { syncNow, lastSyncedAt } from '../sync.js';
+import { forceRefresh } from '../updates.js';
+import { authCardHtml, mountAuthCard } from '../auth-ui.js';
 import { esc, toast } from '../ui.js';
 
 
@@ -161,11 +163,11 @@ function panels() {
                  <p class="field__hint">
                    Catches are kept per account, so signing out hides yours rather than deleting them.
                  </p>`
-              : `<p class="card__body">Not signed in. The catch log asks you to sign in or create an account.</p>
-                 <a class="btn btn--sm btn--primary" href="#/log" style="align-self:flex-start">Go to the log</a>`
+              : `<p class="card__body">Not signed in.</p>`
           }
           ${user ? connectedHtml() : ''}
-        </div>`,
+        </div>
+        ${user ? '' : authCardHtml()}`,
     },
 
     {
@@ -327,6 +329,18 @@ function panels() {
           </p>
           <p class="field__hint" id="buildInfo">Checking what&rsquo;s cached&hellip;</p>
 
+          <!-- Deliberately next to the cache name rather than filed under
+               "Your data": the line above is the evidence that something is
+               stale, and this is what you do about it. -->
+          <div class="btn-row" style="margin-top:4px">
+            <button class="btn btn--sm" id="refreshBtn">Refresh the app</button>
+          </div>
+          <p class="field__hint">
+            Throws away the cached copy and loads the latest one. Your catches,
+            spots and photos are untouched &mdash; they are not in the cache.
+            Needs a connection: offline, the cache <em>is</em> the app.
+          </p>
+
           <!-- Only here once found. Deliberately rendered next to the thing
                you tapped to find it, rather than filed away under Appearance
                where the discovery and the switch would be strangers. -->
@@ -453,6 +467,10 @@ export function mount(root) {
     toast('Signed out');
     location.hash = '#/log';
   });
+
+  // Signed out, the account panel carries the sign-in card itself rather than
+  // a link to the log. Same reasoning as the Account screen.
+  mountAuthCard(root, { onDone: () => location.reload(), allowGuest: false });
 
   // --- connected accounts ---
   const linkStatus = root.querySelector('#linkStatus');
@@ -677,6 +695,30 @@ export function mount(root) {
       build.textContent = bits.join(' · ');
     })();
   }
+
+  // --- refresh ---
+  root.querySelector('#refreshBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Refreshing…';
+
+    const result = await forceRefresh();
+    if (result.ok) {
+      // No toast: the reload eats it. The button says what happened for the
+      // moment before the page goes.
+      btn.textContent = 'Reloading…';
+      location.reload();
+      return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Refresh the app';
+    toast(
+      result.reason === 'offline'
+        ? 'No connection — the cached copy is all there is right now'
+        : 'Could not clear the cache on this browser'
+    );
+  });
 
   // --- storage estimate ---
   // Guarded on the element, not just the API. Settings is one panel at a time

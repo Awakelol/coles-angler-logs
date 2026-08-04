@@ -579,6 +579,43 @@ Firestore's rules permit `users/{uid}/catches` and nothing else, so a profile
 document would be denied. The shape is ready — one row keyed by the same account
 id — but publishing that rule is a console action.
 
+### One sign-in card, three homes
+
+`js/auth-ui.js` owns the sign-in and sign-up form. It used to live inside
+`js/pages/log.js`, which meant the only way to get an account was to visit the
+catch log — so Account and Settings, the two screens *about* your account, both
+had to send you somewhere else to get one.
+
+Extracted, not copied. Three copies of an auth form is three places to fix a bug
+in, and the one that gets missed is the one someone is using.
+
+`mountAuthCard(root, { onDone, onSwap, allowGuest })`. The log passes `onSwap`
+because its heading lives in a band outside the card and has to follow it;
+Account and Settings let the card re-render in place. **Everything bound to an
+element the swap replaces lives in `wire()`**, which runs again after each swap —
+previously it ran once, because swapping re-navigated and remounted the whole
+route, so sharing the card without that would have left the second view inert.
+
+`allowGuest` is false on Account and Settings: choosing to look around without
+an account is something you do on the way to the log, not on the screen about
+your account.
+
+### The refresh button
+
+**Settings → Version & history → Refresh the app.** Asks for a fresh `sw.js`,
+then deletes every `angler-log-*` cache, then reloads.
+
+**Order matters:** `reg.update()` first, so a new worker is in charge before the
+caches go — clear them under the old worker and it simply fills them again from
+its own shell list, which looks like the button did nothing.
+
+**It refuses when offline,** and that is the important part: with no network the
+cache *is* the app, so deleting it leaves nothing to load and the next reload is
+a blank screen. A test holds that refusal.
+
+The cog moved out of the top bar and onto **Account**. It was on every screen,
+which put a link to configuration in front of someone looking at a fish.
+
 ### Guest mode
 
 **Not a fake account.** A catch saved without one gets `userId: null` and is
@@ -606,16 +643,42 @@ like this invites. An unknown `?p=` falls back to the index.
 
 ### Info folders
 
-Below 900px the subcategory chips become **folders** — families for fishes,
-`GEAR_GROUPS` for gear, bodies of water for zones. All three already exist in
-the data, so this names them rather than inventing a taxonomy. One open folder
-*per tab*, so switching to Gear and back returns you to the family you were
-reading. Pressing the open one closes it.
+Below 900px, Info opens as a **pile of folders** rather than a list — families
+for fishes, `GEAR_GROUPS` for gear, bodies of water for zones. All three already
+exist in the data, so this names them rather than inventing a taxonomy.
 
-The silhouette is a single `clip-path` polygon, not a border plus a pseudo-
-element tab: two shapes meeting is two edges to line up and a seam that shows at
-every zoom level. Above 900px the chips come back — a wide window has room to
-show every subcategory at once, which is what chips are for.
+**The pile is `position: sticky`, not a transform.** Each folder parks a little
+lower than the one before, so scrolling walks them one on top of the next and
+leaves a strip of each showing. No JS, no wrap-around: it has a first and a
+last, the scrollbar says where you are in it, and a screen reader gets a plain
+list of buttons. Faking it with transforms would have meant owning the scroll,
+and owning the scroll on a touch device means fighting momentum you cannot feel
+from a desktop.
+
+Each one carries a **bill** — the tab sticking out of the top-left — cut as a
+single `clip-path` polygon rather than a tab drawn as a separate element: two
+shapes meeting is two edges to line up and a seam that shows at every zoom
+level. It also means `box-shadow` is clipped away with the shape, so the lift
+comes from a `drop-shadow` filter, which follows the silhouette.
+
+Pressing one opens it and **the bill grows** — wide enough and tall enough to
+carry the folder's name and an `×`. Same shape, same colour: the folder you
+pressed, opened. The way out sits on the label rather than parked in a corner.
+
+**Three states, not two.** `''` is the pile with nothing open, `ALL` is the pile
+opened onto everything, and anything else is one folder. Using `''` for both
+"nothing open" and "browsing everything" meant pressing **Everything** set the
+state it was already in and simply redrew the pile.
+
+Colour is the only thing telling folders apart once they are piled and all you
+can see is a strip, so the six tints are a real difference rather than shades —
+but tints, not the reference's saturated blocks: six saturated fills that all
+clear 4.5:1 against one text colour is a much narrower palette than it sounds.
+
+**Searching bypasses the pile.** A query is a request to see matches; hiding
+them behind a folder you have to open first would make the search box a
+decoration. Above 900px the chips come back — a wide window has room to show
+every subcategory at once, which is what chips are for.
 
 ### Installing on an iPhone
 
@@ -759,7 +822,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 482 checks, phone width
+python tools/browser_test.py        # terminal 2 — 493 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

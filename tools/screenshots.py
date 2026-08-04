@@ -75,6 +75,12 @@ SHOTS = [
     ("9b-account",   "#/account",    ".acct-name",                   None),
     ("9d-settings-panel", "#/settings?p=data", ".set-back",           None),
     ("9e-info-gear-folders", "#/info?tab=gear", ".folder",             None),
+    ("2c-folders-scrolled", "#/info",  ".folder",
+     "window.scrollTo(0, 520); await new Promise(r=>setTimeout(r,600))"),
+    ("2d-folder-open",  "#/info",      ".folder",
+     "[...document.querySelectorAll('.folder')].find(f=>f.dataset.folder!=='*').click();"
+     "await new Promise(r=>setTimeout(r,700))"),
+    ("9f-account-signin", "#/account", "#authForm",                     None),
     # The + open, so the quick actions and the x are in the tour rather than
     # only in the test assertions.
     ("9c-quick-actions", "#/",       ".fab",
