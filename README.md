@@ -555,11 +555,36 @@ with its own history entry, and "Log a catch" is the first thing the + offers.
 A test asserts that link exists, because a route nothing in the chrome can
 reach is the failure this arrangement invites.
 
-The bulge is a ring in **the bar's own colour**, not the page's. Below the
-bar's top edge it disappears into the pill; above it, it reads as the pill
-swelling to carry the button. Page-coloured it cuts a hole instead, which looks
-like a sticker the moment the band behind the nav is anything but cream — and
-on this app the bands change colour screen to screen.
+The swell around it belongs to **the bar**, not the button — it is
+`.tabbar::before`, a disc in the bar's colour that paints over the bar's own
+hairline where they overlap, so the silhouette comes out as one shape. Built as
+a ring on the button instead, it travels with the button and is still there
+when the bar rolls away, which reads as the + growing a collar rather than the
+nav retracting.
+
+### The nav rolls away on the map
+
+On **/map** the bar retracts into the + and hands its space back; pressing the
++ brings it out again. Only the map: it is the one screen where the content is
+the whole viewport and every pixel of chrome is taken from it. Phone only, too
+— above 900px the map is already a two-column layout with room to spare, and
+hiding the primary navigation to buy space that isn't scarce is a trade in the
+wrong direction.
+
+The state is a class on `<body>`, not a style on the bar, because
+`--tab-space` is what every screen leaves clear for the nav. The map's height
+and margin both derive from it, so shrinking that one token is what actually
+gives the room away — and Leaflet notices through the `ResizeObserver` in
+`js/pages/map.js`.
+
+While rolled, the **+ does one job only: bring the bar back.** Opening the
+quick actions on the same press would put a menu over a bar still unrolling
+behind it. Press it again once you can see the bar and it opens the actions as
+usual. Touching the map puts it away again, and leaving the map restores it.
+
+The tabs get `tabindex="-1"` while rolled. Faded out is not gone: without it,
+five links stay in the tab order behind a transparent bar and keyboard focus
+disappears into a strip of nothing.
 
 `--fab-crown` is the nav's true high point, the top of the + with its ring.
 Everything that has to clear the bar clears the bulge too because it is derived

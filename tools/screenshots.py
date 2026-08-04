@@ -53,6 +53,10 @@ SHOTS = [
      "d.scrollTo({left:d.clientWidth,behavior:'instant'});"
      "d.dispatchEvent(new Event('scroll'));"
      "await new Promise(r=>setTimeout(r,500))"),
+    # The bar is rolled away on the map; this is it brought back by the +.
+    ("4c-map-nav-open", "#/map",     "#mapWeather .now-card__temp",
+     "document.getElementById('quickBtn').click();"
+     "await new Promise(r=>setTimeout(r,700))"),
     ("5-map-zone",   "#/map",        "#fishMap .leaflet-tile-pane",
      "document.querySelector('.zone-pin').click()"),
     ("6-conditions", "#/conditions", ".now-card__temp",              None),

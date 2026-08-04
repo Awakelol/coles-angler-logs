@@ -106,6 +106,7 @@ async function render() {
   const ctx = { regionId, region: getRegion(regionId), params, navigate };
 
   syncTabs(route.path);
+  syncNavRoll(route.path);
 
   // A sheet left open when the route changes would float over the new page.
   // Removing it isn't enough: openSheet() locks the body with position:fixed
@@ -218,6 +219,60 @@ function buildBrandMark() {
 //
 // Lives here rather than in a page module: the nav is outside the router's
 // view, so a page that owned this would take it down on every navigation.
+// ---------------------------------------------------------------------------
+// THE ROLLED NAV
+//
+// On the map the bar retracts into the + and hands its space to the map; the +
+// brings it back. Only on the map: it is the one screen where the content is
+// the whole viewport and every pixel of chrome is taken from it.
+//
+// The state is a class on <body>, not a style on the bar, because --tab-space
+// is what every screen leaves clear for the nav — the map's height and margin
+// both derive from it, so shrinking that one token is what actually gives the
+// room away. Leaflet notices via the ResizeObserver map.js already has.
+// ---------------------------------------------------------------------------
+
+const ROLLS_AWAY = new Set(['/map']);
+
+/** Whether the bar is currently retracted. */
+export function navRolled() {
+  return document.body.classList.contains('is-nav-rolled');
+}
+
+function setNavRolled(rolled) {
+  const bar = document.querySelector('.tabbar');
+  if (!bar) return;
+  bar.classList.toggle('is-rolled', rolled);
+  document.body.classList.toggle('is-nav-rolled', rolled);
+  // Faded out is not the same as gone. Without this the five tabs stay in the
+  // tab order behind a transparent bar, and keyboard focus disappears into a
+  // strip of nothing.
+  for (const a of bar.querySelectorAll('a')) {
+    if (rolled) a.setAttribute('tabindex', '-1');
+    else a.removeAttribute('tabindex');
+  }
+  const btn = document.getElementById('quickBtn');
+  if (btn && btn.getAttribute('aria-expanded') !== 'true') {
+    btn.setAttribute('aria-label', rolled ? 'Show navigation' : 'Add');
+  }
+}
+
+/** Called on every render: the map rolls the bar away, everything else opens it. */
+function syncNavRoll(path) {
+  setNavRolled(ROLLS_AWAY.has(path));
+}
+
+// Touching the map puts the bar away again. Delegated on the document rather
+// than bound in map.js, because the map is re-created on every visit and this
+// outlives it.
+document.addEventListener('pointerdown', (e) => {
+  if (!ROLLS_AWAY.has(parseHash().path)) return;
+  if (navRolled()) return;
+  if (document.getElementById('quickBtn')?.getAttribute('aria-expanded') === 'true') return;
+  if (!e.target.closest?.('#mapWrap')) return;
+  setNavRolled(true);
+}, true);
+
 function wireQuickActions() {
   const btn = document.getElementById('quickBtn');
   const menu = document.getElementById('quickMenu');
@@ -249,8 +304,16 @@ function wireQuickActions() {
     }
   };
 
-  btn.addEventListener('click', () =>
-    setOpen(btn.getAttribute('aria-expanded') !== 'true'));
+  btn.addEventListener('click', () => {
+    // Rolled, the + is the way back to the nav and nothing else. Opening the
+    // actions in the same press would put a menu over a bar that was still
+    // unrolling behind it, and you would not see what you had just done.
+    if (navRolled()) {
+      setNavRolled(false);
+      return;
+    }
+    setOpen(btn.getAttribute('aria-expanded') !== 'true');
+  });
   veil.addEventListener('click', () => setOpen(false));
   // Choosing an action navigates; the menu must not still be up when you land.
   for (const a of menu.querySelectorAll('[data-quick]')) {

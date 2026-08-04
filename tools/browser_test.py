@@ -4166,6 +4166,111 @@ async def main():
             check("you can still zoom past it, upscaled",
                   native["mapZoom"] >= 19, str(native))
 
+            # -------------------------------------------------- the rolled nav
+            print("\nThe nav rolls away on the map")
+
+            await page.goto(f"{BASE}/index.html#/")
+            await page.wait_for("document.querySelector('.tabbar')", label="nav")
+            await asyncio.sleep(0.6)
+            home = await page.eval("""
+                const bar = document.querySelector('.tabbar');
+                const cs = getComputedStyle(bar);
+                return {
+                    width: Math.round(bar.getBoundingClientRect().width),
+                    rolled: bar.classList.contains('is-rolled'),
+                    // The swell belongs to the BAR, not the button — the whole
+                    // point of moving it off the +, so that it leaves when the
+                    // bar leaves instead of following the button as a collar.
+                    bump: getComputedStyle(bar, '::before').width,
+                    // And the + carries no ring of its own any more.
+                    fabShadow: getComputedStyle(document.getElementById('quickBtn')).boxShadow,
+                };
+            """)
+            check("off the map the bar is full width", not home["rolled"] and home["width"] > 200,
+                  str(home))
+            check("the swell is drawn by the bar, not the button",
+                  home["bump"].endswith("px") and float(home["bump"][:-2]) > 40, str(home))
+            # A ring is a 0-blur spread shadow. The drop shadow underneath has
+            # blur, so a spread-only layer is what would give a collar away.
+            check("the + has no ring around it",
+                  "0px 0px 0px" not in home["fabShadow"], home["fabShadow"])
+
+            rolled = await page.eval("""
+                const mapHeight = () =>
+                    Math.round(document.querySelector('.map-screen').getBoundingClientRect().height);
+                location.hash = '#/map';
+                await new Promise(r => setTimeout(r, 900));
+                const bar = document.querySelector('.tabbar');
+                const btn = document.getElementById('quickBtn');
+                const tall = mapHeight();
+                return {
+                    rolled: bar.classList.contains('is-rolled')
+                            && document.body.classList.contains('is-nav-rolled'),
+                    width: Math.round(bar.getBoundingClientRect().width),
+                    // The + survives the retract — it is the way back.
+                    fabVisible: document.getElementById('quickBtn')
+                                    .getBoundingClientRect().width > 30,
+                    // Faded out is not gone: the tabs must leave the tab order.
+                    tabsUnfocusable: [...bar.querySelectorAll('a')]
+                        .every(a => a.getAttribute('tabindex') === '-1'),
+                    label: btn.getAttribute('aria-label'),
+                    tall,
+                };
+            """)
+            check("the map rolls the bar away",
+                  rolled["rolled"] and rolled["width"] < 90, str(rolled))
+            check("the + stays behind to bring it back",
+                  rolled["fabVisible"] and rolled["label"] == "Show navigation", str(rolled))
+            check("the rolled tabs leave the tab order", rolled["tabsUnfocusable"], str(rolled))
+
+            back = await page.eval("""
+                const bar = document.querySelector('.tabbar');
+                const btn = document.getElementById('quickBtn');
+                const menu = document.getElementById('quickMenu');
+                btn.click();
+                await new Promise(r => setTimeout(r, 700));
+                const first = { rolled: bar.classList.contains('is-rolled'),
+                                width: Math.round(bar.getBoundingClientRect().width),
+                                // The first press must NOT also open the menu.
+                                menuUp: !menu.hidden,
+                                shorter: Math.round(
+                                    document.querySelector('.map-screen').getBoundingClientRect().height) };
+                btn.click();
+                await new Promise(r => setTimeout(r, 500));
+                const second = { menuUp: !menu.hidden };
+                document.getElementById('quickVeil').click();
+                await new Promise(r => setTimeout(r, 450));
+                return { first, second };
+            """)
+            check("pressing the + unrolls the bar",
+                  not back["first"]["rolled"] and back["first"]["width"] > 200, str(back["first"]))
+            check("unrolling does not also open the actions",
+                  back["first"]["menuUp"] is False, str(back["first"]))
+            check("pressing it again opens the actions", back["second"]["menuUp"], str(back))
+            # Rolling away has to actually BUY the map something, or it is just
+            # a disappearing act.
+            check("rolled, the map is taller",
+                  rolled["tall"] > back["first"]["shorter"] + 10,
+                  f'rolled {rolled["tall"]} vs open {back["first"]["shorter"]}')
+
+            reroll = await page.eval("""
+                const bar = document.querySelector('.tabbar');
+                const wrap = document.getElementById('mapWrap');
+                const b = wrap.getBoundingClientRect();
+                wrap.dispatchEvent(new PointerEvent('pointerdown', {
+                    bubbles: true, clientX: b.left + b.width / 2, clientY: b.top + 40 }));
+                await new Promise(r => setTimeout(r, 700));
+                const rolled = bar.classList.contains('is-rolled');
+                location.hash = '#/info';
+                await new Promise(r => setTimeout(r, 800));
+                return { rolled, offMap: bar.classList.contains('is-rolled'),
+                         tabbable: [...bar.querySelectorAll('a')]
+                             .every(a => !a.hasAttribute('tabindex')) };
+            """)
+            check("touching the map puts the bar away again", reroll["rolled"], str(reroll))
+            check("leaving the map brings it back",
+                  not reroll["offMap"] and reroll["tabbable"], str(reroll))
+
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")
             await page.wait_for("document.querySelector('.kpi__v')", label="log")

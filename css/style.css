@@ -992,6 +992,8 @@ body:has(.map-screen) { padding-bottom: 0; }
   height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-space) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
   margin-bottom: calc(var(--tab-space) + env(safe-area-inset-bottom, 0px));
+  transition: height .38s cubic-bezier(.32,.72,.3,1),
+              margin-bottom .38s cubic-bezier(.32,.72,.3,1);
 }
 
 .map-screen__info {
@@ -1486,11 +1488,11 @@ body:has(.map-screen) { padding-bottom: 0; }
    button floating over them — and it bulges up out of the row so the bar has a
    high point instead of five things of equal weight.
 
-   The ring is painted in the BAR's colour, not the page's. Below the bar's top
-   edge it disappears into the pill; above it, it reads as the pill swelling to
-   carry the button. Page-coloured, it instead cut a hole — which looks like a
-   sticker the moment the band behind the nav is anything but cream, and on this
-   app the bands change colour screen to screen. */
+   The swell around it is the BAR's own shape (.tabbar::before), not a ring on
+   the button. A ring travels with the button and stays visible when the bar
+   rolls away; a bump belongs to the bar and leaves with it, which is what makes
+   the rolled state read as the nav retracting rather than the button growing a
+   collar. */
 .fab {
   position: relative; z-index: 2;
   justify-self: center; align-self: center;
@@ -1502,7 +1504,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   color: #fff;
   font-family: inherit; padding: 0;
   cursor: pointer;
-  box-shadow: 0 0 0 var(--fab-ring) var(--paper), 0 10px 20px rgb(43 69 147 / .38);
+  box-shadow: 0 10px 20px rgb(43 69 147 / .38);
   transition: transform .28s cubic-bezier(.34,1.4,.5,1), box-shadow .2s ease,
               background-color .25s ease;
 }
@@ -1510,6 +1512,65 @@ body:has(.map-screen) { padding-bottom: 0; }
    like the button falling into the bar. */
 .fab:active { transform: translateY(calc(-1 * var(--fab-rise))) scale(.92); }
 .fab:focus-visible { outline: 3px solid var(--blue-dk); outline-offset: 3px; }
+
+/* The swell. A disc in the bar's colour centred on the +, poking above the top
+   edge. It paints over the bar's own hairline where they overlap — a pseudo-
+   element draws above its parent's border — so the silhouette comes out as one
+   shape rather than a circle laid on a pill. */
+.tabbar::before {
+  content: '';
+  position: absolute; z-index: 0;
+  left: 50%; top: 50%;
+  width: calc(var(--fab-d) + 2 * var(--fab-ring));
+  height: calc(var(--fab-d) + 2 * var(--fab-ring));
+  border-radius: 50%;
+  background: var(--paper);
+  transform: translate(-50%, calc(-50% - var(--fab-rise)));
+  transition: opacity .22s ease, transform .34s cubic-bezier(.32,.72,.3,1);
+}
+
+/* --- the rolled nav ------------------------------------------------------ */
+/*
+   On the map the bar retracts into the + so the map gets the room, and the +
+   brings it back. The pill collapses toward its CENTRE rather than to one end,
+   because the + is the control that reopens it and a button that moves across
+   the screen when it closes is a button you have to hunt for.
+
+   Width is the animated property, not display or visibility, so the retract is
+   something you can watch happen and connect to the button you pressed.
+*/
+.tabbar {
+  transition: width .38s cubic-bezier(.32,.72,.3,1),
+              background-color .3s ease, border-color .3s ease,
+              box-shadow .3s ease;
+}
+.tabbar a {
+  transition: color .2s ease, transform .2s ease, opacity .18s ease;
+}
+
+/* Phone only. Above 900px the map is already a two-column layout with room to
+   spare, and hiding the primary navigation behind a button to buy space that
+   is not scarce is a trade in the wrong direction. The class still goes on —
+   it just does nothing here. */
+@media (max-width: 899px) {
+  .tabbar.is-rolled {
+    width: var(--fab-d);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+  /* The tabs go first and come back last, so the pill is never caught
+     mid-width with legible labels squashed into it. */
+  .tabbar.is-rolled a {
+    opacity: 0; pointer-events: none; transform: scale(.7);
+    transition-duration: .14s;
+  }
+  /* Rolled, the bump would read as the white collar this was meant to lose. */
+  .tabbar.is-rolled::before { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  /* Nothing left to bulge out of, so the + settles into the middle. */
+  .tabbar.is-rolled .fab { transform: none; }
+  .tabbar.is-rolled .fab:active { transform: scale(.92); }
+}
 .fab[aria-expanded="true"] { background: var(--ink); }
 
 /* Two bars that rotate into an x. Rotating the SAME shape is what sells it —
@@ -1524,6 +1585,14 @@ body:has(.map-screen) { padding-bottom: 0; }
 .fab__x i:last-child   { transform: translate(-50%, -50%) rotate(90deg); }
 .fab[aria-expanded="true"] .fab__x i:first-child { transform: translate(-50%, -50%) rotate(135deg); }
 .fab[aria-expanded="true"] .fab__x i:last-child  { transform: translate(-50%, -50%) rotate(45deg); }
+
+/* The room the retracted bar gives back. Scoped to the body so .map-screen's
+   height and margin — both derived from --tab-space — grow together. */
+@media (max-width: 899px) {
+  body.is-nav-rolled {
+    --tab-space: calc(12px + var(--fab-d) + 12px);
+  }
+}
 
 /* --- the quick-action stack --------------------------------------------- */
 
@@ -1570,7 +1639,8 @@ body:has(.map-screen) { padding-bottom: 0; }
 .quick-veil.is-open { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  .quick__item, .fab, .fab__x i, .quick-veil { transition-duration: .01ms; }
+  .quick__item, .fab, .fab__x i, .quick-veil,
+  .tabbar, .tabbar a, .tabbar::before, .map-screen { transition-duration: .01ms; }
 }
 .tabbar a svg { width: 22px; height: 22px; }
 @media (max-width: 360px) { .tabbar a { font-size: 9px; } }
