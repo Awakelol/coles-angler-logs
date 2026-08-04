@@ -20,9 +20,18 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.3.0';
+export const APP_VERSION = '3.4.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.4.0',
+    date: '2026-08-04',
+    title: 'A rail you can put away',
+    changes: [
+      'The desktop navigation collapses to a strip of icons, and remembers.',
+      'Tidier spacing, a clearer selected row, and the logo reads on the panel.',
+    ],
+  },
   {
     version: '3.3.0',
     date: '2026-08-04',

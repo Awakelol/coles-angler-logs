@@ -245,9 +245,16 @@ export function navRolled() {
   return document.body.classList.contains('is-nav-rolled');
 }
 
+const PHONE = () => matchMedia('(max-width: 899px)').matches;
+
 function setNavRolled(rolled) {
   const bar = document.querySelector('.tabbar');
   if (!bar) return;
+  // The rolled RULES are phone-only, but tabindex is not a rule — applied at
+  // desktop width it left every link in a fully visible rail unreachable by
+  // keyboard on the map. The behaviour has to agree with the media query, not
+  // just sit behind it.
+  rolled = rolled && PHONE();
   bar.classList.toggle('is-rolled', rolled);
   document.body.classList.toggle('is-nav-rolled', rolled);
   // Faded out is not the same as gone. Without this the five tabs stay in the
@@ -268,6 +275,12 @@ function syncNavRoll(path) {
   setNavRolled(ROLLS_AWAY.has(path));
 }
 
+// Dragging a window across the breakpoint has to re-decide, or a bar rolled on
+// a narrow window stays rolled — and unfocusable — once it is a rail.
+matchMedia('(max-width: 899px)').addEventListener?.('change', () => {
+  syncNavRoll(parseHash().path);
+});
+
 // Touching the map puts the bar away again. Delegated on the document rather
 // than bound in map.js, because the map is re-created on every visit and this
 // outlives it.
@@ -278,6 +291,49 @@ document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest?.('#mapWrap')) return;
   setNavRolled(true);
 }, true);
+
+// ---------------------------------------------------------------------------
+// THE COLLAPSED RAIL
+//
+// Desktop only, and remembered. Narrowing to icons is a preference about how
+// you want to work, not a response to the window, so it outlives the session.
+//
+// The labels are hidden by CLIPPING rather than display:none — the rail's width
+// is what animates, and a label that vanishes on the first frame makes the
+// panel look like it emptied before it moved.
+// ---------------------------------------------------------------------------
+
+const RAIL_PREF = 'railCollapsed';
+
+function setRailCollapsed(collapsed) {
+  const bar = document.querySelector('.tabbar');
+  const btn = document.getElementById('railToggle');
+  if (!bar || !btn) return;
+  document.body.classList.toggle('rail-collapsed', collapsed);
+  btn.setAttribute('aria-expanded', String(!collapsed));
+  btn.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+
+  // With the labels clipped away, the icons are the only thing left to read.
+  // A native title rather than a styled tooltip because the rail scrolls, and
+  // anything drawn inside it would be cut off at the panel's edge — which is
+  // the one place a tooltip must not be.
+  for (const el of bar.querySelectorAll('a[data-tab], #quickBtn')) {
+    const label = el.getAttribute('aria-label');
+    if (collapsed && label) el.setAttribute('title', label);
+    else el.removeAttribute('title');
+  }
+}
+
+function wireRailToggle() {
+  const btn = document.getElementById('railToggle');
+  if (!btn) return;
+  setRailCollapsed(prefs.get(RAIL_PREF, false) === true);
+  btn.addEventListener('click', () => {
+    const next = document.body.classList.contains('rail-collapsed') ? false : true;
+    prefs.set(RAIL_PREF, next);
+    setRailCollapsed(next);
+  });
+}
 
 function wireQuickActions() {
   const btn = document.getElementById('quickBtn');
@@ -360,6 +416,7 @@ function wireQuickActions() {
 }
 
 wireQuickActions();
+wireRailToggle();
 
 window.addEventListener('hashchange', render);
 

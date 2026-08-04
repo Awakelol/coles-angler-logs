@@ -110,7 +110,7 @@
      highlights in one and not the other the first time someone adds a page.
      What differs is which children show and how they flow — see the rail block
      in the stylesheet. -->
-<nav class="tabbar" aria-label="Primary">
+<nav class="tabbar" id="primaryNav" aria-label="Primary">
   <!-- Rail only. On a phone the brand is in the top bar. -->
   <a class="rail__head" href="#/">
     <span class="rail__mark" id="railMark"></span>
@@ -157,6 +157,18 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7 7 0 0 0-.1-1.1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L16.2 3h-4l-.4 2.8a7 7 0 0 0-1.9 1.1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.8h4l.4-2.8a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.6c.06-.36.1-.73.1-1.1Z"/></svg>
     <span>Settings</span>
   </a>
+
+  <!-- Foot of the rail. The reference hangs this off the panel's edge; the rail
+       scrolls, so anything drawn outside its padding box is clipped — and down
+       here it also fills the empty bottom the rail otherwise had. -->
+  <button type="button" class="rail__toggle rail-only" id="railToggle"
+          aria-expanded="true" aria-controls="primaryNav" aria-label="Collapse navigation">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+            stroke-linejoin="round" d="m14.5 5.5-6 6.5 6 6.5"/>
+    </svg>
+    <span>Collapse</span>
+  </button>
 </nav>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -588,6 +588,28 @@ Two things worth knowing before editing it:
   beats a bare `.rail-only` `(0,1,0)`, which left the rail's links visible in the
   phone bar the first time.
 
+**It collapses.** The button at the foot narrows the rail to a 74px strip of
+icons and the page slides over with it; the choice is stored in `prefs` under
+`railCollapsed`, because narrowing it is a decision about how you want to work
+rather than a response to the window.
+
+Two things that look optional and are not:
+
+- **The labels give up their `max-width`, not just their opacity.** An invisible
+  label still takes its full width, so the icons centred around empty space and
+  sat hard against the rail's edge with the text clipped off it. `max-width`
+  rather than `width` because it animates from a real number to zero.
+- **`:not(.rail__mark)`** on that rule. The brand mark is a `<span>` inside an
+  `<a>`, so it matched and the logo collapsed along with the words.
+
+Collapsed, the icons carry a native `title`. Not a styled tooltip: the rail
+scrolls, so anything drawn inside it is clipped at the panel's edge — which is
+the one place a tooltip must not be.
+
+The toggle sits at the **foot** rather than on the panel's edge like the
+reference, for the same clipping reason — and it fills the empty bottom the rail
+otherwise had.
+
 The rail is the app's one dark surface, so it is the one place `--ink` can land
 on a dark ground without anyone noticing. `desktop_check.py` composites the
 alpha text against the panel and holds every rail label to 4.5:1.
@@ -615,6 +637,11 @@ While rolled, the **+ does one job only: bring the bar back.** Opening the
 quick actions on the same press would put a menu over a bar still unrolling
 behind it. Press it again once you can see the bar and it opens the actions as
 usual. Touching the map puts it away again, and leaving the map restores it.
+
+**The roll is phone-only in behaviour, not just in CSS.** Its rules are behind
+a media query, but `tabindex` is not a rule — applied at desktop width it left
+every link in a fully visible rail unreachable by keyboard on the map. The
+toggle re-checks the media query, and re-runs when the window crosses it.
 
 The tabs get `tabindex="-1"` while rolled. Faded out is not gone: without it,
 five links stay in the tab order behind a transparent bar and keyboard focus

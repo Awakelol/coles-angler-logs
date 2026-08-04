@@ -145,6 +145,103 @@ async def main():
             check("every rail text clears 4.5:1", not bad,
                   ", ".join(bad) or str(contrast))
 
+            # --- collapsing -------------------------------------------------
+            collapse = await ev("""
+                const bar = document.querySelector(".tabbar");
+                const main = document.querySelector("main");
+                const btn = document.getElementById("railToggle");
+                const label = () => bar.querySelector("a[data-tab] span");
+                const wide = { rail: Math.round(bar.getBoundingClientRect().width),
+                               main: Math.round(main.getBoundingClientRect().left),
+                               label: Math.round(label().getBoundingClientRect().width),
+                               titled: bar.querySelector("a[data-tab]").hasAttribute("title") };
+                btn.click();
+                await new Promise(r => setTimeout(r, 800));
+                const icon = bar.querySelector("a[data-tab] svg").getBoundingClientRect();
+                const railBox = bar.getBoundingClientRect();
+                const narrow = {
+                    rail: Math.round(railBox.width),
+                    main: Math.round(main.getBoundingClientRect().left),
+                    label: Math.round(label().getBoundingClientRect().width),
+                    // The icons must sit in the MIDDLE of the narrowed rail.
+                    // Fading the labels without taking their width back left
+                    // them centred around invisible text, hard against the edge.
+                    iconOffCentre: Math.abs((icon.left + icon.right) / 2
+                                            - (railBox.left + railBox.right) / 2),
+                    iconDrawn: icon.width > 12,
+                    markShown: document.querySelector(".rail__mark svg")
+                                   .getBoundingClientRect().width > 20,
+                    titled: bar.querySelector("a[data-tab]").getAttribute("title"),
+                    expanded: btn.getAttribute("aria-expanded"),
+                    stored: JSON.parse(localStorage.getItem("angler.prefs") || "{}").railCollapsed,
+                };
+                return { wide, narrow };
+            """)
+            w, narrow = collapse["wide"], collapse["narrow"]
+            check("the rail collapses to a strip", narrow["rail"] < w["rail"] / 2.5,
+                  str(collapse))
+            check("the page follows it across", narrow["main"] < w["main"] - 100, str(collapse))
+            check("the labels give up their width, not just their opacity",
+                  w["label"] > 20 and narrow["label"] == 0, str(collapse))
+            check("the icons centre in the collapsed rail",
+                  narrow["iconDrawn"] and narrow["iconOffCentre"] <= 2, str(narrow))
+            # The mark is a <span> inside an <a>, so the label rule caught it and
+            # collapsed the logo along with the words.
+            check("the brand mark survives the collapse", narrow["markShown"], str(narrow))
+            check("collapsed icons get a title to read",
+                  not w["titled"] and narrow["titled"] == "Home", str(collapse))
+            check("the choice is remembered", narrow["stored"] is True, str(narrow))
+
+            # It is a preference about how you want to work, so it has to
+            # outlive the page, not just the click.
+            await send("Page.navigate", url=f"{BASE}/index.html#/info")
+            for _ in range(40):
+                if await ev("return !!document.querySelector('.species-card');"): break
+                await asyncio.sleep(.4)
+            await asyncio.sleep(.8)
+            kept = await ev("""
+                const bar = document.querySelector(".tabbar");
+                return { collapsed: document.body.classList.contains("rail-collapsed"),
+                         width: Math.round(bar.getBoundingClientRect().width) };
+            """)
+            check("it is still collapsed after a reload",
+                  kept["collapsed"] and kept["width"] < 110, str(kept))
+
+            restored = await ev("""
+                document.getElementById("railToggle").click();
+                await new Promise(r => setTimeout(r, 800));
+                const bar = document.querySelector(".tabbar");
+                return { width: Math.round(bar.getBoundingClientRect().width),
+                         titled: bar.querySelector("a[data-tab]").hasAttribute("title"),
+                         label: Math.round(bar.querySelector("a[data-tab] span")
+                                    .getBoundingClientRect().width) };
+            """)
+            check("and expands again cleanly",
+                  restored["width"] > 200 and restored["label"] > 20
+                  and not restored["titled"], str(restored))
+
+            # The roll is a phone behaviour. Its CSS is behind a media query but
+            # tabindex is not a rule — applied up here it left every link in a
+            # fully visible rail unreachable by keyboard on the map.
+            await send("Page.navigate", url=f"{BASE}/index.html#/map")
+            for _ in range(60):
+                if await ev("return !!document.querySelector('#mapWeather .now-card__temp');"): break
+                await asyncio.sleep(.4)
+            await asyncio.sleep(1.0)
+            onmap = await ev("""
+                const bar = document.querySelector(".tabbar");
+                const links = [...bar.querySelectorAll("a[data-tab]")];
+                return { rolled: bar.classList.contains("is-rolled"),
+                         body: document.body.classList.contains("is-nav-rolled"),
+                         width: Math.round(bar.getBoundingClientRect().width),
+                         focusable: links.every(a => a.getAttribute("tabindex") !== "-1") };
+            """)
+            check("the map does not roll the rail away",
+                  not onmap["rolled"] and not onmap["body"] and onmap["width"] > 200,
+                  str(onmap))
+            check("the rail stays keyboard-reachable on the map",
+                  onmap["focusable"], str(onmap))
+
             print("\nDesktop map layout")
             layout = await ev("""
                 const s = document.querySelector('.map-screen');

@@ -1685,7 +1685,11 @@ body:has(.map-screen) { padding-bottom: 0; }
   body {
     padding-bottom: 32px;
     padding-left: calc(var(--rail-w) + var(--rail-inset) * 2);
+    /* Custom properties do not animate, but the value they resolve to does —
+       so the page slides over as the rail narrows instead of jumping. */
+    transition: padding-left .34s cubic-bezier(.32,.72,.3,1);
   }
+  body.rail-collapsed { --rail-w: 74px; }
 
   /* The brand moves into the rail, so the top bar keeps only what has nowhere
      else to go — the region switcher and the gear — and sits right. */
@@ -1713,7 +1717,11 @@ body:has(.map-screen) { padding-bottom: 0; }
     border: 0;
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
-    overflow-y: auto;
+    /* x hidden, not auto: the labels are clipped as the rail narrows, and
+       `overflow-y: auto` alone would give the other axis a scrollbar to do it
+       with. */
+    overflow-x: hidden; overflow-y: auto;
+    transition: width .34s cubic-bezier(.32,.72,.3,1);
   }
   /* The swell is a phone answer to a phone problem: there is no row here for
      the + to bulge out of. */
@@ -1727,7 +1735,15 @@ body:has(.map-screen) { padding-bottom: 0; }
     text-decoration: none; color: var(--cream);
     padding: 4px 8px 14px;
   }
-  .rail__mark svg { width: 34px; height: auto; }
+  /* Scoped through .tabbar: `.tabbar a svg` is (0,1,2) and outranks a bare
+     `.rail__mark svg` (0,1,1), which shrank the brand to the 20px meant for
+     nav icons. */
+  .tabbar .rail__mark svg { width: 32px; height: auto; }
+  /* The mark draws itself in --blue, which on the rail's near-black panel is
+     all but invisible. The CSS `stroke` property beats the presentation
+     attribute the SVG sets inline, so the mark can be recoloured for this one
+     surface without the art module knowing where it is. */
+  .tabbar .rail__mark svg [stroke] { stroke: var(--cream); }
   .rail__name {
     font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.15;
   }
@@ -1787,6 +1803,88 @@ body:has(.map-screen) { padding-bottom: 0; }
   .fab__label { display: block; }
   .fab__x { width: 16px; height: 16px; }
   .fab__x i { width: 14px; }
+
+  /* --- the foot ---------------------------------------------------------- */
+
+  .rail__toggle {
+    /* Pushed to the bottom, which is where the rail ran out of things to say. */
+    margin-top: auto;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px; border: 0; border-radius: 14px;
+    background: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 800;
+    color: rgb(246 244 234 / .55);
+    transition: color .2s ease, background-color .2s ease;
+  }
+  .rail__toggle::before {
+    /* A hairline above it, drawn as a pseudo-element so the gap belongs to the
+       button and moves with it rather than to whatever happens to be last. */
+    content: '';
+    position: absolute; left: 12px; right: 12px;
+    margin-top: -13px; height: 1px;
+    background: rgb(246 244 234 / .12);
+  }
+  .rail__toggle:hover { background: rgb(246 244 234 / .07); color: var(--cream); }
+  .rail__toggle svg { width: 20px; height: 20px; flex: none; transition: transform .34s cubic-bezier(.32,.72,.3,1); }
+  .rail__toggle[aria-expanded="false"] svg { transform: rotate(180deg); }
+
+  /* --- collapsed --------------------------------------------------------- */
+
+  /* Labels go by clipping, not display:none. Width is what animates here, and
+     text that disappears on the first frame makes the panel look like it
+     emptied before it moved. */
+  /* :not(.rail__mark) — the brand mark is a <span> inside an <a>, so it matched
+     the label rule and collapsed to nothing along with the words. */
+  .rail__name, .fab__label, .tabbar a span:not(.rail__mark), .rail__toggle span {
+    white-space: nowrap;
+    /* max-width, not width: it animates from a real number to zero, where
+       `width: auto` has nothing to animate from. Fading alone was not enough —
+       an invisible label still takes its full width, so the icons centred
+       around it and sat left of the rail with the text clipped off the edge. */
+    max-width: 220px; overflow: hidden;
+    transition: opacity .22s ease .1s,
+                max-width .34s cubic-bezier(.32,.72,.3,1);
+  }
+  body.rail-collapsed .rail__name,
+  body.rail-collapsed .fab__label,
+  body.rail-collapsed .tabbar a span:not(.rail__mark),
+  body.rail-collapsed .rail__toggle span {
+    opacity: 0;
+    max-width: 0;
+    transition: opacity .12s ease,
+                max-width .34s cubic-bezier(.32,.72,.3,1);
+  }
+  /* The gap belongs to a label that is no longer there. */
+  body.rail-collapsed .tabbar a { gap: 0; }
+
+  body.rail-collapsed .tabbar { padding-left: 9px; padding-right: 9px; }
+  body.rail-collapsed .tabbar a,
+  body.rail-collapsed .fab,
+  body.rail-collapsed .rail__toggle,
+  body.rail-collapsed .rail__head { justify-content: center; padding-left: 0; padding-right: 0; }
+  body.rail-collapsed .rail__head { gap: 0; }
+  body.rail-collapsed .fab { gap: 0; }
+
+  /* The group headings become the dividers they were already acting as. */
+  body.rail-collapsed .rail__group {
+    height: 1px; overflow: hidden;
+    margin: 12px 8px; padding: 0;
+    background: rgb(246 244 234 / .12);
+    transition: height .2s ease, margin .2s ease;
+  }
+
+  /* --- polish ------------------------------------------------------------ */
+
+  /* The active row is the only place the rail uses the accent, so it can
+     afford to sit slightly proud of the panel. */
+  .tabbar a[aria-current="page"] {
+    box-shadow: 0 6px 16px rgb(43 69 147 / .45);
+  }
+  .tabbar a svg, .fab svg, .rail__toggle svg {
+    transition: transform .2s cubic-bezier(.34,1.4,.5,1);
+  }
+  .tabbar a:hover svg { transform: translateX(1px) scale(1.06); }
+  .fab:hover { background: var(--blue-dk); }
 }
 
 /* The rail is taller than a short laptop window once every group is in it, so

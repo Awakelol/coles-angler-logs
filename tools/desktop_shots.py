@@ -17,6 +17,14 @@ BASE = os.environ.get("APP_BASE", "http://127.0.0.1:8777")
 PORT = 9933
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screenshots", "desktop")
 SHOTS = [("home", "#/", ".kpi__v, .empty", None),
+         ("collapsed", "#/info", ".species-card",
+          "document.getElementById('railToggle').click();"
+          "await new Promise(r=>setTimeout(r,700))"),
+         ("collapsed-home", "#/", ".kpi__v, .empty",
+          "await new Promise(r=>setTimeout(r,400))"),
+         ("expanded-again", "#/", ".kpi__v, .empty",
+          "document.getElementById('railToggle').click();"
+          "await new Promise(r=>setTimeout(r,700))"),
          ("info", "#/info", ".species-card", None),
          ("map", "#/map", "#mapWeather .now-card__temp", None),
          ("quick", "#/", ".fab",
