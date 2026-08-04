@@ -19,11 +19,12 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'anglerlog';
-// v2 added SPOTS. The upgrade only creates what is missing, so an existing
-// database keeps every catch in it.
-const DB_VERSION = 2;
+// v2 added SPOTS, v3 added PROFILES. The upgrade only creates what is missing,
+// so an existing database keeps every catch in it.
+const DB_VERSION = 3;
 const CATCHES = 'catches';
 const SPOTS = 'spots';
+const PROFILES = 'profiles';
 
 // Long enough that a phone left in a drawer for a season still learns about
 // deletions when it comes back; short enough that the store doesn't grow
@@ -51,6 +52,12 @@ function openDb() {
       if (!db.objectStoreNames.contains(SPOTS)) {
         const store = db.createObjectStore(SPOTS, { keyPath: 'id' });
         store.createIndex('by-region', 'regionId');
+      }
+      // Display name and avatar, one row per account. Here rather than in
+      // localStorage because an avatar is a Blob, and localStorage is strings
+      // with a ~5 MB cap — the same reason catches live here.
+      if (!db.objectStoreNames.contains(PROFILES)) {
+        db.createObjectStore(PROFILES, { keyPath: 'id' });
       }
     };
 
@@ -284,6 +291,49 @@ export const store = {
 // --- small preferences -----------------------------------------------------
 
 const PREFS_KEY = 'angler.prefs';
+
+/**
+ * WHO YOU ARE, as opposed to who you sign in as.
+ *
+ * The username is the handle — chosen at sign-up, unique, and what the account
+ * IS. The display name is a label on top of it and can be anything, including
+ * nothing, in which case the handle is shown. Keeping them apart means someone
+ * can rename themselves without their sign-in breaking.
+ *
+ * NOT SYNCED YET. Firestore rules currently permit users/{uid}/catches only,
+ * so a profile document would be denied. The shape is ready for it — one
+ * document per account, keyed by the same id — but publishing the rule is a
+ * console action, so this stays on the device until that happens.
+ */
+export const profiles = {
+  async get(userId) {
+    if (!userId) return null;
+    return (await txIn(PROFILES, 'readonly', (s) => s.get(userId))) || null;
+  },
+
+  async save(userId, patch) {
+    if (!userId) throw new Error('A profile needs an account to belong to.');
+    const current = (await this.get(userId)) || { id: userId };
+    const next = { ...current, ...patch, id: userId, updatedAt: Date.now() };
+    await txIn(PROFILES, 'readwrite', (s) => s.put(next));
+    return next;
+  },
+
+  /** Forget the avatar without forgetting the name. */
+  async clearAvatar(userId) {
+    const current = await this.get(userId);
+    if (!current) return null;
+    const { avatar, ...rest } = current;
+    await txIn(PROFILES, 'readwrite', (s) => s.put({ ...rest, updatedAt: Date.now() }));
+    return rest;
+  },
+};
+
+/** What to call someone: their display name if they set one, else the handle. */
+export function shownName(user, profile) {
+  const chosen = (profile?.displayName || '').trim();
+  return chosen || user?.username || '';
+}
 
 export const prefs = {
   all() {

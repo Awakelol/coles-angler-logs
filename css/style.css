@@ -2161,6 +2161,186 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
+/* --- info: subcategories as folders -------------------------------------- */
+/*
+   Phone only. A wide window has room to show every subcategory at once, which
+   is what the chips are for; a folder is a phone answer to a phone problem —
+   twenty-odd families do not fit on one line, and a wrapping row of chips
+   turns into a wall of text with no shape to it.
+
+   The silhouette is a clip-path, not a border plus a pseudo-element tab. Two
+   shapes meeting is two edges to line up and a seam that shows at every zoom
+   level; one polygon has neither.
+*/
+.folders { display: none; }
+
+@media (max-width: 899px) {
+  .chips#familyFilters { display: none; }
+
+  .folders {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 9px;
+  }
+
+  .folder {
+    position: relative;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
+    min-height: 62px;
+    padding: 22px 12px 11px;
+    border: 0;
+    background: var(--sand-lt);
+    color: var(--ink);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    /* Tab on the left, body below it. */
+    clip-path: polygon(0 0, 38% 0, 44% 11px, 100% 11px, 100% 100%, 0 100%);
+    border-radius: 12px;
+    transition: background-color .2s ease, transform .2s ease, color .2s ease;
+  }
+  .folder:active { transform: scale(.97); }
+  .folder.is-open { background: var(--blue); color: #fff; }
+
+  .folder__k {
+    font-size: 13.5px; font-weight: 800; line-height: 1.2;
+    letter-spacing: -.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .folder__n {
+    font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    color: var(--ink-60);
+  }
+  .folder.is-open .folder__n { color: rgb(255 255 255 / .82); }
+}
+
+/* --- settings: an index, then one panel ---------------------------------- */
+/*
+   Rows that go somewhere, grouped under quiet headings. The value sits under
+   the name because a settings list that only names its sections makes you open
+   every one to find out what anything is set to.
+*/
+.wrap--narrow { max-width: 560px; }
+.display--sm { font-size: clamp(30px, 7vw, 38px); }
+.subtitle--tight { margin-bottom: 18px; }
+
+.set-group {
+  margin: 22px 0 8px; padding: 0 4px;
+  font-size: 11px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-30);
+}
+.set-group:first-of-type { margin-top: 6px; }
+
+.set-list {
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.set-row {
+  display: flex; align-items: center; gap: 13px;
+  padding: 14px 16px;
+  text-decoration: none; color: inherit;
+  border-top: 1px solid var(--line);
+  transition: background-color .2s ease;
+}
+.set-row:first-child { border-top: 0; }
+.set-row:hover { background: var(--sand-lt); }
+.set-row:active { background: var(--blue-lt); }
+
+.set-row__ico {
+  flex: none;
+  display: grid; place-items: center;
+  width: 36px; height: 36px;
+  border-radius: 11px;
+  background: var(--blue-lt); color: var(--blue);
+}
+.set-row__body { min-width: 0; flex: 1; }
+.set-row__k {
+  display: block;
+  font-size: 15.5px; font-weight: 800; letter-spacing: -.01em;
+}
+.set-row__v {
+  display: block; margin-top: 1px;
+  font-size: 13px; font-weight: 700; color: var(--ink-60);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.set-row__go { flex: none; color: var(--ink-30); }
+
+.set-back {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-bottom: 12px; padding: 7px 13px 7px 9px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  text-decoration: none; color: var(--ink);
+  font-size: 13.5px; font-weight: 800;
+  transition: background-color .2s ease, transform .2s ease;
+}
+.set-back:hover { background: var(--sand-lt); }
+.set-back:active { transform: scale(.96); }
+
+/* --- the sign-in card ---------------------------------------------------- */
+/*
+   Plain fields with a leading icon rather than the floating-label pattern used
+   elsewhere in the app. Two fields on an otherwise empty screen do not need a
+   label that animates — the placeholder IS the label here, and the icon carries
+   the recognition. aria-label keeps that honest for a screen reader.
+*/
+.auth-form { display: flex; flex-direction: column; gap: 10px; }
+
+.auth-field {
+  position: relative;
+  display: flex; align-items: center;
+}
+.auth-field__ico {
+  position: absolute; left: 14px;
+  display: grid; place-items: center;
+  color: var(--ink-30);
+  pointer-events: none;
+}
+/* #authForm, not .auth-field, and not by preference. The base input rule is
+   `input:not([type=file]):not([type=checkbox])...` — six attribute :not()s,
+   which is specificity (0,6,1). A plain `.auth-field input` is (0,1,1) and
+   loses, so the padding never applied and the leading icon sat on top of the
+   first letter of the placeholder. An id is the shortest thing that wins. */
+#authForm .auth-field input {
+  width: 100%;
+  font-family: inherit; font-size: 15.5px; font-weight: 700;
+  color: var(--ink);
+  padding: 15px 14px 15px 44px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+#authForm .auth-field:has(.auth-field__peek) input { padding-right: 46px; }
+#authForm .auth-field input::placeholder { color: var(--ink-30); font-weight: 700; }
+#authForm .auth-field input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-lt);
+}
+.auth-field__peek {
+  position: absolute; right: 8px;
+  display: grid; place-items: center;
+  width: 34px; height: 34px;
+  border: 0; border-radius: 50%;
+  background: none; color: var(--ink-30);
+  cursor: pointer;
+}
+.auth-field__peek[aria-pressed="true"] { color: var(--blue); }
+
+.btn--tall { padding-top: 15px; padding-bottom: 15px; font-size: 15.5px; }
+
+.auth-swap {
+  margin: 14px 0 0; text-align: center;
+  font-size: 14px; font-weight: 700; color: var(--ink-60);
+}
+.auth-swap .linkish { font-weight: 900; color: var(--blue); }
+
 /* --- account ------------------------------------------------------------- */
 
 .acct-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
@@ -2175,6 +2355,49 @@ body.is-sheet-open {
   box-shadow: 0 6px 18px rgb(43 69 147 / .3);
 }
 .acct-avatar--empty { background: var(--blue-lt); color: var(--blue); box-shadow: none; }
+.acct-hero--empty { align-items: center; }
+
+/* The photo is a button. On a phone it is the biggest thing on the screen and
+   the obvious thing to press, so making it the control rather than putting a
+   link beside it saves a row and a decision. */
+.acct-photo {
+  position: relative; flex: none;
+  width: 84px; height: 84px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: none; cursor: pointer;
+  transition: transform .2s ease;
+}
+.acct-photo:active { transform: scale(.96); }
+.acct-photo__fill {
+  display: grid; place-items: center;
+  width: 100%; height: 100%;
+  border-radius: 50%; overflow: hidden;
+  background: var(--blue); color: #fff;
+  font-family: inherit; font-size: 32px; font-weight: 900; letter-spacing: -.02em;
+  box-shadow: 0 6px 18px rgb(43 69 147 / .3);
+}
+.acct-photo__fill img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The camera badge sits ON the ring, so the affordance reads without a label. */
+.acct-photo__edit {
+  position: absolute; right: -1px; bottom: -1px;
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--paper); color: var(--blue);
+  box-shadow: 0 2px 8px rgb(22 24 29 / .18);
+}
+
+.acct-handle {
+  margin: 1px 0 0; font-size: 14px; font-weight: 800; color: var(--blue);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.acct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+/* Sign out is not destructive, but it is the one button here you can press by
+   accident and be confused by, so it says so. */
+.btn--danger { color: #B3261E; }
+.btn--danger:hover { background: #FCEEEC; }
 .acct-name {
   margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -.02em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

@@ -20,7 +20,7 @@ import {
   allSpecies, speciesByFamily, localNames, getSpecies, primaryName,
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
-import { GEAR, gearByGroup, getGear } from '../data/gear.js';
+import { GEAR, GEAR_GROUPS, gearByGroup, getGear } from '../data/gear.js';
 import { speciesArt, icon } from '../art.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
@@ -244,6 +244,12 @@ export function render(ctx) {
             </button>
           </div>
 
+          <!-- Folders on a phone, chips on a desktop. Same state, same click
+               handler, one shown at a time by a media query — the folder
+               metaphor is a phone answer, and a wide window has room to show
+               every subcategory at once, which is what chips are for. -->
+          <div class="folders" id="infoFolders"></div>
+
           <div class="chips" id="familyFilters">
             <button class="chip" data-family="" aria-pressed="true">All</button>
             ${groups
@@ -266,6 +272,54 @@ export function render(ctx) {
     </section>`;
 }
 
+/**
+ * The subcategories of a tab, as folders.
+ *
+ * Fishes are filed by family, gear by the group it already declares, and
+ * waters by the body of water they sit in — all three already exist in the
+ * data, so this names them rather than inventing a taxonomy.
+ */
+function foldersFor(tab, ctx, species, zones) {
+  if (tab === 'gear') {
+    const counts = new Map();
+    for (const g of GEAR) counts.set(g.group, (counts.get(g.group) || 0) + 1);
+    return GEAR_GROUPS
+      .filter((g) => counts.get(g.id))
+      .map((g) => ({ key: g.id, label: g.name, count: counts.get(g.id) }));
+  }
+
+  if (tab === 'zones') {
+    const counts = new Map();
+    for (const z of zones) counts.set(z.water, (counts.get(z.water) || 0) + 1);
+    return [...counts.entries()].map(([water, count]) => ({ key: water, label: water, count }));
+  }
+
+  return speciesByFamily(ctx.regionId).map((g) => ({
+    key: g.family,
+    label: g.familyCommon || g.family,
+    count: g.species.length,
+  }));
+}
+
+function foldersHtml(items, active, allCount) {
+  return (
+    `<button class="folder${active ? '' : ' is-open'}" data-folder="" aria-pressed="${!active}">
+       <span class="folder__k">All</span>
+       <span class="folder__n">${allCount}</span>
+     </button>` +
+    items
+      .map(
+        (f) => `
+      <button class="folder${f.key === active ? ' is-open' : ''}" data-folder="${esc(f.key)}"
+              aria-pressed="${f.key === active}">
+        <span class="folder__k">${esc(f.label)}</span>
+        <span class="folder__n">${f.count}</span>
+      </button>`
+      )
+      .join('')
+  );
+}
+
 export function mount(root, ctx) {
   const species = allSpecies(ctx.regionId);
   const zones = zonesFor(ctx.regionId);
@@ -275,13 +329,17 @@ export function mount(root, ctx) {
   const tabBar = root.querySelector('#infoTabs');
   const filterBar = root.querySelector('#familyFilters');
 
+  const folderBar = root.querySelector('#infoFolders');
+
   let tab = isTab(ctx.params.get('tab')) ? ctx.params.get('tab') : 'fishes';
   let query = '';
-  let family = ctx.params.get('family') || '';
+  // One open folder PER TAB, not one shared. Switching to Gear and back should
+  // return you to the family you were reading, not to everything.
+  const open = { fishes: ctx.params.get('family') || '', gear: '', zones: '' };
 
-  if (family) {
+  if (open.fishes) {
     for (const b of filterBar.querySelectorAll('[data-family]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.family === family));
+      b.setAttribute('aria-pressed', String(b.dataset.family === open.fishes));
     }
   }
 
@@ -298,7 +356,7 @@ export function mount(root, ctx) {
   function syncHash() {
     const params = new URLSearchParams();
     params.set('tab', tab);
-    if (tab === 'fishes' && family) params.set('family', family);
+    if (tab === 'fishes' && open.fishes) params.set('family', open.fishes);
     const next = `#/info?${params}`;
     if (location.hash !== next) history.replaceState(null, '', next);
   }
@@ -350,7 +408,7 @@ export function mount(root, ctx) {
   }
 
   function drawFishes() {
-    const shown = species.filter((s) => (!family || s.family === family) && matchesSpecies(s, query));
+    const shown = species.filter((s) => (!open.fishes || s.family === open.fishes) && matchesSpecies(s, query));
     const trivia = triviaFor(ctx.regionId, 'fishes').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -435,7 +493,7 @@ export function mount(root, ctx) {
   }
 
   function drawGear() {
-    const shown = GEAR.filter((g) => matchesGear(g, query));
+    const shown = GEAR.filter((g) => (!open.gear || g.group === open.gear) && matchesGear(g, query));
     const trivia = triviaFor(ctx.regionId, 'gear').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -469,7 +527,7 @@ export function mount(root, ctx) {
   }
 
   function drawZones() {
-    const shown = zones.filter((z) => matchesZone(z, query));
+    const shown = zones.filter((z) => (!open.zones || z.water === open.zones) && matchesZone(z, query));
     const trivia = triviaFor(ctx.regionId, 'zones').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
@@ -521,6 +579,17 @@ export function mount(root, ctx) {
     // empty row, and worse, took away the obvious way out — typing a name is
     // how you leave photo mode, which only works if the box is still there.
     filterBar.hidden = photo || tab !== 'fishes';
+
+    // Rebuilt rather than pre-rendered: the folders belong to the tab, and
+    // every tab has a different set of them.
+    if (folderBar) {
+      folderBar.hidden = photo;
+      if (!photo) {
+        const items = foldersFor(tab, ctx, species, zones);
+        const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
+        folderBar.innerHTML = foldersHtml(items, open[tab] || '', all);
+      }
+    }
     for (const b of tabBar.querySelectorAll('[data-tab]')) {
       b.setAttribute('aria-selected', String(!photo && b.dataset.tab === tab));
     }
@@ -551,7 +620,7 @@ export function mount(root, ctx) {
       clear.addEventListener('click', () => {
         clearTimeout(typing); // don't let a half-typed word redraw over the reset
         query = '';
-        family = '';
+        open[tab] = '';
         search.value = '';
         for (const b of filterBar.querySelectorAll('[data-family]')) {
           b.setAttribute('aria-pressed', String(!b.dataset.family));
@@ -604,9 +673,25 @@ export function mount(root, ctx) {
   filterBar.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-family]');
     if (!btn) return;
-    family = btn.dataset.family;
+    open.fishes = btn.dataset.family;
     for (const b of filterBar.querySelectorAll('[data-family]')) {
       b.setAttribute('aria-pressed', String(b === btn));
+    }
+    syncHash();
+    draw();
+  });
+
+  // Pressing the open folder again closes it, which is the only way back to
+  // "all" without hunting for a separate reset.
+  folderBar?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-folder]');
+    if (!btn) return;
+    const key = btn.dataset.folder;
+    open[tab] = open[tab] === key ? '' : key;
+    if (tab === 'fishes') {
+      for (const b of filterBar.querySelectorAll('[data-family]')) {
+        b.setAttribute('aria-pressed', String(b.dataset.family === open.fishes));
+      }
     }
     syncHash();
     draw();

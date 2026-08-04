@@ -1,7 +1,7 @@
 // Catch log + personal records.
 
 import { CONFIG } from '../config.js';
-import { store, computeStats } from '../store.js';
+import { store, computeStats, prefs } from '../store.js';
 import {
   isSignedIn, currentUser, listUsers, signUp, signIn,
   signInWithGoogle, signInWithFacebook,
@@ -280,6 +280,22 @@ function openCatchForm(ctx, entry, onDone) {
 
 let gateView = 'signin';
 
+// ---------------------------------------------------------------------------
+// GUEST MODE
+//
+// Not a fake account — a catch saved without one gets `userId: null` and is
+// adopted by the first account made (store.adoptOrphans). That behaviour has
+// always been there; the gate was simply hiding it, which made "you can start
+// now and keep it later" a promise the screen contradicted.
+//
+// Spots stay behind the account. They are filtered by userId with no orphan
+// path, and Gabriel asked for that gate on purpose.
+// ---------------------------------------------------------------------------
+
+const GUEST_KEY = 'guestMode';
+const isGuest = () => prefs.get(GUEST_KEY, false) === true;
+const setGuest = (on) => prefs.set(GUEST_KEY, on === true);
+
 // Only providers that are actually usable, in CONFIG.auth order. A button
 // that cannot succeed is worse than no button: Facebook's is coded and
 // working, but Meta will not grant the permissions to an individual, so it
@@ -322,36 +338,52 @@ const cloudSignInAvailable = () => cloudConfigured() && enabledProviders().lengt
 
 function signInHtml() {
   return `
-    ${cloudSignInAvailable() ? providerButtons() : ''}
-    ${cloudSignInAvailable() ? '<div class="rule"><span>or</span></div>' : ''}
-
-    <form id="authForm" autocomplete="on">
-      <div class="float">
-        <input type="text" id="a-user" name="username" required placeholder=" "
+    <form id="authForm" autocomplete="on" class="auth-form">
+      <div class="auth-field">
+        <span class="auth-field__ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/></svg>
+        </span>
+        <input type="text" id="a-user" name="username" required
+               placeholder="Username" aria-label="Username"
                autocapitalize="none" autocorrect="off" spellcheck="false"
                autocomplete="username">
-        <label for="a-user">Username</label>
       </div>
-      <div class="float">
-        <input type="password" id="a-pass" name="password" required placeholder=" "
+
+      <div class="auth-field">
+        <span class="auth-field__ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a5 5 0 0 1 5 5v2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v2h6V7a3 3 0 0 0-3-3Zm0 9a2 2 0 0 0-1 3.7V19h2v-2.3A2 2 0 0 0 12 13Z"/></svg>
+        </span>
+        <input type="password" id="a-pass" name="password" required
+               placeholder="Password" aria-label="Password"
                autocomplete="current-password">
-        <label for="a-pass">Password</label>
+        <button type="button" class="auth-field__peek" data-peek="a-pass"
+                aria-label="Show password" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="19" height="19"><path fill="currentColor" d="M12 5c5 0 9 4.4 10 7-1 2.6-5 7-10 7S3 14.6 2 12c1-2.6 5-7 10-7Zm0 2.4c-3.4 0-6.4 2.9-7.6 4.6C5.6 13.7 8.6 16.6 12 16.6s6.4-2.9 7.6-4.6C18.4 10.3 15.4 7.4 12 7.4Zm0 1.8a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z"/></svg>
+        </button>
       </div>
+
       <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
-      <button type="submit" class="btn btn--primary btn--block">Log in</button>
+      <button type="submit" class="btn btn--primary btn--block btn--tall">Log in</button>
     </form>
 
-    <div class="rule"><span>Don&rsquo;t have an account?</span></div>
-    <button class="btn btn--block btn--suggest" data-goto="signup">Sign up</button>`;
+    ${cloudSignInAvailable() ? '<div class="rule"><span>or</span></div>' : ''}
+    ${cloudSignInAvailable() ? providerButtons() : ''}
+
+    <button class="btn btn--block btn--provider" data-goto="guest">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/>
+      </svg>
+      Continue as guest
+    </button>
+
+    <p class="auth-swap">
+      Need an account? <button class="linkish" data-goto="signup">Sign up</button>
+    </p>`;
 }
 
 function signUpHtml() {
   return `
-    <button class="btn btn--sm btn--ghost" data-goto="signin" style="align-self:flex-start">
-      &larr; Back to sign in
-    </button>
-
-    <form id="authForm" autocomplete="on">
+    <form id="authForm" autocomplete="on" class="auth-form">
       <div class="float">
         <input type="text" id="a-user" name="username" required placeholder=" "
                autocapitalize="none" autocorrect="off" spellcheck="false"
@@ -384,8 +416,12 @@ function signUpHtml() {
       </div>
 
       <p class="field__hint" id="authError" role="alert" style="color:#C1121F"></p>
-      <button type="submit" class="btn btn--suggest btn--block">Create account</button>
+      <button type="submit" class="btn btn--primary btn--block btn--tall">Create account</button>
     </form>
+
+    <p class="auth-swap">
+      Already have an account? <button class="linkish" data-goto="signin">Log in</button>
+    </p>
 
     <div class="notice" style="margin-top:16px">
       <h3>Device-only accounts don&rsquo;t sync</h3>
@@ -427,21 +463,28 @@ function gateHtml() {
 }
 
 export function render(ctx) {
-  if (!isSignedIn()) return gateHtml();
-
   const user = currentUser();
+  if (!user && !isGuest()) return gateHtml();
+
   return `
     <section class="band band--green">
       <div class="wrap">
-        <p class="eyebrow">Signed in as ${esc(user.username)}</p>
+        <p class="eyebrow">${user ? `Signed in as ${esc(user.username)}` : 'Guest'}</p>
         <h1 class="display">Catch log</h1>
         <p class="subtitle">Every fish you log sharpens the pattern for the next trip.</p>
         <div class="center"><button class="btn btn--dark" id="addCatch">+ Log a catch</button></div>
-        <p class="sync-line" id="syncLine" data-state="${user.syncs ? 'idle' : 'local'}">${
-          user.syncs
-            ? 'Backed up to your account'
-            : 'On this device only — sign in with a connection to back it up'
+        <p class="sync-line" id="syncLine" data-state="${user?.syncs ? 'idle' : 'local'}">${
+          !user
+            ? 'Logging as a guest — these catches join the first account you make'
+            : user.syncs
+              ? 'Backed up to your account'
+              : 'On this device only — sign in with a connection to back it up'
         }</p>
+        ${
+          user
+            ? ''
+            : '<div class="center" style="margin-top:12px"><button class="btn btn--sm" id="leaveGuest">Sign in or create an account</button></div>'
+        }
       </div>
     </section>
 
@@ -484,7 +527,27 @@ function mountGate(root, ctx) {
 
   card.addEventListener('click', (e) => {
     const goto = e.target.closest('[data-goto]');
-    if (goto) swapTo(goto.dataset.goto);
+    if (!goto) return;
+    if (goto.dataset.goto === 'guest') {
+      setGuest(true);
+      toast('Looking around as a guest');
+      ctx.navigate('/log');
+      return;
+    }
+    swapTo(goto.dataset.goto);
+  });
+
+  // Reveal the password rather than make people retype it. aria-pressed
+  // carries the state, so a screen reader hears the toggle change too.
+  card.addEventListener('click', (e) => {
+    const peek = e.target.closest('[data-peek]');
+    if (!peek) return;
+    const field = card.querySelector(`#${peek.dataset.peek}`);
+    if (!field) return;
+    const showing = field.type === 'text';
+    field.type = showing ? 'password' : 'text';
+    peek.setAttribute('aria-pressed', String(!showing));
+    peek.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
   });
 
   const errorLine = card.querySelector('#authError');
@@ -507,6 +570,7 @@ function mountGate(root, ctx) {
       try {
         const profile = name === 'google' ? await signInWithGoogle() : await signInWithFacebook();
         if (profile) {
+          setGuest(false);
           toast(`Signed in as ${profile.username}`);
           ctx.navigate('/log');
           return;
@@ -556,6 +620,10 @@ function mountGate(root, ctx) {
         toast(`Signed in as ${user.username}`);
       }
       gateView = 'signin'; // so signing out later lands on the right screen
+      // Whoever they were a moment ago, they have an account now. Leaving the
+      // flag set would keep the gate hidden after a later sign-out, which is
+      // the one moment it has to come back.
+      setGuest(false);
       ctx.navigate('/log');
     } catch (err) {
       if (errorLine) errorLine.textContent = err.message;
@@ -567,6 +635,13 @@ function mountGate(root, ctx) {
 
 export async function mount(root, ctx) {
   if (mountGate(root, ctx)) return;
+
+  // Signing in is what ends guest mode — the flag would otherwise keep the
+  // gate hidden after a sign-out, which is the one time it must come back.
+  root.querySelector('#leaveGuest')?.addEventListener('click', () => {
+    setGuest(false);
+    ctx.navigate('/log');
+  });
 
   const user = currentUser();
   const statsPane = root.querySelector('#statsPane');
@@ -604,7 +679,7 @@ export async function mount(root, ctx) {
 
   async function refresh() {
     releaseUrls();
-    const catches = await store.allCatches(user.id);
+    const catches = await store.allCatches(user ? user.id : null);
     const stats = computeStats(catches);
 
     statsPane.innerHTML = `
@@ -698,7 +773,7 @@ export async function mount(root, ctx) {
 
   // Pull anything logged on another device. After the first render, so the
   // catches already here appear immediately rather than behind a round trip.
-  if (user.syncs) {
+  if (user?.syncs) {
     showSync('busy', 'Checking for catches from your other devices…');
     const result = await syncNow();
 

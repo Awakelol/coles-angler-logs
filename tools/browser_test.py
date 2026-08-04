@@ -774,14 +774,19 @@ async def main():
                          google: !!document.querySelector('[data-provider=google]'),
                          facebook: !!document.querySelector('[data-provider=facebook]'),
                          signupBtn: !!document.querySelector('[data-goto=signup]'),
-                         // Providers must come before the username field.
+                         // Credentials first, then "or", then the providers —
+                         // the shape of the reference Gabriel picked, and the
+                         // order most people expect on a screen they have seen
+                         // a thousand times. Providers used to sit on top.
                          order: (() => {
                              const g = document.querySelector('[data-provider=google]');
                              const u = document.getElementById('a-user');
                              if (!g || !u) return false;
-                             return !!(g.compareDocumentPosition(u) &
+                             return !!(u.compareDocumentPosition(g) &
                                        Node.DOCUMENT_POSITION_FOLLOWING);
                          })(),
+                         guest: !!document.querySelector('[data-goto=guest]'),
+                         peek: !!document.querySelector('[data-peek]'),
                          hasEmail: !!document.getElementById('a-email') };
             """)
             check("log is gated when signed out", gated["form"], str(gated))
@@ -793,7 +798,21 @@ async def main():
             check("the live provider is offered", gated["google"], str(gated))
             check("disabled providers are not advertised",
                   not gated["facebook"], str(gated))
-            check("providers sit above the username field", gated["order"], str(gated))
+            check("the username field comes before the providers", gated["order"], str(gated))
+            check("the password can be revealed", gated["peek"], str(gated))
+            # The base input rule is six :not()s deep — (0,6,1) — so a plain
+            # `.auth-field input` lost and the leading icon sat on top of the
+            # first letter. Measured, because it looks fine until you read it.
+            room = await page.eval("""
+                const box = document.querySelector(".auth-field");
+                const input = box.querySelector("input");
+                const ico = box.querySelector(".auth-field__ico").getBoundingClientRect();
+                return { pad: parseFloat(getComputedStyle(input).paddingLeft),
+                         icoRight: Math.round(ico.right - box.getBoundingClientRect().left) };
+            """)
+            check("the field leaves room for its icon",
+                  room["pad"] >= room["icoRight"] + 2, str(room))
+            check("there is a way in without an account", gated["guest"], str(gated))
             check("sign-up is a separate action, not a tab", gated["signupBtn"], str(gated))
             check("sign-in screen has no email field", not gated["hasEmail"], str(gated))
 
@@ -840,6 +859,11 @@ async def main():
             # Floating labels: the name sits inside the empty field, then lifts
             # and STAYS above once there's content — it must never vanish.
             floating = await page.eval("""
+                // Sign-IN uses plain fields with a leading icon now — two fields
+                // on an empty screen do not need a label that animates. Sign-UP
+                // has five and still does, so that is where the pattern lives.
+                document.querySelector('[data-goto=signup]').click();
+                await new Promise(r => setTimeout(r, 800));
                 const wrap = document.querySelector('.float');
                 const input = wrap.querySelector('input');
                 const label = wrap.querySelector('label');
@@ -888,7 +912,9 @@ async def main():
                   floating["properLabel"] and floating["placeholderBlank"], str(floating))
 
             signup = await page.eval("""
-                document.querySelector('[data-goto=signup]').click();
+                // The floating-label block above already switched here, so this
+                // has to be idempotent rather than assume it is on sign-in.
+                document.querySelector('[data-goto=signup]')?.click();
                 await new Promise(r => setTimeout(r, 600));
                 return { email: !!document.getElementById('a-email'),
                          confirm: !!document.getElementById('a-pass2'),
@@ -1383,7 +1409,8 @@ async def main():
 
                     location.hash = '#/';
                     await new Promise(r => setTimeout(r, 250));
-                    location.hash = '#/settings';
+                    // Settings is an index now; the sections live behind ?p=.
+                    location.hash = '#/settings?p=account';
                     await new Promise(r => setTimeout(r, 900));
 
                     const rows = [...document.querySelectorAll('#providerList li')]
@@ -1812,9 +1839,66 @@ async def main():
             check("no API key is shipped to the browser",
                   keys["noAnthropicKey"], str(keys))
 
+            # -------------------------------------------------- settings shape
+            print("\nSettings")
+            await page.goto(f"{BASE}/index.html#/settings")
+            await page.wait_for("document.querySelector('.set-row')", label="settings index")
+
+            index = await page.eval("""
+                const rows = [...document.querySelectorAll(".set-row")];
+                return {
+                    rows: rows.length,
+                    groups: [...document.querySelectorAll(".set-group")]
+                        .map(e => e.textContent.trim()),
+                    // An index, not the whole of settings on one page: none of
+                    // the controls may be here.
+                    noControls: !document.querySelector("#saveTides, #saveWeather, #themePicker"),
+                    // Each row says what it is currently set to. A list that
+                    // only names its sections makes you open every one.
+                    allHaveValues: rows.every(r => (r.querySelector(".set-row__v")?.textContent || "").trim()),
+                    keys: rows.map(r => new URL(r.href, location.href).hash.split("p=")[1]),
+                };
+            """)
+            check("settings is an index of rows", index["rows"] >= 6 and index["noControls"],
+                  str(index))
+            check("the rows are grouped", index["groups"] == ["Account", "App", "Data", "About"],
+                  str(index["groups"]))
+            check("every row shows its current value", index["allHaveValues"], str(index))
+
+            # EVERY panel, not a sample. mount() runs whole for whichever panel
+            # is on screen, and it used to assume all of them were — one
+            # unguarded querySelector threw and the router replaced the entire
+            # page with "Something broke on this screen". That is the specific
+            # failure splitting this route invites.
+            broke = []
+            for key in index["keys"]:
+                await page.goto(f"{BASE}/index.html#/settings?p={key}")
+                await asyncio.sleep(1.0)
+                state = await page.eval("""
+                    return { err: !!document.querySelector(".notice--error"),
+                             back: !!document.querySelector(".set-back"),
+                             heading: document.querySelector(".display")?.textContent.trim(),
+                             jsError: document.body.getAttribute("data-js-error") };
+                """)
+                if state["err"] or not state["back"] or state["jsError"]:
+                    broke.append(f"{key}: {state}")
+            check("every settings panel opens without breaking", not broke,
+                  "; ".join(broke))
+
+            # A panel that no longer exists, a typo, an old bookmark — all of
+            # them have to land somewhere useful rather than on a blank screen.
+            await page.goto(f"{BASE}/index.html#/settings?p=nonsense")
+            await asyncio.sleep(0.8)
+            fallback = await page.eval("""
+                return { rows: document.querySelectorAll(".set-row").length,
+                         back: !!document.querySelector(".set-back") };
+            """)
+            check("an unknown panel falls back to the index",
+                  fallback["rows"] >= 6 and not fallback["back"], str(fallback))
+
             # -------------------------------------------------- version
             print("\nVersion")
-            await page.goto(f"{BASE}/index.html#/settings")
+            await page.goto(f"{BASE}/index.html#/settings?p=about")
             await page.wait_for("document.querySelector('#appVersion')", label="settings")
 
             ver = await page.eval("""
@@ -1937,7 +2021,7 @@ async def main():
                   locked["strayStoredMode"] == "modern", str(locked))
 
             hidden = await page.eval("""
-                location.hash = '#/settings';
+                location.hash = '#/settings?p=about';
                 await new Promise(r => setTimeout(r, 900));
                 return { fieldHidden: document.getElementById('retroField')?.hidden,
                          versionTappable: !!document.getElementById('appVersion') };
@@ -2011,7 +2095,7 @@ async def main():
 
             relocked = await page.eval("""
                 const am = await import('./js/art-mode.js');
-                location.hash = '#/settings';
+                location.hash = '#/settings?p=about';
                 await new Promise(r => setTimeout(r, 900));
                 document.getElementById('relockBtn').click();
                 await new Promise(r => setTimeout(r, 400));
@@ -2033,7 +2117,8 @@ async def main():
                 "log": ("#/log", ".kpi__v, #authForm"),
                 "legacy-species": ("#/species", ".species-card"),
                 "legacy-tips": ("#/tips", ".tip-card"),
-                "settings": ("#/settings", "#saveTides"),
+                "settings": ("#/settings", ".set-row"),
+                "settings-panel": ("#/settings?p=tides", "#saveTides"),
             }
             print("\nRoutes")
             for name, (hash_, sel) in routes.items():

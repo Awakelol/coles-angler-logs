@@ -562,6 +562,68 @@ a ring on the button instead, it travels with the button and is still there
 when the bar rolls away, which reads as the + growing a collar rather than the
 nav retracting.
 
+### Two names, and a face
+
+The **handle** is what you signed up as: unique, validated, and what the account
+*is*. The **display name** is a label on top of it — anything, including nothing,
+in which case the handle shows. Keeping them apart is what lets someone rename
+themselves without their sign-in quietly becoming something else.
+
+Avatars are centre-cropped to a square **at the source**, not with `object-fit`.
+The same blob is shown at 84px on the account screen and smaller elsewhere, and
+cropping in CSS crops a portrait differently at every aspect — cropping once
+means every place it appears shows the same face.
+
+**Neither syncs.** They live in IndexedDB (`profiles`, DB v3) per account.
+Firestore's rules permit `users/{uid}/catches` and nothing else, so a profile
+document would be denied. The shape is ready — one row keyed by the same account
+id — but publishing that rule is a console action.
+
+### Guest mode
+
+**Not a fake account.** A catch saved without one gets `userId: null` and is
+adopted by the first account made (`store.adoptOrphans`). That behaviour was
+always there; the sign-in gate was hiding it, which made “start now, keep it
+later” a promise the screen contradicted.
+
+Spots stay behind the account — they are filtered by `userId` with no orphan
+path, and that gate is deliberate.
+
+Signing in or up clears the flag. It has to: left set, it would keep the gate
+hidden after a later sign-out, which is the one moment it must come back.
+
+### Settings is an index
+
+`#/settings` lists grouped rows; `?p=<key>` opens one panel. Same sections, same
+ids, one `mount()`.
+
+**Every lookup in that mount must be guarded.** It runs whole for whichever
+panel is on screen, and it used to assume all of them were — one unguarded
+`querySelector(...).textContent` threw and the router replaced the entire page
+with “Something broke on this screen”. A test opens every panel in turn and
+fails on an error card, because that is the specific failure splitting a route
+like this invites. An unknown `?p=` falls back to the index.
+
+### Info folders
+
+Below 900px the subcategory chips become **folders** — families for fishes,
+`GEAR_GROUPS` for gear, bodies of water for zones. All three already exist in
+the data, so this names them rather than inventing a taxonomy. One open folder
+*per tab*, so switching to Gear and back returns you to the family you were
+reading. Pressing the open one closes it.
+
+The silhouette is a single `clip-path` polygon, not a border plus a pseudo-
+element tab: two shapes meeting is two edges to line up and a seam that shows at
+every zoom level. Above 900px the chips come back — a wide window has room to
+show every subcategory at once, which is what chips are for.
+
+### Installing on an iPhone
+
+Safari → Share → **Add to Home Screen**. Nothing special is needed: the
+`apple-touch-icon`, `apple-mobile-web-app-title` and `display: standalone` are
+all present. `mobile-web-app-capable` is there too — Chrome warns about a page
+carrying only Apple’s prefixed version.
+
 ### The desktop rail
 
 At **900px and up** the bar becomes a rail down the left: a dark panel with the
@@ -697,7 +759,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 472 checks, phone width
+python tools/browser_test.py        # terminal 2 — 482 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

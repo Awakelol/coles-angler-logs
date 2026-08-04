@@ -100,29 +100,61 @@ function fmtWhen(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-export function render() {
+// ---------------------------------------------------------------------------
+// ONE THING AT A TIME
+//
+// Settings used to be seven sections stacked on one page. Everything was
+// visible, which sounds like a virtue and reads as a wall: the two controls
+// most people ever touch sat between an API key field and a changelog.
+//
+// Now the route is an index, and `?p=<key>` opens a single panel. Same
+// sections, same ids, same mount() — mount uses `?.` throughout, so a panel
+// that isn't on screen simply has nothing to wire.
+// ---------------------------------------------------------------------------
+
+const ICONS = {
+  account: '<path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/>',
+  appearance: '<path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c.8 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8Zm-4.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/>',
+  weather: '<path fill="currentColor" d="M7 18a4.5 4.5 0 0 1-.4-9 6 6 0 0 1 11.4 1.6A4 4 0 0 1 17.5 18Z"/>',
+  tides: '<g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M2.5 9.5c2.4-2.6 4.8-2.6 7.2 0s4.8 2.6 7.2 0 4.8-2.6 5.1 0"/><path d="M2.5 15.5c2.4-2.6 4.8-2.6 7.2 0s4.8 2.6 7.2 0 4.8-2.6 5.1 0"/></g>',
+  data: '<path fill="currentColor" d="M12 2c4.4 0 8 1.3 8 3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5c0-1.7 3.6-3 8-3Zm0 2c-3.6 0-6 1-6 1s2.4 1 6 1 6-1 6-1-2.4-1-6-1Zm6 4.6C16.6 9.2 14.5 9.5 12 9.5s-4.6-.3-6-.9V12c.5.5 2.7 1.2 6 1.2s5.5-.7 6-1.2Zm0 6C16.6 15.2 14.5 15.5 12 15.5s-4.6-.3-6-.9V18c.5.5 2.7 1.2 6 1.2s5.5-.7 6-1.2Z"/>',
+  regions: '<path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3a15.6 15.6 0 0 0-1.2-5.4A8 8 0 0 1 18.9 11ZM12 4.2c.8 1.1 1.6 3.3 1.8 6.8h-3.6c.2-3.5 1-5.7 1.8-6.8ZM5.1 11a8 8 0 0 1 4.2-5.4A15.6 15.6 0 0 0 8.1 11Zm0 2h3c.1 2 .5 3.9 1.2 5.4A8 8 0 0 1 5.1 13ZM12 19.8c-.8-1.1-1.6-3.3-1.8-6.8h3.6c-.2 3.5-1 5.7-1.8 6.8Zm2.7-1.4c.7-1.5 1.1-3.4 1.2-5.4h3a8 8 0 0 1-4.2 5.4Z"/>',
+  about: '<path fill="currentColor" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 4.4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8ZM10.8 11v6.4h2.4V11Z"/>',
+};
+
+const chevron = `
+  <svg class="set-row__go" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+          stroke-linejoin="round" d="m9.5 5.5 6.5 6.5-6.5 6.5"/>
+  </svg>`;
+
+/**
+ * The panels, in the order they appear on the index.
+ *
+ * `sub` is the one line the row shows underneath its name — the current value
+ * where there is one. A settings list that only names its sections makes you
+ * open every panel to find out what anything is set to.
+ */
+function panels() {
   const t = CONFIG.tides;
   const w = CONFIG.weather;
+  const user = currentUser();
 
-  return `
-    <section class="band band--cream">
-      <div class="wrap">
-        <p class="eyebrow">Configuration</p>
-        <h1 class="display">Settings</h1>
-        <p class="subtitle">Keys are stored only in this browser and are never sent anywhere except the provider you choose.</p>
-      </div>
-    </section>
-
-    <section class="band band--green">
-      <div class="wrap">
-        <div class="section-head"><h2>Account</h2><p>Who this device's log belongs to</p></div>
+  return [
+    {
+      key: 'account',
+      group: 'Account',
+      title: 'Account & sync',
+      sub: user ? `@${user.username}` : 'Not signed in',
+      blurb: "Who this device's log belongs to",
+      body: () => `
         <div class="card">
           ${
-            currentUser()
+            user
               ? `<div class="row-between">
                    <div>
                      <p class="card__sub">Signed in as</p>
-                     <h3 class="card__title" style="font-size:20px">${esc(currentUser().username)}</h3>
+                     <h3 class="card__title" style="font-size:20px">${esc(user.username)}</h3>
                    </div>
                    <button class="btn btn--sm" id="signOutBtn">Sign out</button>
                  </div>
@@ -132,15 +164,26 @@ export function render() {
               : `<p class="card__body">Not signed in. The catch log asks you to sign in or create an account.</p>
                  <a class="btn btn--sm btn--primary" href="#/log" style="align-self:flex-start">Go to the log</a>`
           }
-          ${currentUser() ? connectedHtml() : ''}
-        </div>
-      </div>
-    </section>
+          ${user ? connectedHtml() : ''}
+        </div>`,
+    },
 
-    <section class="band band--violet">
-      <div class="wrap">
-        <div class="section-head"><h2>Appearance</h2><p>Follows your phone unless you choose</p></div>
+    {
+      key: 'appearance',
+      group: 'App',
+      title: 'Appearance',
+      sub: THEME_LOCKED ? 'Light' : themeLabel(getTheme()),
+      blurb: 'Follows your phone unless you choose',
+      body: () => `
         <div class="card">
+          ${
+            THEME_LOCKED
+              ? `<p class="card__body">
+                   The app is light for now while the new palette settles. Dark mode is
+                   still here and still works &mdash; it is turned off, not removed.
+                 </p>`
+              : ''
+          }
           <div class="field" ${THEME_LOCKED ? 'hidden' : ''}>
             <label>Theme</label>
             <div class="chips" id="themePicker">
@@ -148,19 +191,22 @@ export function render() {
                 (t) => `
                 <button class="chip" data-theme-choice="${esc(t)}"
                         aria-pressed="${t === getTheme()}">
-                  ${t === 'system' ? 'Match phone' : t[0].toUpperCase() + t.slice(1)}
+                  ${themeLabel(t)}
                 </button>`
               ).join('')}
             </div>
             <p class="field__hint" id="themeHint"></p>
           </div>
-        </div>
-      </div>
-    </section>
+        </div>`,
+    },
 
-    <section class="band band--sky">
-      <div class="wrap">
-        <div class="section-head"><h2>Weather</h2><p>Works with no key by default</p></div>
+    {
+      key: 'weather',
+      group: 'App',
+      title: 'Weather',
+      sub: w.provider === 'openweather' ? 'OpenWeather' : 'Open-Meteo',
+      blurb: 'Works with no key by default',
+      body: () => `
         <div class="card">
           <div class="field">
             <label for="w-provider">Provider</label>
@@ -178,13 +224,16 @@ export function render() {
             </p>
           </div>
           <button class="btn btn--primary" id="saveWeather">Save weather settings</button>
-        </div>
-      </div>
-    </section>
+        </div>`,
+    },
 
-    <section class="band band--yellow">
-      <div class="wrap">
-        <div class="section-head"><h2>Tides</h2><p>Requires a key from one of these providers</p></div>
+    {
+      key: 'tides',
+      group: 'App',
+      title: 'Tides',
+      sub: t.provider === 'none' ? 'Not set up' : t.provider === 'worldtides' ? 'WorldTides' : 'Stormglass',
+      blurb: 'Requires a key from one of these providers',
+      body: () => `
         <div class="card">
           <div class="field">
             <label for="t-provider">Provider</label>
@@ -214,13 +263,16 @@ export function render() {
           </div>
 
           <button class="btn btn--primary" id="saveTides">Save tide settings</button>
-        </div>
-      </div>
-    </section>
+        </div>`,
+    },
 
-    <section class="band band--cream">
-      <div class="wrap">
-        <div class="section-head"><h2>Your data</h2><p>Everything lives on this device</p></div>
+    {
+      key: 'data',
+      group: 'Data',
+      title: 'Your data',
+      sub: 'Export, import, delete',
+      blurb: 'Everything lives on this device',
+      body: () => `
         <div class="card">
           <p class="card__body">
             Catches are stored in this browser's IndexedDB. Clearing site data — or uninstalling
@@ -232,17 +284,20 @@ export function render() {
               Import JSON
               <input type="file" id="importInput" accept="application/json,.json" hidden>
             </label>
-            <button class="btn btn--sm" id="clearBtn" style="color:#C1121F">Delete all catches</button>
+            <button class="btn btn--sm btn--danger" id="clearBtn">Delete all catches</button>
           </div>
           <p class="field__hint">Export omits photos — JSON can't carry image data. Photos stay on the device only.</p>
           <div id="storageInfo" class="field__hint"></div>
-        </div>
-      </div>
-    </section>
+        </div>`,
+    },
 
-    <section class="band band--green">
-      <div class="wrap">
-        <div class="section-head"><h2>Regions</h2><p>${REGIONS.length} loaded</p></div>
+    {
+      key: 'regions',
+      group: 'Data',
+      title: 'Regions',
+      sub: `${REGIONS.length} loaded`,
+      blurb: 'The waters this app knows about',
+      body: () => `
         <div class="card">
           <ul style="margin:0;padding-left:20px;line-height:1.8;font-weight:700">
             ${REGIONS.map((r) => `<li>${esc(r.name)}, ${esc(r.country)} — ${(r.species || []).length} species, ${(r.spots || []).length} spots</li>`).join('')}
@@ -252,20 +307,20 @@ export function render() {
             <code>js/data/index.js</code>. The picker in the header appears automatically once there is
             more than one.
           </p>
-        </div>
-      </div>
-    </section>
+        </div>`,
+    },
 
-    <!-- Which build is this? A fair question on a PWA, where a stale service
-         worker can leave a phone a week behind the site and say nothing. The
-         cache name is read from the browser rather than printed from a
-         constant, so it is evidence rather than a claim. -->
-    <section class="band band--cream">
-      <div class="wrap">
-        <div class="section-head">
-          <h2>Version</h2>
-          <p>What this device is running</p>
-        </div>
+    {
+      // Which build is this? A fair question on a PWA, where a stale service
+      // worker can leave a phone a week behind the site and say nothing. The
+      // cache name is read from the browser rather than printed from a
+      // constant, so it is evidence rather than a claim.
+      key: 'about',
+      group: 'About',
+      title: 'Version & history',
+      sub: `v${APP_VERSION}`,
+      blurb: 'What this device is running',
+      body: () => `
         <div class="card">
           <p class="version-line">
             Cole&rsquo;s Angler Log <strong id="appVersion">v${esc(APP_VERSION)}</strong>
@@ -310,7 +365,83 @@ export function render() {
               ).join('')}
             </ol>
           </details>
-        </div>
+        </div>`,
+    },
+  ];
+}
+
+const themeLabel = (t) => (t === 'system' ? 'Match phone' : t[0].toUpperCase() + t.slice(1));
+
+function indexHtml(list) {
+  // Grouped in source order, so a group's position is decided by where its
+  // first panel sits rather than by a second list that could disagree.
+  const groups = [];
+  for (const p of list) {
+    const found = groups.find((g) => g.name === p.group);
+    if (found) found.items.push(p);
+    else groups.push({ name: p.group, items: [p] });
+  }
+
+  return `
+    <section class="band band--cream">
+      <div class="wrap wrap--narrow">
+        <p class="eyebrow">Configuration</p>
+        <h1 class="display">Settings</h1>
+
+        ${groups
+          .map(
+            (g) => `
+          <p class="set-group">${esc(g.name)}</p>
+          <div class="set-list">
+            ${g.items
+              .map(
+                (p) => `
+              <a class="set-row" href="#/settings?p=${esc(p.key)}">
+                <span class="set-row__ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20">${ICONS[p.key] || ''}</svg>
+                </span>
+                <span class="set-row__body">
+                  <span class="set-row__k">${esc(p.title)}</span>
+                  <span class="set-row__v">${esc(p.sub)}</span>
+                </span>
+                ${chevron}
+              </a>`
+              )
+              .join('')}
+          </div>`
+          )
+          .join('')}
+
+        <p class="field__hint" style="margin-top:18px">
+          Keys are stored only in this browser and are never sent anywhere except the
+          provider you choose.
+        </p>
+      </div>
+    </section>`;
+}
+
+export function render(ctx) {
+  const list = panels();
+  const key = ctx?.params?.get('p');
+  const panel = list.find((p) => p.key === key);
+
+  // An unknown ?p= falls back to the index rather than an empty screen. Old
+  // links, a typo, and a panel that was removed all land somewhere useful.
+  if (!panel) return indexHtml(list);
+
+  return `
+    <section class="band band--cream">
+      <div class="wrap wrap--narrow">
+        <a class="set-back" href="#/settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"
+                  stroke-linejoin="round" d="m14.5 5.5-6.5 6.5 6.5 6.5"/>
+          </svg>
+          Settings
+        </a>
+        <h1 class="display display--sm">${esc(panel.title)}</h1>
+        <p class="subtitle subtitle--tight">${esc(panel.blurb)}</p>
+        ${panel.body()}
       </div>
     </section>`;
 }
@@ -387,6 +518,7 @@ export function mount(root) {
   const themeHint = root.querySelector('#themeHint');
 
   const describeTheme = () => {
+    if (!themeHint) return;
     const choice = getTheme();
     themeHint.textContent =
       choice === 'system'
@@ -395,7 +527,7 @@ export function mount(root) {
   };
   describeTheme();
 
-  themePicker.addEventListener('click', (e) => {
+  themePicker?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-theme-choice]');
     if (!btn) return;
     setTheme(btn.dataset.themeChoice);
@@ -408,15 +540,15 @@ export function mount(root) {
   // --- weather ---
   const wProvider = root.querySelector('#w-provider');
   const owWrap = root.querySelector('#ow-key-wrap');
-  wProvider.addEventListener('change', () => {
-    owWrap.hidden = wProvider.value !== 'openweather';
+  wProvider?.addEventListener('change', () => {
+    if (owWrap) owWrap.hidden = wProvider.value !== 'openweather';
   });
 
-  root.querySelector('#saveWeather').addEventListener('click', () => {
+  root.querySelector('#saveWeather')?.addEventListener('click', () => {
     saveOverrides({
       weather: {
         provider: wProvider.value,
-        openWeatherKey: root.querySelector('#w-key').value.trim(),
+        openWeatherKey: root.querySelector('#w-key')?.value.trim() || '',
       },
     });
     toast('Weather settings saved');
@@ -425,25 +557,26 @@ export function mount(root) {
   // --- tides ---
   const tProvider = root.querySelector('#t-provider');
   const syncTideFields = () => {
+    if (!tProvider) return;
     for (const f of root.querySelectorAll('[data-key-for]')) {
       f.hidden = f.dataset.keyFor !== tProvider.value;
     }
   };
-  tProvider.addEventListener('change', syncTideFields);
+  tProvider?.addEventListener('change', syncTideFields);
 
-  root.querySelector('#saveTides').addEventListener('click', () => {
+  root.querySelector('#saveTides')?.addEventListener('click', () => {
     saveOverrides({
       tides: {
         provider: tProvider.value,
-        worldTidesKey: root.querySelector('#t-wt').value.trim(),
-        stormglassKey: root.querySelector('#t-sg').value.trim(),
+        worldTidesKey: root.querySelector('#t-wt')?.value.trim() || '',
+        stormglassKey: root.querySelector('#t-sg')?.value.trim() || '',
       },
     });
     toast('Tide settings saved');
   });
 
   // --- data ---
-  root.querySelector('#exportBtn').addEventListener('click', async () => {
+  root.querySelector('#exportBtn')?.addEventListener('click', async () => {
     const json = await exportJson();
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -455,7 +588,7 @@ export function mount(root) {
     toast('Exported');
   });
 
-  root.querySelector('#importInput').addEventListener('change', async (e) => {
+  root.querySelector('#importInput')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -467,7 +600,7 @@ export function mount(root) {
     e.target.value = '';
   });
 
-  root.querySelector('#clearBtn').addEventListener('click', async () => {
+  root.querySelector('#clearBtn')?.addEventListener('click', async () => {
     if (!confirm('Delete every logged catch? This cannot be undone.')) return;
     await store.clearCatches();
     toast('All catches deleted');
@@ -546,8 +679,12 @@ export function mount(root) {
   }
 
   // --- storage estimate ---
+  // Guarded on the element, not just the API. Settings is one panel at a time
+  // now, so every one of these lookups can legitimately come back null — and
+  // an unguarded one throws inside mount(), which the router turns into
+  // "Something broke on this screen" for the whole page.
   const info = root.querySelector('#storageInfo');
-  if (navigator.storage?.estimate) {
+  if (info && navigator.storage?.estimate) {
     navigator.storage.estimate().then(({ usage, quota }) => {
       if (!usage && !quota) return;
       const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;

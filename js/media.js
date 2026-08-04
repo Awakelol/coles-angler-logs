@@ -151,6 +151,51 @@ export async function checkStorage(incomingBytes) {
  * @returns {Promise<{kind:'image'|'video', blob:Blob, poster:Blob|null, duration:number|null}>}
  * @throws {Error} with a message written for the user, not the console.
  */
+/**
+ * An avatar: centre-cropped to a square and shrunk hard.
+ *
+ * Square at the source rather than in CSS, because the same blob is shown at
+ * 96px on the account screen and 34px in a row, and `object-fit` on a portrait
+ * photo crops differently at each aspect. Cropping once means every place it
+ * appears shows the same face.
+ *
+ * 256px covers a 96px slot on a 2x screen with room to spare, and puts a
+ * finished avatar around 15-25 KB.
+ */
+export async function prepareAvatar(file) {
+  if (kindOf(file) !== 'image') {
+    throw new Error('Choose a photo for your profile picture.');
+  }
+  if (file.size > LIMITS.imageBytes) {
+    throw new Error(`That photo is ${fmtMB(file.size)}; the limit is ${fmtMB(LIMITS.imageBytes)}.`);
+  }
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const side = Math.min(img.width, img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = Math.min(256, side);
+      canvas.getContext('2d').drawImage(
+        img,
+        (img.width - side) / 2, (img.height - side) / 2, side, side,
+        0, 0, canvas.width, canvas.height
+      );
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('Could not process that image.'))),
+        'image/jpeg',
+        0.85
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('That image could not be read. Try saving it as JPEG first.'));
+    };
+    img.src = url;
+  });
+}
+
 export async function prepareMedia(file) {
   const kind = kindOf(file);
   if (!kind) {

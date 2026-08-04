@@ -20,9 +20,20 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.4.1';
+export const APP_VERSION = '3.5.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.5.0',
+    date: '2026-08-05',
+    title: 'A face, a name, and tidier screens',
+    changes: [
+      'Add a profile photo and pick a display name — your handle stays as it is.',
+      'Settings is a list you choose from, instead of everything at once.',
+      'Species groups, gear and waters are sorted into folders.',
+      'A tidier sign-in, and you can look around as a guest.',
+    ],
+  },
   {
     version: '3.4.1',
     date: '2026-08-04',
