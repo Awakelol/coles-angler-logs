@@ -2373,7 +2373,11 @@ async def main():
             nav = await page.eval("""
                 document.querySelector('.sheet-backdrop')?.remove();
                 document.body.classList.remove('is-sheet-open');
-                const items = [...document.querySelectorAll('.tabbar a')];
+                // Rendered children only. The rail's brand, group headings,
+                // Log and Settings live in the same nav and sit out at this
+                // width; counting them would describe a bar nobody sees.
+                const shown = (el) => getComputedStyle(el).display !== 'none';
+                const items = [...document.querySelectorAll('.tabbar a')].filter(shown);
                 const account = document.querySelector('.tabbar a[data-tab="/account"]');
                 account.click();
                 await new Promise(r => setTimeout(r, 700));
@@ -2381,7 +2385,7 @@ async def main():
                 const bar = barEl.getBoundingClientRect();
                 const fabEl = document.getElementById('quickBtn');
                 const fab = fabEl.getBoundingClientRect();
-                const kids = [...barEl.children];
+                const kids = [...barEl.children].filter(shown);
                 return {
                     order: items.map(e => e.querySelector('span').textContent.trim()),
                     // The + is a slot in the bar, in the middle, where the Log

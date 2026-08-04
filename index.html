@@ -105,7 +105,18 @@
 </div>
 <div class="quick-veil" id="quickVeil" hidden></div>
 
+<!-- ONE nav for both layouts. A phone bar and a desktop rail built as two
+     elements would mean two sets of links, two active states, and a route that
+     highlights in one and not the other the first time someone adds a page.
+     What differs is which children show and how they flow — see the rail block
+     in the stylesheet. -->
 <nav class="tabbar" aria-label="Primary">
+  <!-- Rail only. On a phone the brand is in the top bar. -->
+  <a class="rail__head" href="#/">
+    <span class="rail__mark" id="railMark"></span>
+    <span class="rail__name">Cole&rsquo;s Angler Log</span>
+  </a>
+  <p class="rail__group">Explore</p>
   <a href="#/" data-tab="/" aria-label="Home">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg>
     <span>Home</span>
@@ -115,21 +126,36 @@
     <span>Map</span>
   </a>
 
-  <!-- The middle slot, where the Log tab used to be. The log is not lost — it
-       is the first thing the + offers, and it keeps its own route. The bars are
+  <!-- The middle slot on a phone, where the Log tab used to be. The log is not
+       lost there — it is the first thing the + offers, and it keeps its own
+       route. On the rail there is room for both, so the Log link below comes
+       back and this is hoisted to the top as the primary action. The bars are
        two halves of one shape, rotated, which is what makes + BECOME x rather
        than swap for it. -->
   <button type="button" class="fab" id="quickBtn"
           aria-expanded="false" aria-controls="quickMenu" aria-label="Add">
     <span class="fab__x" aria-hidden="true"><i></i><i></i></span>
+    <span class="fab__label">New entry</span>
   </button>
+
+  <!-- Rail only: the phone bar has five slots and the + took this one. -->
+  <a class="rail-only" href="#/log" data-tab="/log" aria-label="Log">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 5v3H9v2h3v3h2v-3h3v-2h-3V8Z"/></svg>
+    <span>Log</span>
+  </a>
   <a href="#/info" data-tab="/info" aria-label="Info">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h11a3 3 0 0 1 3 3v16a1 1 0 0 1-1 1H7a3 3 0 0 1-3-3V5a3 3 0 0 1 2-2.8Zm0 15.2V19a1 1 0 0 0 1 1h11v-2H7a3 3 0 0 0-1 .2ZM12 5.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4ZM11 9.5h2V15h-2Z"/></svg>
     <span>Info</span>
   </a>
+  <p class="rail__group">You</p>
   <a href="#/account" data-tab="/account" aria-label="Account">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/></svg>
     <span>Account</span>
+  </a>
+  <!-- Rail only: on a phone this is the gear in the top bar. -->
+  <a class="rail-only" href="#/settings" data-tab="/settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7 7 0 0 0-.1-1.1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L16.2 3h-4l-.4 2.8a7 7 0 0 0-1.9 1.1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.8h4l.4-2.8a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.6c.06-.36.1-.73.1-1.1Z"/></svg>
+    <span>Settings</span>
   </a>
 </nav>
 

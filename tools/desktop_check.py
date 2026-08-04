@@ -61,6 +61,90 @@ async def main():
                 await asyncio.sleep(.5)
             await asyncio.sleep(1.2)
 
+            print("\nThe desktop rail")
+            rail = await ev("""
+                const bar = document.querySelector(".tabbar");
+                const box = bar.getBoundingClientRect();
+                const shown = (el) => getComputedStyle(el).display !== "none";
+                const links = [...bar.querySelectorAll("a[data-tab]")].filter(shown);
+                const fabBox = document.getElementById("quickBtn").getBoundingClientRect();
+                return {
+                    vertical: box.height > box.width * 2,
+                    onTheLeft: box.left < 40 && box.top < 40,
+                    labels: links.map(a => a.querySelector("span").textContent.trim()),
+                    brandShown: shown(document.querySelector(".rail__head")),
+                    brandDrawn: document.getElementById("railMark").innerHTML.includes("<svg"),
+                    groups: [...bar.querySelectorAll(".rail__group")]
+                        .filter(shown).map(e => e.textContent.trim()),
+                    fabWide: fabBox.width > 150 && fabBox.width >= box.width - 40,
+                    fabLabelled: shown(bar.querySelector(".fab__label")),
+                    noBump: getComputedStyle(bar, "::before").display === "none",
+                    contentClear: document.querySelector("main").getBoundingClientRect().left
+                                  >= box.right,
+                };
+            """)
+            check("the nav is a rail down the left",
+                  rail["vertical"] and rail["onTheLeft"], str(rail))
+            # Every destination has a home up here, including the two the phone
+            # bar has no room for.
+            check("the rail lists every destination",
+                  rail["labels"] == ["Home", "Map", "Log", "Info", "Account", "Settings"],
+                  str(rail["labels"]))
+            check("the rail carries the brand",
+                  rail["brandShown"] and rail["brandDrawn"], str(rail))
+            check("the rail groups its links", rail["groups"] == ["Explore", "You"],
+                  str(rail["groups"]))
+            check("the create button is a full-width labelled action",
+                  rail["fabWide"] and rail["fabLabelled"], str(rail))
+            check("the phone bar swell is gone", rail["noBump"], str(rail))
+            check("content clears the rail", rail["contentClear"], str(rail))
+
+            # The rail is the one dark surface in a light app, so it is the one
+            # place --ink lands on a dark ground unnoticed. That is exactly what
+            # happened: the active row came out near-black on blue, because a
+            # later rule OUTSIDE the media query won on source order.
+            contrast = await ev("""
+                const lum = (c) => {
+                    const [r,g,b] = c.match(/[0-9.]+/g).slice(0,3).map(Number)
+                        .map(v => { v /= 255; return v <= .03928 ? v/12.92
+                                                 : Math.pow((v+.055)/1.055, 2.4); });
+                    return .2126*r + .7152*g + .0722*b;
+                };
+                const ratio = (fg, bg) => {
+                    const a = lum(fg), b = lum(bg);
+                    return (Math.max(a,b) + .05) / (Math.min(a,b) + .05);
+                };
+                // Alpha text on the rail resolves against the rail, so it has
+                // to be composited rather than measured from the rgba string.
+                const over = (fg, bg) => {
+                    const f = fg.match(/[0-9.]+/g).map(Number);
+                    const b = bg.match(/[0-9.]+/g).map(Number);
+                    const a = f.length > 3 ? f[3] : 1;
+                    return "rgb(" + [0,1,2].map(i => Math.round(f[i]*a + b[i]*(1-a))).join(",") + ")";
+                };
+                const bar = document.querySelector(".tabbar");
+                const railBg = getComputedStyle(bar).backgroundColor;
+                const out = [];
+                const add = (name, el, bg) => {
+                    if (!el) return;
+                    const cs = getComputedStyle(el);
+                    const ground = bg || railBg;
+                    out.push({ name, r: +ratio(over(cs.color, ground), ground).toFixed(2) });
+                };
+                add("rail brand", document.querySelector(".rail__name"));
+                add("rail group heading", document.querySelector(".rail__group"));
+                add("rail idle link", [...bar.querySelectorAll("a[data-tab]")]
+                    .find(a => !a.hasAttribute("aria-current")));
+                const on = bar.querySelector("a[aria-current='page']");
+                add("rail active link", on, on && getComputedStyle(on).backgroundColor);
+                const fab = document.getElementById("quickBtn");
+                add("rail create button", fab, getComputedStyle(fab).backgroundColor);
+                return out;
+            """)
+            bad = [x["name"] + "=" + str(x["r"]) for x in contrast if x["r"] < 4.5]
+            check("every rail text clears 4.5:1", not bad,
+                  ", ".join(bad) or str(contrast))
+
             print("\nDesktop map layout")
             layout = await ev("""
                 const s = document.querySelector('.map-screen');

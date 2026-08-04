@@ -1650,6 +1650,154 @@ body:has(.map-screen) { padding-bottom: 0; }
 /* The account tab has nowhere to go yet — say so rather than look broken. */
 .tabbar__soon { opacity: .45; cursor: default; }
 
+/* NOTE: everything below is AFTER the base .tabbar rules on purpose. A
+   media query does not raise specificity — `.tabbar a[aria-current]` outside
+   one and inside one are both (0,1,1), so source order decides. Placed above,
+   the rail's white-on-blue active row lost its colour to the phone bar's
+   --ink and came out near-black on blue at about 2:1. */
+/* --- rail bits, hidden on the phone bar ---------------------------------- */
+/*
+   These live in the same <nav> as the tabs so there is one nav, one set of
+   links and one active state. On a phone the brand is in the top bar, the gear
+   is in the top bar, and the + holds the slot the Log link would want — so all
+   three sit out until there is a rail to put them in.
+*/
+/* Scoped through .tabbar on purpose: `.tabbar a` is (0,1,1) and would beat a
+   bare `.rail-only` (0,1,0), leaving the rail's links visible in the phone bar
+   — which is exactly what happened the first time. */
+.tabbar .rail__head, .tabbar .rail__group,
+.tabbar .rail-only, .fab__label { display: none; }
+
+/* --- the desktop rail ---------------------------------------------------- */
+/*
+   Same breakpoint as the map's two-column split, deliberately: one width at
+   which the app stops being a phone, rather than two that disagree by 60px and
+   produce a layout nobody designed.
+*/
+@media (min-width: 900px) {
+  :root {
+    --rail-w: 236px;
+    --rail-inset: 14px;
+    /* No bottom bar up here, so pages stop reserving room for one. */
+    --tab-space: 28px;
+  }
+
+  body {
+    padding-bottom: 32px;
+    padding-left: calc(var(--rail-w) + var(--rail-inset) * 2);
+  }
+
+  /* The brand moves into the rail, so the top bar keeps only what has nowhere
+     else to go — the region switcher and the gear — and sits right. */
+  .topbar__inner > .brand { display: none; }
+  .topbar__inner { justify-content: flex-end; max-width: none; padding-right: 24px; }
+  .topbar { border-bottom: 0; }
+
+  /* The content sits in its own panel, the way the reference does, rather than
+     bleeding into the window edge beside a rail that has a shape. */
+  main { margin-right: var(--rail-inset); }
+  main > .band:first-of-type { border-radius: var(--radius) var(--radius) 0 0; }
+  main > .band:last-of-type  { border-radius: 0 0 var(--radius) var(--radius); }
+  main > .band:last-of-type  { border-bottom: 0; }
+
+  .tabbar {
+    top: var(--rail-inset); bottom: var(--rail-inset);
+    left: var(--rail-inset);
+    right: auto;
+    width: var(--rail-w); height: auto;
+    transform: none;
+    display: flex; flex-direction: column; align-items: stretch;
+    gap: 2px;
+    padding: 16px 12px;
+    background: var(--ink);
+    border: 0;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+  }
+  /* The swell is a phone answer to a phone problem: there is no row here for
+     the + to bulge out of. */
+  .tabbar::before { display: none; }
+
+  .tabbar .rail__head, .tabbar .rail-only { display: flex; }
+  .tabbar .rail__group { display: block; }
+
+  .rail__head {
+    align-items: center; gap: 10px;
+    text-decoration: none; color: var(--cream);
+    padding: 4px 8px 14px;
+  }
+  .rail__mark svg { width: 34px; height: auto; }
+  .rail__name {
+    font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.15;
+  }
+
+  .rail__group {
+    margin: 14px 0 6px; padding: 0 10px;
+    font-size: 10px; font-weight: 800; letter-spacing: .16em;
+    text-transform: uppercase;
+    /* Section headings, not links — deliberately quieter than the items under
+       them, and above 4.5:1 all the same. */
+    color: rgb(246 244 234 / .55);
+  }
+  .rail__group:first-of-type { margin-top: 4px; }
+
+  /* A row, not a stack: at this size the label is the target and the icon is
+     recognition, which is the opposite of the phone bar. */
+  .tabbar a {
+    flex-direction: row; align-items: center; justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 14px;
+    font-size: 14px; font-weight: 800; letter-spacing: 0;
+    color: rgb(246 244 234 / .72);
+    position: relative;
+  }
+  .tabbar a:hover { background: rgb(246 244 234 / .07); color: var(--cream); }
+  .tabbar a:active { transform: none; background: rgb(246 244 234 / .12); }
+  .tabbar a svg { width: 20px; height: 20px; }
+
+  /* The marker that says which one you are on: the app's one strong colour,
+     filling the row. A thin bar at the rail's edge was the first attempt and
+     the rail clips it — `overflow-y: auto` forces overflow-x to auto too, so
+     anything drawn outside the padding box is cut off. */
+  .tabbar a[aria-current="page"] {
+    background: var(--blue);
+    color: #fff;
+  }
+  .tabbar a[aria-current="page"] svg { color: #fff; }
+  .tabbar a[aria-current="page"]:hover { background: var(--blue); color: #fff; }
+
+  /* Brand first, then the thing you came to do, then the places you can go. */
+  .rail__head { order: -2; }
+  .fab {
+    order: -1;
+    width: auto; height: 44px;
+    /* stretch, not the `align-self: center` the phone bar sets — that is what
+       kept this a narrow pill floating in the middle of the rail. */
+    align-self: stretch;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    transform: none;
+    font-size: 14px; font-weight: 800;
+    box-shadow: none;
+    margin-bottom: 10px;
+  }
+  .fab:active { transform: scale(.98); }
+  .fab__label { display: block; }
+  .fab__x { width: 16px; height: 16px; }
+  .fab__x i { width: 14px; }
+}
+
+/* The rail is taller than a short laptop window once every group is in it, so
+   it scrolls — but only then, and without a scrollbar cutting through the
+   rounded corner on the machines where it never needs to. */
+@media (min-width: 900px) and (max-height: 620px) {
+  .tabbar { padding-top: 12px; }
+  .rail__head { padding-bottom: 8px; }
+}
+
+
 /* --- toast --------------------------------------------------------------- */
 
 .toast {

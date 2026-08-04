@@ -562,6 +562,40 @@ a ring on the button instead, it travels with the button and is still there
 when the bar rolls away, which reads as the + growing a collar rather than the
 nav retracting.
 
+### The desktop rail
+
+At **900px and up** the bar becomes a rail down the left: a dark panel with the
+brand at the top, a full-width **New entry** button, and the links grouped under
+*Explore* and *You*.
+
+**It is the same `<nav>`.** A phone bar and a desktop rail built as two elements
+would mean two sets of links, two active states, and a route that highlights in
+one and not the other the first time someone adds a page. What differs is which
+children show and how they flow — `.rail__head`, `.rail__group` and `.rail-only`
+sit out below 900px, and the `+` is hoisted with `order` rather than moved.
+
+That also settles the argument the phone bar could not: **Log and Settings get
+their own rows up here**, because a rail has as many slots as it wants.
+
+Two things worth knowing before editing it:
+
+- **The rail's rules come after the base `.tabbar` rules on purpose.** A media
+  query does not raise specificity — `.tabbar a[aria-current]` inside one and
+  outside one are both `(0,1,1)`, so source order decides. Placed above, the
+  rail's white-on-blue active row lost its colour to the phone bar's `--ink`
+  and rendered near-black on blue at about 2:1.
+- **Rail-only rules are scoped through `.tabbar`.** `.tabbar a` is `(0,1,1)` and
+  beats a bare `.rail-only` `(0,1,0)`, which left the rail's links visible in the
+  phone bar the first time.
+
+The rail is the app's one dark surface, so it is the one place `--ink` can land
+on a dark ground without anyone noticing. `desktop_check.py` composites the
+alpha text against the panel and holds every rail label to 4.5:1.
+
+There is **no right-hand rail**, unlike the reference. The map already puts its
+weather panel beside the map on desktop; a second permanent column on every
+other screen would be furniture looking for content.
+
 ### The nav rolls away on the map
 
 On **/map** the bar retracts into the + and hands its space back; pressing the
@@ -626,10 +660,17 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2
+python tools/browser_test.py        # terminal 2 — 472 checks, phone width
+python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 
-Drives real headless Chrome over the DevTools Protocol — 448 checks covering
+**Both, always.** The main suite runs at phone width, so the desktop rail, the
+two-column map and the rounded content panel are invisible to it — and a phone
+layout that passes tells you nothing about the width where the navigation is a
+completely different element. `tools/desktop_shots.py` writes screenshots of
+those layouts for looking at.
+
+Drives real headless Chrome over the DevTools Protocol — checks covering
 the IndexedDB round-trip, sprite/palette integrity, the species-to-zone data
 model (dangling ids, orphaned ids, cross-zone sharing), all seven routes, the
 catch-log flow and stats maths, the species search, the map's zoom-reveal and

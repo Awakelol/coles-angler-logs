@@ -213,6 +213,12 @@ function trackTopbarHeight() {
 function buildBrandMark() {
   const mark = document.getElementById('brandMark');
   if (mark) mark.innerHTML = brandMark({ size: 40 });
+  // The rail carries the brand at desktop widths, where the top bar's copy is
+  // hidden. Drawn regardless of width — it costs one small SVG, and building it
+  // on a resize handler instead would leave the rail blank for a frame every
+  // time someone drags a window across the breakpoint.
+  const rail = document.getElementById('railMark');
+  if (rail) rail.innerHTML = brandMark({ size: 34 });
 }
 
 // --- the + and its quick actions -------------------------------------------
@@ -287,6 +293,7 @@ function wireQuickActions() {
     if (open) {
       menu.hidden = false;
       veil.hidden = false;
+      placeMenu();
       requestAnimationFrame(() => {
         menu.classList.add('is-open');
         veil.classList.add('is-open');
@@ -303,6 +310,32 @@ function wireQuickActions() {
       }, 260);
     }
   };
+
+  // On a phone the stack rises from the bottom centre, which is where the + is.
+  // On the rail the + is top-left, and a menu that opened at the far corner of
+  // the window would look like it belonged to something else — so it is
+  // measured off the button rather than positioned by a second set of rules
+  // that would have to be kept in step with the rail's padding.
+  const wide = () => matchMedia('(min-width: 900px)').matches;
+  function placeMenu() {
+    if (!wide()) {
+      menu.style.cssText = '';
+      return;
+    }
+    const r = btn.getBoundingClientRect();
+    const rail = btn.closest('.tabbar').getBoundingClientRect();
+    // Beside the rail rather than below the button: dropped straight down it
+    // covers the navigation it belongs to, and you choose an action while the
+    // thing that opened it is hidden behind the choice.
+    menu.style.left = `${Math.round(rail.right + 12)}px`;
+    menu.style.top = `${Math.round(r.top)}px`;
+    menu.style.bottom = 'auto';
+    menu.style.transform = 'none';
+    menu.style.width = '260px';
+  }
+  addEventListener('resize', () => {
+    if (btn.getAttribute('aria-expanded') === 'true') placeMenu();
+  });
 
   btn.addEventListener('click', () => {
     // Rolled, the + is the way back to the nav and nothing else. Opening the
