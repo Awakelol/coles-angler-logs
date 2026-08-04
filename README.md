@@ -620,8 +620,12 @@ other screen would be furniture looking for content.
 
 ### The nav rolls away on the map
 
-On **/map** the bar retracts into the + and hands its space back; pressing the
-+ brings it out again. Only the map: it is the one screen where the content is
+On **/map** the bar retracts **to the bottom-right** and hands its space back;
+pressing the + brings it out again. The pill is anchored on its right edge
+rather than centred — the same position either way, but it decides which way it
+goes when it shrinks. Centred it collapsed about its own middle and left the +
+floating in the void; pinned right it rolls to the edge and parks where a thumb
+already is. Only the map: it is the one screen where the content is
 the whole viewport and every pixel of chrome is taken from it. Phone only, too
 — above 900px the map is already a two-column layout with room to spare, and
 hiding the primary navigation to buy space that isn't scarce is a trade in the
@@ -642,6 +646,12 @@ usual. Touching the map puts it away again, and leaving the map restores it.
 a media query, but `tabindex` is not a rule — applied at desktop width it left
 every link in a fully visible rail unreachable by keyboard on the map. The
 toggle re-checks the media query, and re-runs when the window crosses it.
+
+Rolled, the bar becomes **one grid cell with everything stacked in it**. Left
+as five columns, each column still claims its min-content — the tabs' labels —
+so the track total stayed near 260px inside a 58px box, the grid overflowed, and
+the + went clean off the right edge of the screen. Fading a thing does not stop
+it taking up room.
 
 The tabs get `tabindex="-1"` while rolled. Faded out is not gone: without it,
 five links stay in the tab order behind a transparent bar and keyboard focus

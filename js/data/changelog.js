@@ -20,9 +20,17 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.4.0';
+export const APP_VERSION = '3.4.1';
 
 export const CHANGELOG = [
+  {
+    version: '3.4.1',
+    date: '2026-08-04',
+    title: 'The map button parks properly',
+    changes: [
+      'On the map the bar now rolls away to the bottom-right, not into its own middle.',
+    ],
+  },
   {
     version: '3.4.0',
     date: '2026-08-04',

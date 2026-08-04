@@ -1464,7 +1464,15 @@ body:has(.map-screen) { padding-bottom: 0; }
    an object you could pick up rather than a strip of chrome. */
 .tabbar {
   position: fixed; z-index: 50;
-  left: 50%; transform: translateX(-50%);
+  /* Anchored on its RIGHT edge, not centred. Identical position either way —
+     below 484px this resolves to a 12px inset on both sides, above it to the
+     same centring as before — but it decides which way the pill goes when it
+     retracts on the map. Centred, it shrank about its own middle and left the
+     + floating in the void; pinned right, it rolls TO the edge and parks
+     there, which is what "to the side" means and where a thumb already is. */
+  left: auto;
+  right: max(12px, calc((100% - 460px) / 2));
+  transform: none;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   width: min(calc(100% - 24px), 460px);
   height: var(--tab-h);
@@ -1558,7 +1566,14 @@ body:has(.map-screen) { padding-bottom: 0; }
     background: transparent;
     border-color: transparent;
     box-shadow: none;
+    /* ONE cell, with everything stacked in it. Left as five columns, each
+       column still claims its min-content — the tabs' labels — so the track
+       total stayed near 260px inside a 58px box and the grid overflowed,
+       carrying the + clean off the right edge of the screen. Fading a thing
+       does not stop it taking up room. */
+    grid-template-columns: 1fr;
   }
+  .tabbar.is-rolled > * { grid-column: 1; grid-row: 1; }
   /* The tabs go first and come back last, so the pill is never caught
      mid-width with legible labels squashed into it. */
   .tabbar.is-rolled a {

@@ -4218,6 +4218,14 @@ async def main():
                     tabsUnfocusable: [...bar.querySelectorAll('a')]
                         .every(a => a.getAttribute('tabindex') === '-1'),
                     label: btn.getAttribute('aria-label'),
+                    // It rolls TO THE SIDE, not into its own middle. The + must
+                    // end up parked at the right edge where a thumb already is,
+                    // not floating in the centre of an invisible bar.
+                    gapRight: Math.round(window.innerWidth - bar.getBoundingClientRect().right),
+                    fabRight: Math.round(window.innerWidth
+                        - document.getElementById('quickBtn').getBoundingClientRect().right),
+                    fabPastCentre: document.getElementById('quickBtn')
+                        .getBoundingClientRect().left > window.innerWidth / 2,
                     tall,
                 };
             """)
@@ -4225,6 +4233,9 @@ async def main():
                   rolled["rolled"] and rolled["width"] < 90, str(rolled))
             check("the + stays behind to bring it back",
                   rolled["fabVisible"] and rolled["label"] == "Show navigation", str(rolled))
+            check("it rolls to the side rather than into its own middle",
+                  rolled["fabPastCentre"] and 8 <= rolled["fabRight"] <= 20
+                  and 8 <= rolled["gapRight"] <= 20, str(rolled))
             check("the rolled tabs leave the tab order", rolled["tabsUnfocusable"], str(rolled))
 
             back = await page.eval("""
