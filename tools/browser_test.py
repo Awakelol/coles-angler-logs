@@ -2377,13 +2377,25 @@ async def main():
                 const account = document.querySelector('.tabbar a[data-tab="/account"]');
                 account.click();
                 await new Promise(r => setTimeout(r, 700));
-                const bar = document.querySelector('.tabbar').getBoundingClientRect();
+                const barEl = document.querySelector('.tabbar');
+                const bar = barEl.getBoundingClientRect();
+                const fabEl = document.getElementById('quickBtn');
+                const fab = fabEl.getBoundingClientRect();
+                const kids = [...barEl.children];
                 return {
                     order: items.map(e => e.querySelector('span').textContent.trim()),
-                    // Five destinations. The create button is NOT one of them —
-                    // it floats above, so adding it never cost a tab its place.
-                    fabOutsideBar: !document.querySelector('.tabbar .fab'),
-                    fabExists: !!document.getElementById('quickBtn'),
+                    // The + is a slot in the bar, in the middle, where the Log
+                    // tab used to be.
+                    fabInBar: barEl.contains(fabEl),
+                    fabSlot: kids.indexOf(fabEl), slots: kids.length,
+                    // It BULGES: its top is above the bar's, and it is still
+                    // rooted in the row rather than hovering clear of it.
+                    bulge: Math.round(bar.top - fab.top),
+                    rooted: fab.bottom < bar.bottom && fab.bottom > bar.top,
+                    centred: Math.abs((fab.left + fab.right) / 2
+                                      - (bar.left + bar.right) / 2) < 2,
+                    // The log keeps its route even without a tab of its own.
+                    logReachable: !!document.querySelector('#quickMenu [href*="/log"]'),
                     accountRoute: location.hash,
                     accountRendered: !!document.querySelector('.acct-hero'),
                     // A floating island, not a bar welded to the edge.
@@ -2391,10 +2403,16 @@ async def main():
                             && Math.round(window.innerHeight - bar.bottom) > 4,
                 };
             """)
-            check("tab bar reads home, map, log, info, account",
-                  nav["order"] == ["Home", "Map", "Log", "Info", "Account"], str(nav["order"]))
-            check("the create button costs no tab its place",
-                  nav["fabExists"] and nav["fabOutsideBar"], str(nav))
+            check("tab bar reads home, map, info, account",
+                  nav["order"] == ["Home", "Map", "Info", "Account"], str(nav["order"]))
+            check("the + is the middle slot of the bar",
+                  nav["fabInBar"] and nav["slots"] == 5 and nav["fabSlot"] == 2
+                  and nav["centred"], str(nav))
+            check("the + bulges up out of the bar",
+                  nav["bulge"] >= 10 and nav["rooted"], str(nav))
+            # It replaced the Log TAB, not the Log SCREEN. If this ever fails,
+            # the app has a route nothing in the chrome can reach.
+            check("the log is still reachable from the +", nav["logReachable"], str(nav))
             check("the nav floats clear of every edge", nav["floats"], str(nav))
             check("account tab opens the account screen",
                   nav["accountRoute"].startswith("#/account") and nav["accountRendered"],
@@ -3032,13 +3050,18 @@ async def main():
             gap = await page.eval("""
                 const m = document.getElementById('mapWrap').getBoundingClientRect();
                 const bar = document.querySelector('.tabbar').getBoundingClientRect();
+                const fab = document.getElementById('quickBtn').getBoundingClientRect();
                 return { gap: Math.round(bar.top - m.bottom),
+                         // The + bulges above the bar, so IT is the nav's high
+                         // point and the thing the map has to stop short of.
+                         crownGap: Math.round(fab.top - m.bottom),
                          barBottomGap: Math.round(window.innerHeight - bar.bottom) };
             """)
-            # The bar floats now, so a small gap above it is the design rather
-            # than dead space — but the map must still reach it, not stop short.
+            # The bar floats now, so a gap above it is the design rather than
+            # dead space — but measured against the +, the map must still come
+            # right up to the nav instead of stopping short of it.
             check("no dead space between map and tab bar",
-                  -4 <= gap["gap"] <= 18, f"{gap['gap']}px")
+                  -4 <= gap["crownGap"] <= 18, str(gap))
             check("the nav floats clear of the bottom edge",
                   gap["barBottomGap"] >= 6, f"{gap['barBottomGap']}px")
 
@@ -3418,17 +3441,27 @@ async def main():
             check("no two zone pins sit on top of each other",
                   not crowd, "; ".join(crowd))
 
-            # Map pins must stay horizontal — angled art aliases badly at 34px.
+            # Map pins must stay horizontal — angled art aliases badly at 34px —
+            # and must come through the art façade so they follow the mode. They
+            # used to call renderSprite directly and stayed pixel on a modern map.
             pin = await page.eval("""
-                const p = await import('./js/pixel.js');
+                const art = await import('./js/art.js');
                 const svg = document.querySelector('.zone-pin svg');
                 if (!svg) return null;
-                const v = svg.getAttribute('viewBox').split(' ');
-                const g = p.SPRITES.perch;
-                return { pin: `${v[2]}x${v[3]}`, sprite: `${g[0].length}x${g.length}` };
+                const v = svg.getAttribute('viewBox').split(' ').map(Number);
+                const box = svg.getBoundingClientRect();
+                return {
+                    viewBox: `${v[2]}x${v[3]}`,
+                    landscape: v[2] >= v[3] && box.width >= box.height - 1,
+                    // Byte-identical to what the façade returns for the current
+                    // mode, which is the only way to prove it went through it.
+                    viaFacade: svg.outerHTML.includes('viewBox="' + v.join(' ') + '"')
+                        && art.icon('fish', { size: 34 }).includes('viewBox="0 0 ' + v[2] + ' ' + v[3] + '"'),
+                    drawn: svg.innerHTML.length > 40,
+                };
             """)
-            check("map pins use the horizontal sprite",
-                  pin and pin["pin"] == pin["sprite"], str(pin))
+            check("map pins use horizontal fish art from the façade",
+                  pin and pin["landscape"] and pin["viaFacade"] and pin["drawn"], str(pin))
 
             # The zone list is gone; zones open from their map pin.
             await page.eval("return document.querySelector('.zone-pin').click(), 1;")

@@ -546,22 +546,32 @@ for every text-on-fill pair and holds them at 4.5:1.
 
 ### The navigation
 
-A floating island: a pill lifted off the bottom edge, and a **+ above it**
-rather than notched into it. The reference design notches it in, and the first
-attempt did too — but the app has five destinations, six slots were needed for
-five plus a create button, and the tab that lost its place was **Log**. In a
-fishing-log app, the records screen has to stay reachable, so the + floats
-clear instead.
+A floating island: a pill lifted off the bottom edge, with the **+ as its
+middle slot**, bulging up out of the row. Five slots — Home, Map, **+**, Info,
+Account.
+
+**The + replaced the Log tab, not the Log screen.** `#/log` is still a route
+with its own history entry, and "Log a catch" is the first thing the + offers.
+A test asserts that link exists, because a route nothing in the chrome can
+reach is the failure this arrangement invites.
+
+The bulge is a ring in **the bar's own colour**, not the page's. Below the
+bar's top edge it disappears into the pill; above it, it reads as the pill
+swelling to carry the button. Page-coloured it cuts a hole instead, which looks
+like a sticker the moment the band behind the nav is anything but cream — and
+on this app the bands change colour screen to screen.
+
+`--fab-crown` is the nav's true high point, the top of the + with its ring.
+Everything that has to clear the bar clears the bulge too because it is derived
+from that one token: the page's bottom padding, the map's height, and where the
+quick-action stack starts. The map screen is the reason it matters — the
+weather drawer's grip sits centre-bottom, exactly under the +, and a hardcoded
+number would have put a button on top of the handle you pull.
 
 Pressing it rotates two bars into an ×. Both bars are the same shape rotating,
 not one glyph swapped for another — a swap reads as a flicker at this size.
 The three quick actions rise in sequence behind a veil, and close on the ×, the
 veil, Escape, or any navigation.
-
-On the map the + would land exactly on the weather drawer's grip; both are
-centre-bottom furniture. It sits a notch higher on that screen only, keeping
-its horizontal position, because a button that moves sideways between screens
-is harder to find again than one that shifts up.
 
 ### Dark mode is off
 

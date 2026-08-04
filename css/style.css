@@ -77,8 +77,16 @@
   --shadow-lg: 0 10px 30px rgb(22 24 29 / .10);
 
   --tab-h: 62px;
-  /* The pill plus the air above and below it. */
-  --tab-space: calc(var(--tab-h) + 24px);
+  --fab-d: 58px;           /* the + , in the middle slot of the bar */
+  --fab-rise: 14px;        /* how far its centre sits above the bar's */
+  --fab-ring: 5px;         /* the page-coloured cut-out around it */
+  /* The highest point of the nav: the top of the +, ring included. Everything
+     that has to clear the bar clears the bulge too, which is the whole reason
+     this is a token and not five hand-added numbers. */
+  --fab-crown: calc(12px + var(--tab-h) / 2 + var(--fab-rise)
+                    + var(--fab-d) / 2 + var(--fab-ring));
+  /* The pill, its bulge, and the air above and below. */
+  --tab-space: calc(var(--fab-crown) + 12px);
   --font: "Nunito", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
   --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
 }
@@ -1465,7 +1473,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   border-radius: 999px;
   box-shadow: 0 8px 28px rgb(22 24 29 / .14);
 }
-.tabbar a, .tabbar button {
+.tabbar a {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   text-decoration: none; color: var(--ink-30); font-size: 9.5px; font-weight: 800;
   letter-spacing: .03em;
@@ -1474,35 +1482,33 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 .tabbar a:active { transform: scale(.92); }
 
-/* The + . Lifted out of the row so it reads as the primary action, and given
-   the one strong colour in the palette so nothing else competes with it. */
+/* The + . It IS the middle slot of the bar — a grid child like the tabs, not a
+   button floating over them — and it bulges up out of the row so the bar has a
+   high point instead of five things of equal weight.
+
+   The ring is painted in the BAR's colour, not the page's. Below the bar's top
+   edge it disappears into the pill; above it, it reads as the pill swelling to
+   carry the button. Page-coloured, it instead cut a hole — which looks like a
+   sticker the moment the band behind the nav is anything but cream, and on this
+   app the bands change colour screen to screen. */
 .fab {
-  position: fixed; z-index: 52;
-  left: 50%; transform: translateX(-50%);
-  bottom: calc(12px + var(--tab-h) + 14px + env(safe-area-inset-bottom, 0px));
-  width: 56px; height: 56px;
+  position: relative; z-index: 2;
+  justify-self: center; align-self: center;
+  width: var(--fab-d); height: var(--fab-d);
+  transform: translateY(calc(-1 * var(--fab-rise)));
   border: 0; border-radius: 50%;
   display: grid; place-items: center;
   background: var(--blue);
   color: #fff;
+  font-family: inherit; padding: 0;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgb(43 69 147 / .42);
+  box-shadow: 0 0 0 var(--fab-ring) var(--paper), 0 10px 20px rgb(43 69 147 / .38);
   transition: transform .28s cubic-bezier(.34,1.4,.5,1), box-shadow .2s ease,
               background-color .25s ease;
 }
-.fab:active { transform: translateX(-50%) scale(.9); }
-
-/* The map puts a drawer grip at centre-bottom, which is exactly where the +
-   floats. Two pieces of furniture wanting the same spot, so on that one screen
-   the + sits a notch higher — clear of the grip when the drawer is down. It
-   keeps its horizontal place, because a button that moves sideways between
-   screens is harder to find than one that shifts up. */
-body:has(.map-screen) .fab {
-  bottom: calc(12px + var(--tab-h) + 14px + 58px + env(safe-area-inset-bottom, 0px));
-}
-body:has(.map-screen) .quick {
-  bottom: calc(12px + var(--tab-h) + 14px + 58px + 56px + 12px + env(safe-area-inset-bottom, 0px));
-}
+/* Compounded, not replaced — dropping the rise here would make the press look
+   like the button falling into the bar. */
+.fab:active { transform: translateY(calc(-1 * var(--fab-rise))) scale(.92); }
 .fab:focus-visible { outline: 3px solid var(--blue-dk); outline-offset: 3px; }
 .fab[aria-expanded="true"] { background: var(--ink); }
 
@@ -1524,7 +1530,7 @@ body:has(.map-screen) .quick {
 .quick {
   position: fixed; z-index: 51;
   left: 50%; transform: translateX(-50%);
-  bottom: calc(12px + var(--tab-h) + 14px + 56px + 12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--fab-crown) + 12px + env(safe-area-inset-bottom, 0px));
   width: min(calc(100% - 48px), 300px);
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1566,8 +1572,8 @@ body:has(.map-screen) .quick {
 @media (prefers-reduced-motion: reduce) {
   .quick__item, .fab, .fab__x i, .quick-veil { transition-duration: .01ms; }
 }
-.tabbar a svg, .tabbar button svg { width: 22px; height: 22px; }
-@media (max-width: 360px) { .tabbar a, .tabbar button { font-size: 9px; } }
+.tabbar a svg { width: 22px; height: 22px; }
+@media (max-width: 360px) { .tabbar a { font-size: 9px; } }
 .tabbar a[aria-current="page"] { color: var(--ink); }
 .tabbar a[aria-current="page"] svg { color: var(--blue); }
 

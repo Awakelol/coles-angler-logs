@@ -8,7 +8,7 @@
 
 import { resolveSpecies, getSpecies, zonesFor } from './data/index.js';
 import { tacticsFor, lureSummary, habitatTactics } from './data/tactics.js';
-import { speciesSprite, renderSprite, SPRITES } from './art.js';
+import { speciesArt, icon } from './art.js';
 import { speciesDetailHtml, mountSheetPhoto } from './species-ui.js';
 import { esc } from './ui.js';
 
@@ -28,10 +28,15 @@ export const ZONE_PALETTE = {
 
 export const zonePalette = (zone) => ZONE_PALETTE[zone.type] || 'ocean';
 
-/** A pixel fish in a bordered pill, used as the map marker. */
+/** A fish in a bordered pill, used as the map marker.
+ *
+ * Through the façade, so the pin follows the art mode like everything else.
+ * It called renderSprite directly and stayed pixel while the rest of the app
+ * went modern — a row of retro fish on a modern map, which is the one place
+ * you cannot miss them. */
 export function zoneMarkerHtml(zone) {
-  const sprite = renderSprite(SPRITES.perch, zonePalette(zone), { size: 34 });
-  return `<div class="zone-pin" title="${esc(zone.name)}">${sprite}</div>`;
+  const fish = icon('fish', { size: 34, palette: zonePalette(zone) });
+  return `<div class="zone-pin" title="${esc(zone.name)}">${fish}</div>`;
 }
 
 /** The full zone write-up: habitat, possible catches, tactics, what to bring. */
@@ -70,7 +75,7 @@ export function zoneSheetHtml(zone) {
           const t = tacticsFor(s);
           return `
           <div class="card card--tight">
-            <div class="species-card__art" style="min-height:70px">${speciesSprite(s, { size: 110 })}</div>
+            <div class="species-card__art" style="min-height:70px">${speciesArt(s, { size: 110 })}</div>
             <h4 class="card__title" style="font-size:15px">${esc(s.common)}</h4>
             <p class="card__sub species-card__sci">${esc(s.scientific)}</p>
             ${

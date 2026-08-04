@@ -191,8 +191,12 @@ const ICONS = {
   // A fish icon pointing the other way to the fish beside it is the kind of
   // thing nobody names but everybody feels.
   fish: (p) => `
+    <!-- p[4], not the p[5] the other icons use for their body. At 34px in a
+         white map pin a near-white fill leaves only the outline and the tail,
+         and the pin reads as a gold arrow. A mid tone also makes the zone
+         colourway legible at pin size, which is the point of tinting it. -->
     <path d="M15.6 12c0 4-3.6 6.6-7 6.6S2 16 2 12s3.2-6.6 6.6-6.6 7 2.6 7 6.6Z"
-          fill="${p[5]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
+          fill="${p[4]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
     <path d="M15 8.2 21.6 4.8a.8.8 0 0 1 1.2.8L21.4 12l1.4 6.4a.8.8 0 0 1-1.2.8L15 15.8Z"
           fill="${p[8]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
     <path d="M9 5.6c1.4-2 3.2-2.6 4.6-2.2-.4 1.6-1.2 2.6-2.4 3.2"

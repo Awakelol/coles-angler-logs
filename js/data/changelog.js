@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.0.0';
+export const APP_VERSION = '3.1.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.1.0',
+    date: '2026-08-04',
+    title: 'The + moves into the bar',
+    changes: [
+      'The + is part of the navigation now, bulging out of the middle of it.',
+      'It took the Log tab’s place — tap the + and “Log a catch” to get there.',
+      'Zone pins on the map are drawn in the new style, tinted by water type.',
+    ],
+  },
   {
     version: '3.0.0',
     date: '2026-08-04',
