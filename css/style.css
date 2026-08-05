@@ -2167,17 +2167,21 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* --- info: the card deck ------------------------------------------------- */
+/* --- info: the file drawer ----------------------------------------------- */
 /*
-   Phone only. A hand of cards fanned DOWNWARD: the live card is on top and the
-   ones behind sit progressively lower and narrower, so a sliver of each shows
-   below the one in front. Swipe the top card up to skip it, tap it to open it.
+   Hanging folders seen from the front. Every folder is present from the start
+   and every label is readable at once: the bodies overlap, but each folder sits
+   one tab-height below the one behind it, so the tabs form a column down the
+   drawer.
 
-   The positions come from one number. `--d` is a card's distance from the top
-   of the deck, set in JS, and everything else here is arithmetic on it — offset,
-   width, brightness. The animation is not in this file: dragging writes
-   transforms directly, and the settle is a Web Animations spring, because a
-   cubic-bezier cannot overshoot and a spring that cannot overshoot is a ramp.
+   THE OVERLAP IS A NEGATIVE MARGIN, NOT ABSOLUTE POSITIONING. Folders have to
+   be able to grow when they open, and pushing the ones below down is the whole
+   behaviour — absolutely positioned folders would need every offset recomputed
+   in JS on every open, which is a layout engine badly reimplemented.
+
+   Later siblings paint over earlier ones with no z-index at all, which is
+   exactly the stacking a drawer has: the folder in front is the one nearer the
+   bottom of the list.
 */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
@@ -2185,171 +2189,123 @@ body.is-sheet-open {
   /* Read once, then it is 60px between you and the folders. */
   .band--yellow .subtitle { display: none; }
 
-  .deck {
+  .drawer {
+    --tab-h: 52px;
+    /* How much of a closed folder's body shows below its tab. Enough for the
+       shape to read as a folder rather than as a row. */
+    --body-peek: 14px;
+    display: flow-root;
+    padding-bottom: 8px;
+  }
+
+  .ffold {
     position: relative;
-    /* The live card plus room for the fan below it — and the whole thing has
-       to clear the floating nav, or the slivers that make it a deck are behind
-       the tab bar and it reads as one lonely card. */
-    height: 258px;
-    margin-bottom: 4px;
-    /* The whole deck is a drag surface, so the browser must not claim the
-       vertical gesture for scrolling first. */
-    touch-action: none;
-    user-select: none; -webkit-user-select: none;
-  }
-
-  .deck__cards { position: absolute; inset: 0; }
-
-  .dcard {
-    position: absolute; left: 0; right: 0; top: 0;
-    height: 194px;
-    padding: 20px 20px 16px;
-    border-radius: 22px;
-    background: var(--folder-bg, var(--paper));
-    color: var(--ink);
-    /* Down and narrower. Only the horizontal axis is scaled: a uniform scale
-       would pull the bottom edge back UP by nearly what the offset pushed it
-       down, and the slivers would cancel out to nothing. */
-    --d: 0;
-    transform: translate3d(0, calc(var(--d) * 15px), 0) scaleX(calc(1 - var(--d) * .04));
-    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .13));
-    will-change: transform;
-    cursor: grab;
-  }
-  .dcard.is-live { cursor: grab; }
-  .dcard.is-live:active { cursor: grabbing; }
-
-  /* Everything behind the live card is dimmed a touch, so the top of the deck
-     reads as the top of the deck even where two tints are close. */
-  .dcard:not(.is-live) .dcard__face { opacity: .55; }
-  .dcard:not(.is-live) .dcard__body { visibility: hidden; }
-
-  .dcard__face { display: flex; flex-direction: column; height: 100%; }
-  .dcard__k {
-    margin: 0;
-    font-size: 22px; font-weight: 900; letter-spacing: -.03em; line-height: 1.08;
-  }
-  .dcard__sub {
-    margin: 4px 0 0;
-    font-size: 13px; font-weight: 700; color: var(--ink-60);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-
-  .dcard__body {
-    margin-top: auto;
-    display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
-  }
-  /* The example picture. Square and cropped, so a photograph and an icon take
-     the same room and the cards do not change shape between tabs. */
-  .dcard__art {
-    flex: none;
-    width: 70px; height: 70px;
-    display: grid; place-items: center;
-    border-radius: 16px; overflow: hidden;
-    background: rgb(255 255 255 / .5);
-  }
-  .dcard__art img,
-  .dcard__art .species-photo {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    border-radius: 0; box-shadow: none;
-  }
-  .dcard__art .species-photo img { width: 100%; height: 100%; object-fit: cover; }
-
-  .dcard__count { text-align: right; }
-  .dcard__n {
-    display: block;
-    font-size: 44px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
-  }
-  .dcard__unit {
-    display: block;
-    font-size: 11.5px; font-weight: 800; letter-spacing: .07em;
-    text-transform: uppercase; color: var(--ink-60);
-  }
-
-  .deck__hint {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    margin: 0; text-align: center;
-    font-size: 12px; font-weight: 800; letter-spacing: .04em;
-    color: var(--ink-30);
-  }
-
-  /* Nothing left. Deliberately a rest state and not a reshuffle — but with a
-     way back, because a tab that can be emptied and not refilled is a tab you
-     have broken. */
-  .deck__done {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px;
-    border-radius: 22px;
-    border: 2px dashed var(--line);
-  }
-  .deck__done-k { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink-60); }
-
-  .dcard[data-tint="0"] { --folder-bg: #DDE5F6; }
-  .dcard[data-tint="1"] { --folder-bg: #E9E4C6; }
-  .dcard[data-tint="2"] { --folder-bg: #D6E7DC; }
-  .dcard[data-tint="3"] { --folder-bg: #F6DED9; }
-  .dcard[data-tint="4"] { --folder-bg: #E2DBEF; }
-  .dcard[data-tint="5"] { --folder-bg: #CFE4EA; }
-
-  /* --- the opened card ---------------------------------------------------- */
-
-  /* The handle echoes the sliver you saw in the deck — the same shape, sticking
-     out of the same edge — so the way back out looks like the thing you came
-     from rather than a generic close button. */
-  .folder-head {
-    position: sticky;
-    top: calc(var(--topbar-h, 0px) + 8px);
-    z-index: 6;
-    margin-bottom: 16px;
-    padding: 6px 18px 14px;
+    /* A closed folder occupies its tab plus a sliver of body; the rest is
+       behind the folder in front. */
+    min-height: calc(var(--tab-h) + var(--body-peek));
+    background: var(--fold-bg, var(--sand-lt));
     border-radius: 18px;
-    background: var(--folder-bg, var(--sand-lt));
-    clip-path: polygon(0 0, 76% 0, 82% 46px, 100% 46px, 100% 100%, 0 100%);
-    /* clip-path cuts a box-shadow off with the shape, so the lift comes from a
-       filter instead — it follows the silhouette. */
-    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .12));
-  }
-  .folder-head__bill {
-    display: flex; align-items: center; gap: 6px;
-    height: 46px;
-    max-width: 74%;
-  }
-  .folder-head__k {
-    margin: 0; min-width: 0;
-    font-size: 19px; font-weight: 900; letter-spacing: -.02em;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .folder-head__n {
-    margin: 6px 0 0;
-    font-size: 12.5px; font-weight: 800; color: var(--ink-60);
+    /* THE FOLDER SHAPE. Body full width, tab narrower and protruding from the
+       top edge — one polygon, because a tab drawn as a second element is two
+       shapes to line up and a seam along the join at every zoom level. */
+    clip-path: polygon(0 0, 62% 0, 66% var(--tab-h), 100% var(--tab-h), 100% 100%, 0 100%);
+    /* clip-path cuts a box-shadow off with the shape, so the depth between
+       layers comes from a filter — it follows the silhouette. */
+    filter: drop-shadow(0 -3px 10px rgb(22 24 29 / .13));
   }
 
-  .folder-head__x {
+  /* Each folder starts one tab below the one behind it. The first keeps its
+     own top; every other is pulled up over its predecessor's body. */
+  .ffold + .ffold {
+    margin-top: calc(-1 * var(--body-peek));
+  }
+
+  .ffold__tab {
+    display: flex; align-items: center;
+    height: var(--tab-h);
+    margin: 0;
+    /* The tab is 62% wide before the clip; the button fills it. */
+    width: 66%;
+  }
+
+  .ffold__grip {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 10px;
+    height: 100%;
+    padding: 0 8px 0 14px;
+    border: 0; background: none; color: inherit;
+    font-family: inherit; text-align: left;
+    cursor: pointer;
+  }
+
+  /* The example picture, inline with the label. Square and cropped so a
+     photograph and an icon take the same room and the tabs stay a column. */
+  .ffold__pic {
     flex: none;
     display: grid; place-items: center;
     width: 32px; height: 32px;
+    border-radius: 9px; overflow: hidden;
+    background: rgb(255 255 255 / .6);
+  }
+  .ffold__pic img,
+  .ffold__pic .species-photo {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    border-radius: 0; box-shadow: none;
+  }
+  .ffold__pic .species-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .ffold__pic svg { width: 22px; height: 22px; }
+
+  .ffold__label {
+    flex: 1; min-width: 0;
+    font-size: 15.5px; font-weight: 800; letter-spacing: -.015em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ffold__n {
+    flex: none;
+    font-size: 12.5px; font-weight: 800; color: var(--ink-60);
+  }
+
+  .ffold__x {
+    flex: none;
+    display: grid; place-items: center;
+    width: 34px; height: 34px; margin-right: 6px;
     border: 0; border-radius: 50%;
-    background: rgb(255 255 255 / .65); color: var(--ink);
+    background: rgb(255 255 255 / .7); color: var(--ink);
     cursor: pointer;
     transition: background-color .2s ease, transform .2s ease;
   }
-  .folder-head__x:hover { background: #fff; }
-  .folder-head__x:active { transform: scale(.9); }
+  .ffold__x:hover { background: #fff; }
+  .ffold__x:active { transform: scale(.9); }
 
-  .folder-head[data-tint="0"] { --folder-bg: #DDE5F6; }
-  .folder-head[data-tint="1"] { --folder-bg: #E9E4C6; }
-  .folder-head[data-tint="2"] { --folder-bg: #D6E7DC; }
-  .folder-head[data-tint="3"] { --folder-bg: #F6DED9; }
-  .folder-head[data-tint="4"] { --folder-bg: #E2DBEF; }
-  .folder-head[data-tint="5"] { --folder-bg: #CFE4EA; }
+  /* --- open ---------------------------------------------------------------- */
+
+  /* The open folder keeps its place in the drawer: the ones above it do not
+     move, and the ones below are pushed down by exactly the height of what it
+     is showing. Nothing is removed, nothing reshuffles. */
+  .ffold.is-open {
+    filter: drop-shadow(0 -4px 20px rgb(22 24 29 / .18));
+  }
+  .ffold__inner {
+    padding: 4px 14px 18px;
+    overflow: hidden;
+  }
+  /* The content sits on the folder's own colour, so a species card inside the
+     Snapper folder is visibly inside the Snapper folder. */
+  .ffold__inner .section-head { margin-top: 6px; }
+
+  .ffold[data-tint="0"] { --fold-bg: #DDE5F6; }
+  .ffold[data-tint="1"] { --fold-bg: #E9E4C6; }
+  .ffold[data-tint="2"] { --fold-bg: #D6E7DC; }
+  .ffold[data-tint="3"] { --fold-bg: #F6DED9; }
+  .ffold[data-tint="4"] { --fold-bg: #E2DBEF; }
+  .ffold[data-tint="5"] { --fold-bg: #CFE4EA; }
+  .ffold--all { --fold-bg: var(--paper); }
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
-  /* The deal still happens — it has to, or the deck stops meaning anything —
-     it just happens at once. The JS checks the same query and skips the
-     spring rather than running it at 1ms, which would stutter. */
-  .dcard { transition: none !important; }
+  /* The JS checks the same query and skips the springs rather than running
+     them at 1ms, which stutters. */
+  .ffold { transition: none; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */

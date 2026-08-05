@@ -22,7 +22,7 @@ import {
 } from '../data/index.js';
 import { GEAR, GEAR_GROUPS, gearByGroup, getGear } from '../data/gear.js';
 import { photoFor } from '../data/species-photos.js';
-import { deckHtml, mountDeck } from '../card-deck.js';
+import { drawerHtml, mountDrawer } from '../file-drawer.js';
 import { speciesArt, icon } from '../art.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
@@ -337,28 +337,6 @@ function folderArt(tab, key, species, ctx) {
   return icon('wave', { size: 58, palette: 'ocean' });
 }
 
-/**
- * The open folder: the same shape, with its bill grown to hold the name and the
- * way out. Closed, the bill is a blank tab you grab; opened, it is the label
- * and the x — so the thing you pressed is the thing that now says where you are
- * and how to leave.
- */
-function folderHeadHtml(label, count, tint) {
-  return `
-    <div class="folder-head" ${tint == null ? '' : `data-tint="${tint}"`}>
-      <div class="folder-head__bill">
-        <p class="folder-head__k">${esc(label)}</p>
-        <button class="folder-head__x" data-close-folder aria-label="Back to all folders">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
-                  d="M6 6l12 12M18 6L6 18"/>
-          </svg>
-        </button>
-      </div>
-      <p class="folder-head__n">${esc(count)}</p>
-    </div>`;
-}
-
 export function mount(root, ctx) {
   const species = allSpecies(ctx.regionId);
   const zones = zonesFor(ctx.regionId);
@@ -445,7 +423,7 @@ export function mount(root, ctx) {
   // --- per-tab renderers ---------------------------------------------------
 
   function drawPhoto() {
-    results.innerHTML = identifyPanelHtml();
+    out().innerHTML = identifyPanelHtml();
     releasePhoto = mountIdentifyPanel(results);
   }
 
@@ -455,12 +433,6 @@ export function mount(root, ctx) {
   /** Exactly one folder open, as opposed to Everything or the pile. */
   const soloFolder = () => phone() && open[tab] && open[tab] !== ALL;
 
-  function headHtml(count) {
-    if (!phone() || !open[tab]) return '';
-    const meta = openFolderMeta();
-    return meta ? folderHeadHtml(meta.label, `${count} ${noun()}`, meta.tint) : '';
-  }
-
   function drawFishes() {
     const shown = species.filter((s) => (!open.fishes || open.fishes === ALL || s.family === open.fishes) && matchesSpecies(s, query));
     const trivia = triviaFor(ctx.regionId, 'fishes').filter((t) => matchesTip(t, query));
@@ -469,7 +441,7 @@ export function mount(root, ctx) {
       // Local names get spelled by ear, so an empty result is usually a
       // near-miss rather than a species we don't have.
       const guesses = query ? suggestSpecies(query, species, localNames) : [];
-      results.innerHTML =
+      out().innerHTML =
         emptyHtml(
           `Nothing matches &ldquo;${esc(search.value.trim())}&rdquo;.`,
           guesses.length
@@ -500,7 +472,7 @@ export function mount(root, ctx) {
             : ''
         ) + triviaHtml(trivia);
 
-      for (const btn of results.querySelectorAll('[data-suggest]')) {
+      for (const btn of out().querySelectorAll('[data-suggest]')) {
         btn.addEventListener('click', () => {
           const s = getSpecies(btn.dataset.suggest);
           if (!s) return;
@@ -522,8 +494,7 @@ export function mount(root, ctx) {
       groups.get(key).push(s);
     }
 
-    results.innerHTML =
-      headHtml(shown.length) +
+    out().innerHTML =
       elsewhereHtml() +
       [...groups.entries()]
         .map(
@@ -539,7 +510,7 @@ export function mount(root, ctx) {
         .join('') +
       triviaHtml(trivia);
 
-    for (const btn of results.querySelectorAll('[data-species]')) {
+    for (const btn of out().querySelectorAll('[data-species]')) {
       btn.addEventListener('click', () => {
         const s = getSpecies(btn.dataset.species);
         if (s) openSpecies(s);
@@ -552,13 +523,12 @@ export function mount(root, ctx) {
     const trivia = triviaFor(ctx.regionId, 'gear').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
-      results.innerHTML =
+      out().innerHTML =
         emptyHtml(`No gear matches &ldquo;${esc(search.value.trim())}&rdquo;.`) + triviaHtml(trivia);
       return;
     }
 
-    results.innerHTML =
-      headHtml(shown.length) +
+    out().innerHTML =
       elsewhereHtml() +
       gearByGroup(shown)
         .map(
@@ -574,7 +544,7 @@ export function mount(root, ctx) {
         .join('') +
       triviaHtml(trivia);
 
-    for (const btn of results.querySelectorAll('[data-gear]')) {
+    for (const btn of out().querySelectorAll('[data-gear]')) {
       btn.addEventListener('click', () => {
         const g = getGear(btn.dataset.gear);
         if (g) openSheet(g.name, () => gearDetailHtml(g));
@@ -587,7 +557,7 @@ export function mount(root, ctx) {
     const trivia = triviaFor(ctx.regionId, 'zones').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
-      results.innerHTML =
+      out().innerHTML =
         emptyHtml(`No waters match &ldquo;${esc(search.value.trim())}&rdquo;.`) + triviaHtml(trivia);
       return;
     }
@@ -601,8 +571,7 @@ export function mount(root, ctx) {
       .map((g) => ({ ...g, zones: g.zones.filter((z) => visible.has(z.id)) }))
       .filter((g) => g.zones.length);
 
-    results.innerHTML =
-      headHtml(shown.length) +
+    out().innerHTML =
       elsewhereHtml() +
       groups
         .map(
@@ -619,7 +588,7 @@ export function mount(root, ctx) {
       `<a class="btn btn--dark" style="margin-bottom:30px" href="#/map">Open the map</a>` +
       triviaHtml(trivia);
 
-    for (const btn of results.querySelectorAll('[data-zone]')) {
+    for (const btn of out().querySelectorAll('[data-zone]')) {
       btn.addEventListener('click', () => {
         const z = zones.find((x) => x.id === btn.dataset.zone);
         if (z) openSheet(z.name, () => zoneSheetHtml(z), (sheetRoot) =>
@@ -630,46 +599,62 @@ export function mount(root, ctx) {
 
   const phone = () => matchMedia('(max-width: 899px)').matches;
 
-  // Kept so closing an expanded folder can hand its card back to the deck
-  // rather than dealing from the top again.
-  let deckApi = null;
-  let lastOpened = '';
+  let drawerApi = null;
 
-  /** The deck, with nothing open. */
-  function drawFolderStack() {
+  /**
+   * Where a draw goes.
+   *
+   * On a phone the tab's content is rendered INSIDE the folder that was opened,
+   * so the rest of the drawer stays where it is around it. Everywhere else it
+   * is the page. One indirection rather than two copies of every draw.
+   */
+  let pane = null;
+  const out = () => pane || results;
+
+  /** Every folder, all labels readable, one of them possibly open. */
+  function drawDrawer() {
     const items = foldersFor(tab, ctx, species, zones);
     const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
 
-    // "Everything" leads the hand, so the first card is the one that does not
+    // "Everything" leads the drawer, so the first tab is the one that does not
     // ask you to choose.
-    const cards = [
-      { key: ALL, label: 'Everything', blurb: 'The whole list, ungrouped',
-        count: all, noun: noun(), tint: null,
+    const folders = [
+      { key: ALL, label: 'Everything', count: all, tint: null,
         image: folderArt(tab, null, species, ctx) },
       ...items.map((f, i) => ({
         key: f.key,
         label: f.label,
-        blurb: f.blurb || 'Tap to open',
         count: f.count,
-        noun: noun(),
         tint: i % FOLDER_TINTS,
         image: folderArt(tab, f.key, species, ctx),
       })),
     ];
 
-    results.innerHTML = deckHtml(cards, {
-      emptyLabel: `That is every ${tab === 'gear' ? 'kind of gear' : tab === 'zones' ? 'water' : 'family'}`,
+    results.innerHTML = drawerHtml(folders);
+    results.querySelector('.ffold')?.classList.add('ffold--all');
+
+    drawerApi = mountDrawer(results, {
+      openKey: open[tab] || '',
+      onOpen: (key, into) => {
+        open[tab] = key;
+        syncHash();
+        // The folder's own body is the page for as long as it is open.
+        pane = into;
+        fill();
+        pane = null;
+      },
+      onClose: () => {
+        open[tab] = '';
+        syncHash();
+      },
     });
-    deckApi = mountDeck(results, { onOpen: openFolder, startKey: lastOpened });
   }
 
-  /** The label and colour of whatever is open, so its header can match its card. */
-  function openFolderMeta() {
-    if (open[tab] === ALL) return { label: 'Everything', tint: null };
-    const items = foldersFor(tab, ctx, species, zones);
-    const i = items.findIndex((f) => f.key === open[tab]);
-    if (i < 0) return null;
-    return { label: items[i].label, tint: i % FOLDER_TINTS };
+  /** Whatever the current tab draws, into wherever `out()` points. */
+  function fill() {
+    if (tab === 'gear') drawGear();
+    else if (tab === 'zones') drawZones();
+    else drawFishes();
   }
 
   function draw() {
@@ -692,21 +677,20 @@ export function mount(root, ctx) {
       releasePhoto = null;
     }
 
-    // The stack IS the browse surface on a phone: with nothing open you get
-    // the pile, not a list. Searching bypasses it — a query is a request to
-    // see matches, and hiding them behind a folder you have to open first
-    // would make the search box a decoration.
-    if (!photo && phone() && !open[tab] && !query) {
-      drawFolderStack();
+    // The drawer IS the browse surface on a phone, open folder or not — the
+    // point of it is that everything else stays visible while you read one
+    // thing. Searching bypasses it: a query is a request to see matches, and
+    // hiding them inside a folder you must open first would make the search
+    // box a decoration.
+    if (!photo && phone() && !query) {
+      drawDrawer();
       return;
     }
 
     if (photo) drawPhoto();
-    else if (tab === 'gear') drawGear();
-    else if (tab === 'zones') drawZones();
-    else drawFishes();
+    else fill();
 
-    for (const btn of results.querySelectorAll('[data-goto]')) {
+    for (const btn of out().querySelectorAll('[data-goto]')) {
       btn.addEventListener('click', () => {
         tab = btn.dataset.goto;
         syncHash();
@@ -714,7 +698,7 @@ export function mount(root, ctx) {
       });
     }
 
-    const clear = results.querySelector('[data-clear]');
+    const clear = out().querySelector('[data-clear]');
     if (clear) {
       clear.addEventListener('click', () => {
         clearTimeout(typing); // don't let a half-typed word redraw over the reset
@@ -738,7 +722,6 @@ export function mount(root, ctx) {
     clearTimeout(typing); // a half-typed word must not redraw over the new tab
     tab = btn.dataset.tab;
     lastTab = tab;
-    lastOpened = '';
     syncHash();
     draw();
   });
@@ -781,38 +764,8 @@ export function mount(root, ctx) {
     draw();
   });
 
-  // Delegated on the results pane, because the stack and the open folder's
-  // header are both drawn into it and replaced on every redraw.
-  /** One place decides what opening a folder means. */
-  function openFolder(key) {
-    if (!key) return;
-    lastOpened = key;
-    open[tab] = key;
-    if (tab === 'fishes') {
-      for (const b of filterBar.querySelectorAll('[data-family]')) {
-        b.setAttribute('aria-pressed', String((b.dataset.family || ALL) === (open.fishes || ALL)));
-      }
-    }
-    // Straight to the top: the folder you just opened is above the fold, and
-    // landing mid-list reads as nothing having happened.
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    syncHash();
-    draw();
-  }
-
-  results.addEventListener('click', (e) => {
-    if (e.target.closest('[data-close-folder]')) {
-      open[tab] = '';
-      deckApi = null;
-      if (tab === 'fishes') {
-        for (const b of filterBar.querySelectorAll('[data-family]')) {
-          b.setAttribute('aria-pressed', String(!b.dataset.family));
-        }
-      }
-      syncHash();
-      draw();
-    }
-  });
+  // Opening and closing belong to the drawer, which knows which folder is
+  // which and where it sits. The chips below are the desktop equivalent.
 
   draw();
 

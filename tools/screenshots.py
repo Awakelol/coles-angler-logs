@@ -75,24 +75,12 @@ SHOTS = [
     ("9b-account",   "#/account",    ".acct-name",                   None),
     ("9d-settings-panel", "#/settings?p=data", ".set-back",           None),
     ("9e-info-gear-folders", "#/info?tab=gear", ".folder",             None),
-    ("2c-deck-mid-swipe", "#/info", ".dcard",
-     "const c=document.querySelector('.dcard.is-live');"
-     "const b=c.getBoundingClientRect(); const x=b.left+b.width/2, y=b.top+40;"
-     "const p=(t,yy)=>new PointerEvent(t,{bubbles:true,pointerId:9,clientX:x,clientY:yy});"
-     "c.dispatchEvent(p('pointerdown',y));"
-     "document.querySelector('[data-deck]').dispatchEvent(p('pointermove',y-70));"
-     "await new Promise(r=>setTimeout(r,180))"),
-    ("2d-folder-open",  "#/info",      ".dcard",
-     # The shot before leaves a finger down on purpose; hash navigation does not
-     # reload, so release it or this tap lands during someone else's gesture.
-     "document.querySelector('[data-deck]').dispatchEvent("
-     "new PointerEvent('pointercancel',{bubbles:true,pointerId:9}));"
-     "await new Promise(r=>setTimeout(r,300));"
-     "const c=document.querySelector('.dcard.is-live');"
-     "const b=c.getBoundingClientRect();"
-     "const p=(t)=>new PointerEvent(t,{bubbles:true,pointerId:8,clientX:b.left+b.width/2,clientY:b.top+40});"
-     "c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup'));"
-     "await new Promise(r=>setTimeout(r,700))"),
+    ("2c-drawer-open", "#/info",     ".ffold",
+     "const fs=[...document.querySelectorAll('.ffold')];"
+     "fs[3].querySelector('.ffold__grip').click();"
+     "await new Promise(r=>setTimeout(r,900))"),
+    ("2d-drawer-scrolled", "#/info",  ".ffold",
+     "window.scrollTo(0,420); await new Promise(r=>setTimeout(r,500))"),
     ("9f-account-signin", "#/account", "#authForm",                     None),
     # The + open, so the quick actions and the x are in the tour rather than
     # only in the test assertions.

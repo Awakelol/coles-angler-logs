@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.8.0';
+export const APP_VERSION = '3.9.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.9.0',
+    date: '2026-08-06',
+    title: 'A drawer of folders',
+    changes: [
+      'Info is a filing drawer now \u2014 every folder visible, every label readable.',
+      'Tap a tab to open that folder in place; the rest of the drawer stays put.',
+      'Each tab shows a photo of something inside it.',
+    ],
+  },
   {
     version: '3.8.0',
     date: '2026-08-06',

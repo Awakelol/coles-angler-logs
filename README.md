@@ -641,65 +641,60 @@ with “Something broke on this screen”. A test opens every panel in turn and
 fails on an error card, because that is the specific failure splitting a route
 like this invites. An unknown `?p=` falls back to the index.
 
-### Info: the card deck
+### Info: the file drawer
 
-Below 900px, Info opens as a hand of cards fanned **downward** — the live card
-on top, the rest progressively lower and narrower so a sliver of each shows
-below it. Families for fishes, `GEAR_GROUPS` for gear, bodies of water for
-zones. Each card carries a picture: a real photograph for a fish family, an
-icon for gear and waters, because there are no photographs of those and a
-stand-in would be worse than an honest symbol.
+Below 900px, Info is a drawer of hanging folders. Every folder is present
+from the start and **every label is readable at once**: the bodies overlap,
+but each folder sits one tab-height below the one behind it, so the tabs form
+a column down the drawer. Families for fishes, `GEAR_GROUPS` for gear, bodies
+of water for zones. Each tab carries a small example picture inline with its
+label — a real photograph for a fish family, an icon for gear and waters,
+because there are no photographs of those and a stand-in would be worse than
+an honest symbol.
 
-**Swipe up** to skip a card, **tap** to open it. `js/card-deck.js`.
+Tapping a tab opens that folder **in place**: the folders above it do not
+move, the ones below are pushed down by exactly what the content needs, and
+nothing is ever removed. An `x` appears on the open folder's own tab; tapping
+it puts the folder back. `js/file-drawer.js`.
+
+#### The overlap is a negative margin, not absolute positioning
+
+Folders have to grow when they open, and pushing the ones below down is the
+whole behaviour. Absolutely positioned folders would need every offset
+recomputed in JS on every open — a layout engine, badly reimplemented. Later
+siblings also paint over earlier ones with no `z-index` at all, which is
+exactly the stacking a drawer has.
+
+The folder silhouette — wide body, narrower tab protruding from the top — is
+one `clip-path` polygon on one element. A tab drawn as a second element is two
+shapes to line up and a seam along the join that shows at every zoom level.
+It also means `box-shadow` is clipped away with the shape, so the depth
+between layers comes from a `drop-shadow` filter, which follows the outline.
 
 #### Why there is no Framer Motion
 
-It was the right suggestion for a React app and this is not one — no build step,
-no bundler, no framework. Pulling in React to get a spring would be a larger
-change than the feature.
+It needs React, and this app has no build step, no bundler and no framework.
+`spring()` solves a damped harmonic oscillator by steps and emits the samples
+as a CSS `linear()` easing, which the Web Animations API runs directly — the
+same curve. **`cubic-bezier` cannot express it**: it is monotonic between its
+endpoints, so a bezier spring never overshoots.
 
-The spring is real all the same. `spring()` solves a damped harmonic oscillator
-by steps and emits the samples as a CSS `linear()` easing, which the Web
-Animations API runs on the compositor — the same curve Framer Motion would
-produce. **`cubic-bezier` cannot do this**: it is monotonic between its
-endpoints, so a bezier “spring” never overshoots, and the eye reads the
-difference even when it cannot name it.
+**Two springs, deliberately.** The pane's height uses a nearly-critically-
+damped one, because height that overshoots means content clipped and then
+revealed, which reads as a glitch rather than as bounce. The folder's own lift
+is bouncier — that is the part that should feel like it was pulled out of the
+drawer.
 
-#### Gestures are told apart by intent, not by element
+#### The content renders inside the folder
 
-Tap and swipe are the same pointer sequence on the same card, separated on
-release by how far and how fast it moved. A card that opened on the way to being
-swiped would make the deck feel like it was arguing with you.
+`out()` in `js/pages/info.js` points either at the page or at the open
+folder's pane, and every draw function writes to it. One indirection rather
+than two copies of every list.
 
-A flick has to clear `FLICK_FLOOR` (34px) before velocity alone can dismiss.
-Without that floor a fast 20px nudge counts as a throw, because velocity over a
-couple of frames is enormous however short the gesture was — the deck fires
-cards away from taps that wobbled, which reads as the app misunderstanding you.
-
-#### Three things that bite
-
-- **`setPointerCapture` throws** `NotFoundError` for a pointer id with no active
-  pointer — which is every synthetic event. Unguarded, anything driving the deck
-  programmatically takes the page down with it.
-- **A `pointerdown` from a different id while a drag is live means the last one
-  never ended** — a lost pointerup, a cancelled touch, a tab that lost focus.
-  Taking over is right; refusing wedges the deck for the session.
-- **`scaleX` only, not `scale`.** A uniform scale pulls the bottom edge back up
-  by nearly what the offset pushed it down, and the slivers cancel to nothing.
-
-#### What it does not do
-
-**No flip.** The spec allowed expanding in place as the fallback, and that is
-what this does — the card opens into the list with a handle carrying an `×`,
-cut from the same shape as the sliver you saw in the deck. A half-convincing
-3D flip would be worse than a good expand.
-
-**The deck rests when empty, but offers a way back.** No looping and no
-reshuffle, as asked — with a *Deal them again* button, because a tab that can be
-emptied and not refilled is a tab you have broken.
-
-**Searching bypasses the deck.** A query is a request to see matches. Above
-900px the chips return — a wide window has room for every subcategory at once.
+**Searching bypasses the drawer.** A query is a request to see matches, and
+hiding them inside a folder you must open first would make the search box a
+decoration. Above 900px the chips return — a wide window has room to show
+every subcategory at once.
 
 ### Installing on an iPhone
 
