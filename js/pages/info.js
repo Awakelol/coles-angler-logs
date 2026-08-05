@@ -21,6 +21,8 @@ import {
   triviaFor, zonesFor, zonesByWater,
 } from '../data/index.js';
 import { GEAR, GEAR_GROUPS, gearByGroup, getGear } from '../data/gear.js';
+import { photoFor } from '../data/species-photos.js';
+import { deckHtml, mountDeck } from '../card-deck.js';
 import { speciesArt, icon } from '../art.js';
 import { speciesDetailHtml, mountSheetPhoto } from '../species-ui.js';
 import { suggestSpecies } from '../search.js';
@@ -279,19 +281,29 @@ function foldersFor(tab, ctx, species, zones) {
     for (const g of GEAR) counts.set(g.group, (counts.get(g.group) || 0) + 1);
     return GEAR_GROUPS
       .filter((g) => counts.get(g.id))
-      .map((g) => ({ key: g.id, label: g.name, count: counts.get(g.id) }));
+      .map((g) => ({ key: g.id, label: g.name, count: counts.get(g.id), blurb: g.blurb }));
   }
 
   if (tab === 'zones') {
     const counts = new Map();
-    for (const z of zones) counts.set(z.water, (counts.get(z.water) || 0) + 1);
-    return [...counts.entries()].map(([water, count]) => ({ key: water, label: water, count }));
+    const example = new Map();
+    for (const z of zones) {
+      counts.set(z.water, (counts.get(z.water) || 0) + 1);
+      if (!example.has(z.water)) example.set(z.water, z.name);
+    }
+    return [...counts.entries()].map(([water, count]) => ({
+      key: water, label: water, count,
+      blurb: `${example.get(water)} and other spots`,
+    }));
   }
 
   return speciesByFamily(ctx.regionId).map((g) => ({
     key: g.family,
     label: g.familyCommon || g.family,
     count: g.species.length,
+    // The scientific family, which is the thing the common name is a nickname
+    // for and the only extra fact worth the line.
+    blurb: g.family,
   }));
 }
 
@@ -305,41 +317,24 @@ const FOLDER_TINTS = 6;
 const ALL = '*';
 
 /**
- * The deck.
+ * One card's picture.
  *
- * Not a list and not a scroll-stack: the folders sit in ONE place, overlapping,
- * with only a few pixels of each one behind showing as a coloured edge. The
- * front card is the one you read. Scrolling deals the next one forward.
- *
- * THE SCROLL IS REAL, the movement is not. An invisible rail behind the deck
- * does the scrolling — one viewport-height spacer per folder, with snap points
- * — and the cards are absolutely positioned and animated to match whichever
- * spacer you have landed on. That buys native momentum and native snapping on
- * touch, which is the part that is almost impossible to fake convincingly, and
- * it cannot loop because a scrollbar has a top and a bottom.
+ * Fishes get a real photograph — the first species in the family that has one.
+ * Gear gets its group's icon; there are no gear photographs and inventing a
+ * stand-in would be worse than an honest symbol. Zones get a fish tinted to the
+ * water, for the same reason.
  */
-function deckHtml(items, allCount, allLabel, noun) {
-  const card = (key, label, sub, count, tint) => `
-    <button class="folder${tint == null ? ' folder--all' : ''}" data-folder="${esc(key)}"
-            ${tint == null ? '' : `data-tint="${tint}"`}>
-      <span class="folder__k">${esc(label)}</span>
-      <span class="folder__sub">${esc(sub)}</span>
-      <span class="folder__n">${count}</span>
-      <span class="folder__unit">${esc(noun)}</span>
-    </button>`;
-
-  return `
-    <div class="deck" id="deck">
-      <div class="deck__cards">
-        ${card('*', allLabel, 'Everything in one list', allCount, null)}
-        ${items
-          .map((f, i) => card(f.key, f.label, 'Tap to open', f.count, i % FOLDER_TINTS))
-          .join('')}
-      </div>
-      <div class="deck__rail" id="deckRail" tabindex="0" aria-label="Folders">
-        ${Array.from({ length: items.length + 1 }, () => '<i></i>').join('')}
-      </div>
-    </div>`;
+function folderArt(tab, key, species, ctx) {
+  if (tab === 'fishes') {
+    const first = species.find((s) => s.family === key && photoFor(s.id));
+    if (first) return speciesArt(first, { size: 92 });
+    return icon('fish', { size: 58, palette: 'ocean' });
+  }
+  if (tab === 'gear') {
+    const item = GEAR.find((g) => g.group === key);
+    return icon(item?.icon || 'box', { size: 58, palette: item?.palette || 'slate' });
+  }
+  return icon('wave', { size: 58, palette: 'ocean' });
 }
 
 /**
@@ -635,70 +630,37 @@ export function mount(root, ctx) {
 
   const phone = () => matchMedia('(max-width: 899px)').matches;
 
+  // Kept so closing an expanded folder can hand its card back to the deck
+  // rather than dealing from the top again.
+  let deckApi = null;
+  let lastOpened = '';
+
   /** The deck, with nothing open. */
   function drawFolderStack() {
     const items = foldersFor(tab, ctx, species, zones);
     const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
-    results.innerHTML = deckHtml(items, all, 'Everything', noun());
-    mountDeck(results.querySelector('#deck'), openFolder);
-  }
 
-  /**
-   * Drive the deck from the rail's scroll position.
-   *
-   * `--d` is a card's distance from the front: 0 is the one you are reading, 1
-   * is the edge just behind it, and a negative one has been dealt away. The CSS
-   * turns that single number into the offset, the scale and the z-order, so the
-   * only thing here is arithmetic — no measuring, no per-card animation.
-   */
-  function mountDeck(deck, onPick) {
-    if (!deck) return;
-    const rail = deck.querySelector('.deck__rail');
-    const cards = [...deck.querySelectorAll('.folder')];
-    if (!rail || !cards.length) return;
+    // "Everything" leads the hand, so the first card is the one that does not
+    // ask you to choose.
+    const cards = [
+      { key: ALL, label: 'Everything', blurb: 'The whole list, ungrouped',
+        count: all, noun: noun(), tint: null,
+        image: folderArt(tab, null, species, ctx) },
+      ...items.map((f, i) => ({
+        key: f.key,
+        label: f.label,
+        blurb: f.blurb || 'Tap to open',
+        count: f.count,
+        noun: noun(),
+        tint: i % FOLDER_TINTS,
+        image: folderArt(tab, f.key, species, ctx),
+      })),
+    ];
 
-    let front = 0;
-
-    const paint = () => {
-      for (let i = 0; i < cards.length; i++) {
-        const d = i - front;
-        cards[i].style.setProperty('--d', String(Math.max(d, 0)));
-        cards[i].classList.toggle('is-dealt', d < 0);
-        cards[i].classList.toggle('is-front', d === 0);
-        // Five deep is already only an edge; past that they are invisible and
-        // would just be a hundred elements' worth of compositing.
-        cards[i].style.opacity = d < 0 || d > 5 ? '0' : '1';
-        cards[i].setAttribute('aria-hidden', String(d < 0 || d > 5));
-      }
-    };
-
-    rail.addEventListener('scroll', () => {
-      const step = rail.clientHeight || 1;
-      const next = Math.min(cards.length - 1, Math.max(0, Math.round(rail.scrollTop / step)));
-      if (next === front) return;
-      front = next;
-      paint();
-    }, { passive: true });
-
-    // THE RAIL SITS ON TOP AND TAKES THE TAPS. It has to be topmost or a touch
-    // starting on a card would never reach the scroller and the deck would be
-    // inert on a phone — so the cards are pointer-events: none and the rail
-    // reports whichever one is at the front. Opening a card you can only see
-    // the edge of would be a guess anyway; scrolling is how you choose.
-    //
-    // Reported by CALLING BACK, not by firing a click on the card and hoping
-    // the event finds its way home. The first version did exactly that, and a
-    // stray handler in here swallowed it.
-    const openFront = () => onPick(cards[front]?.dataset.folder || '');
-    rail.addEventListener('click', openFront);
-    rail.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openFront();
-      }
+    results.innerHTML = deckHtml(cards, {
+      emptyLabel: `That is every ${tab === 'gear' ? 'kind of gear' : tab === 'zones' ? 'water' : 'family'}`,
     });
-
-    paint();
+    deckApi = mountDeck(results, { onOpen: openFolder, startKey: lastOpened });
   }
 
   /** The label and colour of whatever is open, so its header can match its card. */
@@ -776,6 +738,7 @@ export function mount(root, ctx) {
     clearTimeout(typing); // a half-typed word must not redraw over the new tab
     tab = btn.dataset.tab;
     lastTab = tab;
+    lastOpened = '';
     syncHash();
     draw();
   });
@@ -823,6 +786,7 @@ export function mount(root, ctx) {
   /** One place decides what opening a folder means. */
   function openFolder(key) {
     if (!key) return;
+    lastOpened = key;
     open[tab] = key;
     if (tab === 'fishes') {
       for (const b of filterBar.querySelectorAll('[data-family]')) {
@@ -839,6 +803,7 @@ export function mount(root, ctx) {
   results.addEventListener('click', (e) => {
     if (e.target.closest('[data-close-folder]')) {
       open[tab] = '';
+      deckApi = null;
       if (tab === 'fishes') {
         for (const b of filterBar.querySelectorAll('[data-family]')) {
           b.setAttribute('aria-pressed', String(!b.dataset.family));

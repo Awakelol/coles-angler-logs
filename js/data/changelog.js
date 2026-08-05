@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.7.0';
+export const APP_VERSION = '3.8.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.8.0',
+    date: '2026-08-06',
+    title: 'A hand of cards',
+    changes: [
+      'Swipe a card up to skip it, or tap it to open — with real spring physics.',
+      'Every card shows a photo or an icon and a line about what is inside.',
+      'Swipe through them all and the deck rests, with a button to deal again.',
+    ],
+  },
   {
     version: '3.7.0',
     date: '2026-08-05',

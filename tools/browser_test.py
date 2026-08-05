@@ -181,29 +181,27 @@ def static_checks():
 
 
 async def ev_pile(page):
-    """Measure the deck: how many, do they overlap in one place, are they
-    different colours, is exactly one at the front."""
+    """Measure the deck: how many cards, do they fan DOWNWARD from one place,
+    is exactly one live, are they different colours."""
     return await page.eval("""
-        const fs = [...document.querySelectorAll('.folder')];
-        const boxes = fs.map(f => f.getBoundingClientRect());
-        const bgs = new Set(fs.map(f => getComputedStyle(f).backgroundColor));
+        const cs = [...document.querySelectorAll('.dcard')].filter(c => !c.hidden);
+        const boxes = cs.map(c => c.getBoundingClientRect());
+        const bgs = new Set(cs.map(c => getComputedStyle(c).backgroundColor));
         return {
-            folders: fs.length,
+            folders: document.querySelectorAll('.dcard').length,
+            shown: cs.length,
             cards: document.querySelectorAll('.species-card').length,
-            // ONE PLACE, overlapping — not a list. Centres, not edges: the
-            // cards behind are SCALED DOWN on purpose, so their left edges and
-            // widths differ by design and only the centre line is shared.
+            // Centres, not edges: the cards behind are scaled horizontally on
+            // purpose, so only the centre line is shared.
             overlapping: boxes.every(b =>
                 Math.abs((b.left + b.right) / 2 - (boxes[0].left + boxes[0].right) / 2) < 2),
-            spread: Math.round(Math.max(...boxes.slice(0, 5).map(b => b.top))
-                             - Math.min(...boxes.slice(0, 5).map(b => b.top))),
-            front: document.querySelectorAll('.folder.is-front').length,
-            // The rail is what scrolls, and it has to be taller than the deck
-            // or there is nothing to scroll through.
-            scrollable: (() => {
-                const r = document.getElementById('deckRail');
-                return !!r && r.scrollHeight > r.clientHeight * 2;
-            })(),
+            // DOWNWARD. Each one sits lower than the one in front of it, which
+            // is the whole difference from the version that fanned upward.
+            descending: boxes.every((b, i) => i === 0 || b.top > boxes[i - 1].top),
+            live: document.querySelectorAll('.dcard.is-live').length,
+            // Every card carries a picture and a line of its own.
+            illustrated: cs.every(c => !!c.querySelector('.dcard__art')?.innerHTML.trim()),
+            described: cs.every(c => (c.querySelector('.dcard__sub')?.textContent || '').trim()),
             distinctColours: bgs.size,
         };
     """)
@@ -773,12 +771,12 @@ async def main():
             grouped = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 // Phone width opens Info as a pile of folders. "Everything" is
                 // the one at the bottom of it, and it carries the ALL sentinel
                 // rather than an empty string — empty means "nothing open".
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -1542,7 +1540,7 @@ async def main():
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
                 const box = document.getElementById('infoSearch');
@@ -1560,7 +1558,7 @@ async def main():
 
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
                     backTo: document.querySelector('[data-tab][aria-selected="true"]')
@@ -2172,13 +2170,13 @@ async def main():
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
                 "identify": ("#/identify", "#takePhoto"),
-                "info-fishes": ("#/info", ".folder, .species-card"),
-                "info-gear": ("#/info?tab=gear", ".folder, .gear-card"),
-                "info-zones": ("#/info?tab=zones", ".folder, .zone-card"),
+                "info-fishes": ("#/info", ".dcard, .species-card"),
+                "info-gear": ("#/info?tab=gear", ".dcard, .gear-card"),
+                "info-zones": ("#/info?tab=zones", ".dcard, .zone-card"),
                 "conditions": ("#/conditions", ".now-card__temp, .notice--error"),
                 "log": ("#/log", ".kpi__v, #authForm"),
-                "legacy-species": ("#/species", ".folder, .species-card"),
-                "legacy-tips": ("#/tips", ".folder, .tip-card"),
+                "legacy-species": ("#/species", ".dcard, .species-card"),
+                "legacy-tips": ("#/tips", ".dcard, .tip-card"),
                 "settings": ("#/settings", ".set-row"),
                 "settings-panel": ("#/settings?p=tides", "#saveTides"),
             }
@@ -2349,8 +2347,8 @@ async def main():
             await page.goto(f"{BASE}/index.html#/info")
             # Phone width lands on the pile of folders. Open Everything so the
             # rest of this block sees the cards it is about.
-            await page.wait_for("document.getElementById('deckRail')", label="info deck")
-            await page.eval("return document.getElementById('deckRail').click(), 1;")
+            await page.wait_for("document.querySelector('.dcard')", label="info deck")
+            await page.eval("return (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })(); 1;")
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
 
             tabs = await page.eval("""
@@ -2367,7 +2365,7 @@ async def main():
                 // switching tabs lands on that tab's pile — the cards are one
                 // press further in.
                 const openAll = async () => {
-                    document.getElementById('deckRail')?.click();
+                    (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                     await new Promise(r => setTimeout(r, 350));
                 };
                 const seen = {};
@@ -2397,35 +2395,72 @@ async def main():
             """)
             # --- the pile of folders ----------------------------------------
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.getElementById('deckRail')", label="deck")
+            await page.wait_for("document.querySelector('.dcard')", label="deck")
             await asyncio.sleep(0.6)
 
             pile = await ev_pile(page)
-            check("info opens as a deck of folders",
+            check("info opens as a deck of cards",
                   pile["folders"] >= 6 and not pile["cards"], str(pile))
-            # Overlapping in ONE place, a few pixels apart — a deck, not a list.
-            # The first attempt spread them down the page as sticky cards, which
-            # is a different thing that happens to also involve scrolling.
-            check("the folders overlap in one place",
-                  pile["overlapping"] and 0 < pile["spread"] <= 60, str(pile))
-            check("exactly one folder is at the front", pile["front"] == 1, str(pile))
-            check("there is a rail to scroll through them", pile["scrollable"], str(pile))
+            # Fanned DOWNWARD from one place — each card lower than the one in
+            # front, a sliver of it showing below. The previous build fanned
+            # upward, which is a different shape entirely.
+            check("the cards fan downward from one place",
+                  pile["overlapping"] and pile["descending"], str(pile))
+            check("exactly one card is live", pile["live"] == 1, str(pile))
+            check("every card carries a picture and a line",
+                  pile["illustrated"] and pile["described"], str(pile))
             # Colour is the only thing telling them apart once piled.
             check("the folders are colour-coded",
                   pile["distinctColours"] >= 5, str(pile))
 
-            # Scroll the rail one card on, then tap it. The cards themselves are
-            # pointer-events: none — the rail is on top so a touch that starts
-            # anywhere in the deck reaches the scroller — so tapping a card is
-            # not how any of this works.
+            # Swipe the top card away, then tap the one behind it. Both are
+            # pointer gestures on the same element, told apart by how far the
+            # pointer travelled — so the test has to perform them, not click.
+            swiped = await page.eval("""
+                const deck = document.querySelector("[data-deck]");
+                const gesture = (dy, steps) => {
+                    const c = document.querySelector(".dcard.is-live");
+                    const b = c.getBoundingClientRect();
+                    const x = b.left + b.width / 2, y0 = b.top + 40;
+                    const p = (t, y) => new PointerEvent(t, { bubbles: true, pointerId: 3,
+                                                              clientX: x, clientY: y });
+                    c.dispatchEvent(p("pointerdown", y0));
+                    for (let i = 1; i <= steps; i++) {
+                        deck.dispatchEvent(p("pointermove", y0 + (dy * i) / steps));
+                    }
+                    deck.dispatchEvent(p("pointerup", y0 + dy));
+                };
+                const before = document.querySelector(".dcard.is-live")?.dataset.key;
+
+                // Too small to count: this must spring back, not dismiss.
+                gesture(-30, 4);
+                await new Promise(r => setTimeout(r, 700));
+                const afterNudge = document.querySelector(".dcard.is-live")?.dataset.key;
+
+                gesture(-200, 8);
+                await new Promise(r => setTimeout(r, 800));
+                const afterSwipe = document.querySelector(".dcard.is-live")?.dataset.key;
+                const goneIsHidden = [...document.querySelectorAll(".dcard.is-gone")]
+                    .every(c => c.hidden);
+                return { before, afterNudge, afterSwipe, goneIsHidden };
+            """)
+            check("a short drag springs back rather than dismissing",
+                  swiped["afterNudge"] == swiped["before"], str(swiped))
+            check("swiping up deals the next card forward",
+                  swiped["afterSwipe"] and swiped["afterSwipe"] != swiped["before"],
+                  str(swiped))
+            check("a dealt card is taken out of the deck",
+                  swiped["goneIsHidden"], str(swiped))
+
             opened = await page.eval("""
-                const rail = document.getElementById("deckRail");
-                rail.scrollTop = rail.clientHeight;
-                await new Promise(r => setTimeout(r, 500));
-                const f = document.querySelector(".folder.is-front");
-                const label = f.querySelector(".folder__k").textContent.trim();
-                rail.click();
-                await new Promise(r => setTimeout(r, 600));
+                const c = document.querySelector(".dcard.is-live");
+                const label = c.querySelector(".dcard__k").textContent.trim();
+                const b = c.getBoundingClientRect();
+                const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 4,
+                    clientX: b.left + b.width / 2, clientY: b.top + 40 });
+                c.dispatchEvent(p("pointerdown"));
+                c.dispatchEvent(p("pointerup"));
+                await new Promise(r => setTimeout(r, 700));
                 const head = document.querySelector(".folder-head");
                 return {
                     label,
@@ -2433,13 +2468,11 @@ async def main():
                     // The way out sits BESIDE the name of what you are in.
                     hasX: !!head?.querySelector("[data-close-folder]"),
                     cards: document.querySelectorAll(".species-card").length,
-                    pileGone: document.querySelectorAll(".folder").length === 0,
-                    // The header wears the folder’s colour, so the thing you
-                    // opened and the thing you are in are visibly the same.
+                    pileGone: document.querySelectorAll(".dcard").length === 0,
                     headTint: head?.getAttribute("data-tint") || "",
                 };
             """)
-            check("pressing a folder opens it",
+            check("tapping a card opens it",
                   opened["cards"] > 0 and opened["pileGone"], str(opened))
             check("the open folder says which one it is",
                   opened["headLabel"] == opened["label"], str(opened))
@@ -2450,12 +2483,16 @@ async def main():
 
             closed = await page.eval("""
                 document.querySelector("[data-close-folder]").click();
-                await new Promise(r => setTimeout(r, 600));
-                return { folders: document.querySelectorAll(".folder").length,
-                         cards: document.querySelectorAll(".species-card").length };
+                await new Promise(r => setTimeout(r, 700));
+                return { folders: document.querySelectorAll(".dcard").length,
+                         cards: document.querySelectorAll(".species-card").length,
+                         // Back in ITS place, not at the top of the deck.
+                         live: document.querySelector(".dcard.is-live")?.dataset.key };
             """)
-            check("the x goes back to the pile",
+            check("the x goes back to the deck",
                   closed["folders"] >= 6 and not closed["cards"], str(closed))
+            check("the card you opened is the one you come back to",
+                  closed["live"] == swiped["afterSwipe"], str(closed))
 
             # A query is a request to SEE matches. Hiding them behind a folder
             # you have to open first would make the search box a decoration.
@@ -2465,7 +2502,7 @@ async def main():
                 box.dispatchEvent(new Event("input", { bubbles: true }));
                 await new Promise(r => setTimeout(r, 700));
                 return { cards: document.querySelectorAll(".species-card").length,
-                         folders: document.querySelectorAll(".folder").length };
+                         folders: document.querySelectorAll(".dcard").length };
             """)
             check("searching goes straight to the matches",
                   searched["cards"] > 0 and not searched["folders"], str(searched))
@@ -2484,9 +2521,9 @@ async def main():
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2533,7 +2570,7 @@ async def main():
             gear_sheet = await page.eval("""
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2574,7 +2611,7 @@ async def main():
                 document.body.classList.remove('is-sheet-open');
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -2587,7 +2624,7 @@ async def main():
             cross = await page.eval("""
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
                 i.value = 'baitcasting';
@@ -2608,7 +2645,7 @@ async def main():
             legacy = await page.eval("""
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
                          sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
@@ -2717,8 +2754,8 @@ async def main():
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.getElementById('deckRail')", label="info deck")
-            await page.eval("return document.getElementById('deckRail').click(), 1;")
+            await page.wait_for("document.querySelector('.dcard')", label="info deck")
+            await page.eval("return (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })(); 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
@@ -3347,8 +3384,8 @@ async def main():
             print()
             print("Sheet")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.getElementById('deckRail')", label="info deck")
-            await page.eval("return document.getElementById('deckRail').click(), 1;")
+            await page.wait_for("document.querySelector('.dcard')", label="info deck")
+            await page.eval("return (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })(); 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -4530,7 +4567,7 @@ async def main():
                 const rolled = bar.classList.contains('is-rolled');
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 800));
-                document.getElementById('deckRail')?.click();
+                (() => { const c = document.querySelector('.dcard.is-live'); if (!c) return false; const b = c.getBoundingClientRect(); const p = (t) => new PointerEvent(t, { bubbles: true, pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + 40 }); c.dispatchEvent(p('pointerdown')); c.dispatchEvent(p('pointerup')); return true; })();
                 await new Promise(r => setTimeout(r, 350));
                 return { rolled, offMap: bar.classList.contains('is-rolled'),
                          tabbable: [...bar.querySelectorAll('a')]

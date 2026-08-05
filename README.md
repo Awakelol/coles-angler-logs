@@ -641,54 +641,65 @@ with “Something broke on this screen”. A test opens every panel in turn and
 fails on an error card, because that is the specific failure splitting a route
 like this invites. An unknown `?p=` falls back to the index.
 
-### Info folders
+### Info: the card deck
 
-Below 900px, Info opens as a **deck**: the folders sit in one place,
-overlapping, with the bills of the ones behind fanned above the front card.
-Families for fishes, `GEAR_GROUPS` for gear, bodies of water for zones — all
-three already exist in the data, so this names them rather than inventing a
-taxonomy.
+Below 900px, Info opens as a hand of cards fanned **downward** — the live card
+on top, the rest progressively lower and narrower so a sliver of each shows
+below it. Families for fishes, `GEAR_GROUPS` for gear, bodies of water for
+zones. Each card carries a picture: a real photograph for a fish family, an
+icon for gear and waters, because there are no photographs of those and a
+stand-in would be worse than an honest symbol.
 
-**The scroll is real and the movement is not.** An invisible rail does the
-scrolling — one deck-height spacer per folder, snapped — and the cards are
-absolutely positioned and animated to match wherever it has landed. Native
-momentum and native snap are the parts that are almost impossible to fake on
-touch, and a scrollbar cannot loop, which is what was asked for.
+**Swipe up** to skip a card, **tap** to open it. `js/card-deck.js`.
 
-**The rail sits on top and takes the taps.** It has to be topmost or a touch
-starting on a card would never reach the scroller and the deck would be inert on
-a phone — so the cards are `pointer-events: none` and the rail reports whichever
-one is at the front, **by calling back** rather than firing a click on a card and
-hoping the event finds its way home.
+#### Why there is no Framer Motion
 
-`--d` is a card's distance from the front. One number becomes the offset, the
-width and the z-order:
+It was the right suggestion for a React app and this is not one — no build step,
+no bundler, no framework. Pulling in React to get a spring would be a larger
+change than the feature.
 
-- **`scaleX` only, not `scale`.** A uniform scale pulls the top edge back down by
-  almost exactly what the offset raised it, and the bills cancel out to nothing.
-- **`data-tint`, not an inline custom property.** `style.setProperty('--d')`
-  re-serialises the whole style attribute in normalised form (`--tint: 0`), which
-  silently stopped every `[style*="--tint:0"]` rule matching and left the deck
-  one colour.
+The spring is real all the same. `spring()` solves a damped harmonic oscillator
+by steps and emits the samples as a CSS `linear()` easing, which the Web
+Animations API runs on the compositor — the same curve Framer Motion would
+produce. **`cubic-bezier` cannot do this**: it is monotonic between its
+endpoints, so a bezier “spring” never overshoots, and the eye reads the
+difference even when it cannot name it.
 
-Each folder carries a **bill** — the tab on the top-left — cut as a single
-`clip-path` polygon rather than a tab drawn as a separate element: two shapes
-meeting is two edges to line up and a seam that shows at every zoom level. It
-also means `box-shadow` is clipped away with the shape, so the lift comes from a
-`drop-shadow` filter, which follows the silhouette.
+#### Gestures are told apart by intent, not by element
 
-Tapping opens the front folder and **the bill grows** to carry its name and an
-`×`. Same shape, same colour: the folder you pressed, opened.
+Tap and swipe are the same pointer sequence on the same card, separated on
+release by how far and how fast it moved. A card that opened on the way to being
+swiped would make the deck feel like it was arguing with you.
 
-**Three states, not two.** `''` is the deck with nothing open, `ALL` is the deck
-opened onto everything, anything else is one folder. Using `''` for both
-"nothing open" and "browsing everything" meant pressing **Everything** set the
-state it was already in and simply redrew the deck — a button that looked dead.
+A flick has to clear `FLICK_FLOOR` (34px) before velocity alone can dismiss.
+Without that floor a fast 20px nudge counts as a throw, because velocity over a
+couple of frames is enormous however short the gesture was — the deck fires
+cards away from taps that wobbled, which reads as the app misunderstanding you.
 
-**Searching bypasses the deck.** A query is a request to see matches; hiding them
-behind a folder you have to open first would make the search box a decoration.
-Above 900px the chips come back — a wide window has room to show every
-subcategory at once, which is what chips are for.
+#### Three things that bite
+
+- **`setPointerCapture` throws** `NotFoundError` for a pointer id with no active
+  pointer — which is every synthetic event. Unguarded, anything driving the deck
+  programmatically takes the page down with it.
+- **A `pointerdown` from a different id while a drag is live means the last one
+  never ended** — a lost pointerup, a cancelled touch, a tab that lost focus.
+  Taking over is right; refusing wedges the deck for the session.
+- **`scaleX` only, not `scale`.** A uniform scale pulls the bottom edge back up
+  by nearly what the offset pushed it down, and the slivers cancel to nothing.
+
+#### What it does not do
+
+**No flip.** The spec allowed expanding in place as the fallback, and that is
+what this does — the card opens into the list with a handle carrying an `×`,
+cut from the same shape as the sliver you saw in the deck. A half-convincing
+3D flip would be worse than a good expand.
+
+**The deck rests when empty, but offers a way back.** No looping and no
+reshuffle, as asked — with a *Deal them again* button, because a tab that can be
+emptied and not refilled is a tab you have broken.
+
+**Searching bypasses the deck.** A query is a request to see matches. Above
+900px the chips return — a wide window has room for every subcategory at once.
 
 ### Installing on an iPhone
 
@@ -832,7 +843,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 495 checks, phone width
+python tools/browser_test.py        # terminal 2 — 499 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

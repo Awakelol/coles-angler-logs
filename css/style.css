@@ -2167,17 +2167,17 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* --- info: subcategories as a deck --------------------------------------- */
+/* --- info: the card deck ------------------------------------------------- */
 /*
-   Phone only. The folders sit in ONE place, overlapping, with a few pixels of
-   each one behind showing as a coloured edge. Scrolling deals the next one
-   forward.
+   Phone only. A hand of cards fanned DOWNWARD: the live card is on top and the
+   ones behind sit progressively lower and narrower, so a sliver of each shows
+   below the one in front. Swipe the top card up to skip it, tap it to open it.
 
-   THE SCROLL IS REAL AND THE MOVEMENT IS NOT. An invisible rail does the
-   scrolling — one deck-height spacer per folder, snapped — and the cards are
-   absolutely positioned and animated to match wherever it has landed. Native
-   momentum and native snap are the parts that are almost impossible to fake on
-   touch, and a scrollbar cannot loop, which is what was asked for.
+   The positions come from one number. `--d` is a card's distance from the top
+   of the deck, set in JS, and everything else here is arithmetic on it — offset,
+   width, brightness. The animation is not in this file: dragging writes
+   transforms directly, and the settle is a Web Animations spring, because a
+   cubic-bezier cannot overshoot and a spring that cannot overshoot is a ramp.
 */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
@@ -2187,107 +2187,116 @@ body.is-sheet-open {
 
   .deck {
     position: relative;
-    height: 300px;
-    margin-bottom: 6px;
-    /* The dealt-away card leaves upward; without this it would paint over the
-       search box above it. */
-    overflow: hidden;
+    /* The live card plus room for the fan below it — and the whole thing has
+       to clear the floating nav, or the slivers that make it a deck are behind
+       the tab bar and it reads as one lonely card. */
+    height: 258px;
+    margin-bottom: 4px;
+    /* The whole deck is a drag surface, so the browser must not claim the
+       vertical gesture for scrolling first. */
+    touch-action: none;
+    user-select: none; -webkit-user-select: none;
   }
 
   .deck__cards { position: absolute; inset: 0; }
 
-  /* On top, so a touch that starts anywhere in the deck reaches the scroller.
-     Transparent, and the cards below are pointer-events: none. */
-  .deck__rail {
-    position: absolute; inset: 0; z-index: 10;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    cursor: pointer;
-  }
-  .deck__rail::-webkit-scrollbar { display: none; }
-  .deck__rail > i { display: block; height: 100%; scroll-snap-align: start; }
-  .deck__rail:focus-visible {
-    outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 22px;
-  }
-
-  .folder {
-    /* Room above for the edges of the cards behind. */
-    position: absolute; left: 0; right: 0; top: 34px;
-    height: 248px;
-    display: flex; flex-direction: column; align-items: flex-start;
-    /* Top padding clears the bill. */
-    padding: 30px 22px 20px;
-    border: 0; border-radius: 22px;
-    background: var(--folder-bg, var(--sand-lt));
+  .dcard {
+    position: absolute; left: 0; right: 0; top: 0;
+    height: 194px;
+    padding: 20px 20px 16px;
+    border-radius: 22px;
+    background: var(--folder-bg, var(--paper));
     color: var(--ink);
-    font-family: inherit;
-    text-align: left;
-    pointer-events: none;
-
-    /* THE BILL. One polygon rather than a tab drawn as a separate element: two
-       shapes meeting is two edges to line up and a seam that shows at every
-       zoom level. */
-    clip-path: polygon(0 0, 34% 0, 40% 16px, 100% 16px, 100% 100%, 0 100%);
-
-    /* --d is how far back this card is; 0 is the one you are reading. One
-       number becomes the offset, the size and the order. */
+    /* Down and narrower. Only the horizontal axis is scaled: a uniform scale
+       would pull the bottom edge back UP by nearly what the offset pushed it
+       down, and the slivers would cancel out to nothing. */
     --d: 0;
-    /* UP and NARROWER, so the cards behind show as strips ABOVE the front one
-       — the way you see the tops of the cards in a deck that is fanned towards
-       you. scaleX only, deliberately: a uniform scale pulls the top edge back
-       down by almost exactly what the offset raised it, and the strips cancel
-       out to nothing. */
-    transform: translate3d(0, calc(var(--d) * -10px), 0) scaleX(calc(1 - var(--d) * .045));
-    z-index: calc(20 - var(--d));
-    filter: drop-shadow(0 -5px 14px rgb(22 24 29 / .13));
-    transition: transform .46s cubic-bezier(.22, .68, .28, 1),
-                opacity .34s ease;
+    transform: translate3d(0, calc(var(--d) * 15px), 0) scaleX(calc(1 - var(--d) * .04));
+    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .13));
+    will-change: transform;
+    cursor: grab;
   }
+  .dcard.is-live { cursor: grab; }
+  .dcard.is-live:active { cursor: grabbing; }
 
-  /* Dealt away: up and out, the way a card comes off the top of a deck. */
-  .folder.is-dealt {
-    transform: translate3d(0, -128%, 0) scale(.94) rotate(-3deg);
-  }
+  /* Everything behind the live card is dimmed a touch, so the top of the deck
+     reads as the top of the deck even where two tints are close. */
+  .dcard:not(.is-live) .dcard__face { opacity: .55; }
+  .dcard:not(.is-live) .dcard__body { visibility: hidden; }
 
-  .folder__k {
-    font-size: 26px; font-weight: 900; letter-spacing: -.03em; line-height: 1.08;
+  .dcard__face { display: flex; flex-direction: column; height: 100%; }
+  .dcard__k {
+    margin: 0;
+    font-size: 22px; font-weight: 900; letter-spacing: -.03em; line-height: 1.08;
   }
-  .folder__sub {
-    margin-top: 3px;
+  .dcard__sub {
+    margin: 4px 0 0;
     font-size: 13px; font-weight: 700; color: var(--ink-60);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* The big number, as in the reference. It is also the only part still legible
-     on a card that is half-covered mid-deal. */
-  /* Under the label rather than pinned to the foot of the card. The deck sits
-     below the hero and the search box, so on a short phone the bottom of the
-     front card is off screen — anything parked down there is a number nobody
-     sees. */
-  .folder__n {
-    margin-top: 14px;
-    font-size: 58px; font-weight: 900; letter-spacing: -.05em; line-height: 1;
+
+  .dcard__body {
+    margin-top: auto;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
   }
-  .folder__unit {
-    font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+  /* The example picture. Square and cropped, so a photograph and an icon take
+     the same room and the cards do not change shape between tabs. */
+  .dcard__art {
+    flex: none;
+    width: 70px; height: 70px;
+    display: grid; place-items: center;
+    border-radius: 16px; overflow: hidden;
+    background: rgb(255 255 255 / .5);
+  }
+  .dcard__art img,
+  .dcard__art .species-photo {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    border-radius: 0; box-shadow: none;
+  }
+  .dcard__art .species-photo img { width: 100%; height: 100%; object-fit: cover; }
+
+  .dcard__count { text-align: right; }
+  .dcard__n {
+    display: block;
+    font-size: 44px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
+  }
+  .dcard__unit {
+    display: block;
+    font-size: 11.5px; font-weight: 800; letter-spacing: .07em;
     text-transform: uppercase; color: var(--ink-60);
   }
 
-  /* Colour is what tells one folder from another when all you can see of it is
-     an edge. Tints rather than the saturated blocks in the reference, because
-     the label has to stay dark and readable on every one of the six. */
-  .folder[data-tint="0"] { --folder-bg: #DDE5F6; }
-  .folder[data-tint="1"] { --folder-bg: #E9E4C6; }
-  .folder[data-tint="2"] { --folder-bg: #D6E7DC; }
-  .folder[data-tint="3"] { --folder-bg: #F6DED9; }
-  .folder[data-tint="4"] { --folder-bg: #E2DBEF; }
-  .folder[data-tint="5"] { --folder-bg: #CFE4EA; }
-  .folder--all { --folder-bg: var(--paper); }
+  .deck__hint {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    margin: 0; text-align: center;
+    font-size: 12px; font-weight: 800; letter-spacing: .04em;
+    color: var(--ink-30);
+  }
 
-  /* --- the open folder ---------------------------------------------------- */
+  /* Nothing left. Deliberately a rest state and not a reshuffle — but with a
+     way back, because a tab that can be emptied and not refilled is a tab you
+     have broken. */
+  .deck__done {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px;
+    border-radius: 22px;
+    border: 2px dashed var(--line);
+  }
+  .deck__done-k { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink-60); }
 
-  /* Open, the bill GROWS: wide enough and tall enough to carry the label and
-     the x. Same silhouette, same colour — the folder you pressed, opened. */
+  .dcard[data-tint="0"] { --folder-bg: #DDE5F6; }
+  .dcard[data-tint="1"] { --folder-bg: #E9E4C6; }
+  .dcard[data-tint="2"] { --folder-bg: #D6E7DC; }
+  .dcard[data-tint="3"] { --folder-bg: #F6DED9; }
+  .dcard[data-tint="4"] { --folder-bg: #E2DBEF; }
+  .dcard[data-tint="5"] { --folder-bg: #CFE4EA; }
+
+  /* --- the opened card ---------------------------------------------------- */
+
+  /* The handle echoes the sliver you saw in the deck — the same shape, sticking
+     out of the same edge — so the way back out looks like the thing you came
+     from rather than a generic close button. */
   .folder-head {
     position: sticky;
     top: calc(var(--topbar-h, 0px) + 8px);
@@ -2316,8 +2325,6 @@ body.is-sheet-open {
     font-size: 12.5px; font-weight: 800; color: var(--ink-60);
   }
 
-  /* In the bill, beside the name — where it reads as "close THIS" rather than
-     as a general back button parked in a corner. */
   .folder-head__x {
     flex: none;
     display: grid; place-items: center;
@@ -2340,9 +2347,9 @@ body.is-sheet-open {
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
   /* The deal still happens — it has to, or the deck stops meaning anything —
-     it just happens at once rather than over half a second. */
-  .folder { transition-duration: .01ms; }
-  .deck__rail { scroll-behavior: auto; }
+     it just happens at once. The JS checks the same query and skips the
+     spring rather than running it at 1ms, which would stutter. */
+  .dcard { transition: none !important; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */
