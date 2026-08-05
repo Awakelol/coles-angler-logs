@@ -305,30 +305,40 @@ const FOLDER_TINTS = 6;
 const ALL = '*';
 
 /**
- * The pile.
+ * The deck.
  *
- * Each folder is `position: sticky` at a slightly lower offset than the one
- * before, so scrolling parks them one on top of the next and leaves a strip of
- * each showing — a wheel you turn by scrolling, with a first and a last. No
- * JS, no wrap-around, and the scrollbar tells you where you are in it.
+ * Not a list and not a scroll-stack: the folders sit in ONE place, overlapping,
+ * with only a few pixels of each one behind showing as a coloured edge. The
+ * front card is the one you read. Scrolling deals the next one forward.
+ *
+ * THE SCROLL IS REAL, the movement is not. An invisible rail behind the deck
+ * does the scrolling — one viewport-height spacer per folder, with snap points
+ * — and the cards are absolutely positioned and animated to match whichever
+ * spacer you have landed on. That buys native momentum and native snapping on
+ * touch, which is the part that is almost impossible to fake convincingly, and
+ * it cannot loop because a scrollbar has a top and a bottom.
  */
-function folderStackHtml(items, allCount, allLabel) {
+function deckHtml(items, allCount, allLabel, noun) {
+  const card = (key, label, sub, count, tint) => `
+    <button class="folder${tint == null ? ' folder--all' : ''}" data-folder="${esc(key)}"
+            ${tint == null ? '' : `data-tint="${tint}"`}>
+      <span class="folder__k">${esc(label)}</span>
+      <span class="folder__sub">${esc(sub)}</span>
+      <span class="folder__n">${count}</span>
+      <span class="folder__unit">${esc(noun)}</span>
+    </button>`;
+
   return `
-    <div class="folder-stack" id="folderStack">
-      <button class="folder folder--all" data-folder="${ALL}" style="--i:0">
-        <span class="folder__k">${esc(allLabel)}</span>
-        <span class="folder__n">${allCount}</span>
-      </button>
-      ${items
-        .map(
-          (f, i) => `
-        <button class="folder" data-folder="${esc(f.key)}"
-                style="--i:${i + 1};--tint:${i % FOLDER_TINTS}">
-          <span class="folder__k">${esc(f.label)}</span>
-          <span class="folder__n">${f.count}</span>
-        </button>`
-        )
-        .join('')}
+    <div class="deck" id="deck">
+      <div class="deck__cards">
+        ${card('*', allLabel, 'Everything in one list', allCount, null)}
+        ${items
+          .map((f, i) => card(f.key, f.label, 'Tap to open', f.count, i % FOLDER_TINTS))
+          .join('')}
+      </div>
+      <div class="deck__rail" id="deckRail" tabindex="0" aria-label="Folders">
+        ${Array.from({ length: items.length + 1 }, () => '<i></i>').join('')}
+      </div>
     </div>`;
 }
 
@@ -340,7 +350,7 @@ function folderStackHtml(items, allCount, allLabel) {
  */
 function folderHeadHtml(label, count, tint) {
   return `
-    <div class="folder-head" ${tint == null ? '' : `style="--tint:${tint}"`}>
+    <div class="folder-head" ${tint == null ? '' : `data-tint="${tint}"`}>
       <div class="folder-head__bill">
         <p class="folder-head__k">${esc(label)}</p>
         <button class="folder-head__x" data-close-folder aria-label="Back to all folders">
@@ -625,12 +635,70 @@ export function mount(root, ctx) {
 
   const phone = () => matchMedia('(max-width: 899px)').matches;
 
-  /** The pile, with nothing open. */
+  /** The deck, with nothing open. */
   function drawFolderStack() {
     const items = foldersFor(tab, ctx, species, zones);
     const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
-    const noun = tab === 'gear' ? 'items' : tab === 'zones' ? 'waters' : 'species';
-    results.innerHTML = folderStackHtml(items, `${all} ${noun}`, 'Everything');
+    results.innerHTML = deckHtml(items, all, 'Everything', noun());
+    mountDeck(results.querySelector('#deck'), openFolder);
+  }
+
+  /**
+   * Drive the deck from the rail's scroll position.
+   *
+   * `--d` is a card's distance from the front: 0 is the one you are reading, 1
+   * is the edge just behind it, and a negative one has been dealt away. The CSS
+   * turns that single number into the offset, the scale and the z-order, so the
+   * only thing here is arithmetic — no measuring, no per-card animation.
+   */
+  function mountDeck(deck, onPick) {
+    if (!deck) return;
+    const rail = deck.querySelector('.deck__rail');
+    const cards = [...deck.querySelectorAll('.folder')];
+    if (!rail || !cards.length) return;
+
+    let front = 0;
+
+    const paint = () => {
+      for (let i = 0; i < cards.length; i++) {
+        const d = i - front;
+        cards[i].style.setProperty('--d', String(Math.max(d, 0)));
+        cards[i].classList.toggle('is-dealt', d < 0);
+        cards[i].classList.toggle('is-front', d === 0);
+        // Five deep is already only an edge; past that they are invisible and
+        // would just be a hundred elements' worth of compositing.
+        cards[i].style.opacity = d < 0 || d > 5 ? '0' : '1';
+        cards[i].setAttribute('aria-hidden', String(d < 0 || d > 5));
+      }
+    };
+
+    rail.addEventListener('scroll', () => {
+      const step = rail.clientHeight || 1;
+      const next = Math.min(cards.length - 1, Math.max(0, Math.round(rail.scrollTop / step)));
+      if (next === front) return;
+      front = next;
+      paint();
+    }, { passive: true });
+
+    // THE RAIL SITS ON TOP AND TAKES THE TAPS. It has to be topmost or a touch
+    // starting on a card would never reach the scroller and the deck would be
+    // inert on a phone — so the cards are pointer-events: none and the rail
+    // reports whichever one is at the front. Opening a card you can only see
+    // the edge of would be a guess anyway; scrolling is how you choose.
+    //
+    // Reported by CALLING BACK, not by firing a click on the card and hoping
+    // the event finds its way home. The first version did exactly that, and a
+    // stray handler in here swallowed it.
+    const openFront = () => onPick(cards[front]?.dataset.folder || '');
+    rail.addEventListener('click', openFront);
+    rail.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openFront();
+      }
+    });
+
+    paint();
   }
 
   /** The label and colour of whatever is open, so its header can match its card. */
@@ -752,23 +820,23 @@ export function mount(root, ctx) {
 
   // Delegated on the results pane, because the stack and the open folder's
   // header are both drawn into it and replaced on every redraw.
-  results.addEventListener('click', (e) => {
-    const folder = e.target.closest('[data-folder]');
-    if (folder) {
-      open[tab] = folder.dataset.folder;
-      if (tab === 'fishes') {
-        for (const b of filterBar.querySelectorAll('[data-family]')) {
-          b.setAttribute('aria-pressed', String((b.dataset.family || ALL) === (open.fishes || ALL)));
-        }
+  /** One place decides what opening a folder means. */
+  function openFolder(key) {
+    if (!key) return;
+    open[tab] = key;
+    if (tab === 'fishes') {
+      for (const b of filterBar.querySelectorAll('[data-family]')) {
+        b.setAttribute('aria-pressed', String((b.dataset.family || ALL) === (open.fishes || ALL)));
       }
-      // Straight to the top: the folder you just opened is above the fold, and
-      // landing mid-list reads as nothing having happened.
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      syncHash();
-      draw();
-      return;
     }
+    // Straight to the top: the folder you just opened is above the fold, and
+    // landing mid-list reads as nothing having happened.
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    syncHash();
+    draw();
+  }
 
+  results.addEventListener('click', (e) => {
     if (e.target.closest('[data-close-folder]')) {
       open[tab] = '';
       if (tab === 'fishes') {

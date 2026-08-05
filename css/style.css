@@ -238,6 +238,12 @@ a { color: inherit; }
   background: var(--cream);
   border-bottom: var(--border-w) solid var(--line);
 }
+/* Home only. Everywhere else the page's own <h1> says where you are, in type
+   twice the size, so the bar is a second title above the real one — and on a
+   phone that is 68px of a screen that has none to spare. The element stays in
+   the DOM: --topbar-h is measured from it, and a bar that is display:none
+   measures 0, which is exactly what the map and the folder pile want. */
+body.no-topbar .topbar { display: none; }
 
 .topbar__inner {
   max-width: 1100px; margin: 0 auto;
@@ -2161,84 +2167,121 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* --- info: subcategories as a pile of folders ---------------------------- */
+/* --- info: subcategories as a deck --------------------------------------- */
 /*
-   Phone only. A wide window has room for every subcategory at once, which is
-   what the chips are for; a pile is a phone answer to a phone problem.
+   Phone only. The folders sit in ONE place, overlapping, with a few pixels of
+   each one behind showing as a coloured edge. Scrolling deals the next one
+   forward.
 
-   THE PILE IS `position: sticky`, NOT A TRANSFORM. Each folder parks a little
-   lower than the one before, so scrolling walks them one on top of the next and
-   leaves a strip of each showing. No JS, no wrap-around — it has a first and a
-   last, the scrollbar says where you are in it, and a screen reader gets a
-   plain list of buttons. Faking the same effect with transforms would have
-   meant owning the scroll, and owning the scroll on a touch device means
-   fighting momentum you cannot feel from a desktop.
+   THE SCROLL IS REAL AND THE MOVEMENT IS NOT. An invisible rail does the
+   scrolling — one deck-height spacer per folder, snapped — and the cards are
+   absolutely positioned and animated to match wherever it has landed. Native
+   momentum and native snap are the parts that are almost impossible to fake on
+   touch, and a scrollbar cannot loop, which is what was asked for.
 */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
 
-  .folder-stack {
-    display: flex; flex-direction: column;
-    /* Room under the last one so it can reach its own sticky offset — without
-       it the bottom of the pile never parks and the last folder feels stuck. */
-    padding-bottom: 46vh;
+  /* Read once, then it is 60px between you and the folders. */
+  .band--yellow .subtitle { display: none; }
+
+  .deck {
+    position: relative;
+    height: 300px;
+    margin-bottom: 6px;
+    /* The dealt-away card leaves upward; without this it would paint over the
+       search box above it. */
+    overflow: hidden;
+  }
+
+  .deck__cards { position: absolute; inset: 0; }
+
+  /* On top, so a touch that starts anywhere in the deck reaches the scroller.
+     Transparent, and the cards below are pointer-events: none. */
+  .deck__rail {
+    position: absolute; inset: 0; z-index: 10;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    cursor: pointer;
+  }
+  .deck__rail::-webkit-scrollbar { display: none; }
+  .deck__rail > i { display: block; height: 100%; scroll-snap-align: start; }
+  .deck__rail:focus-visible {
+    outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 22px;
   }
 
   .folder {
-    position: sticky;
-    /* Each one lands 13px below the last, which is the strip you see of the
-       folders already behind it. */
-    top: calc(var(--topbar-h, 68px) + 10px + var(--i) * 12px);
-    z-index: calc(var(--i) + 1);
-
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    /* Tall enough to read as a card, short enough that four or five are on
-       screen at once — a pile you cannot see the shape of is just a list. */
-    min-height: 86px;
-    margin-bottom: 9px;
+    /* Room above for the edges of the cards behind. */
+    position: absolute; left: 0; right: 0; top: 34px;
+    height: 248px;
+    display: flex; flex-direction: column; align-items: flex-start;
     /* Top padding clears the bill. */
-    padding: 30px 18px 14px;
-    border: 0; border-radius: 18px;
-    /* THE BILL. One polygon rather than a tab drawn as a separate element:
-       two shapes meeting is two edges to line up and a seam that shows at
-       every zoom level. The corners stay rounded because border-radius is
-       applied before the clip. */
-    clip-path: polygon(0 0, 34% 0, 40% 15px, 100% 15px, 100% 100%, 0 100%);
+    padding: 30px 22px 20px;
+    border: 0; border-radius: 22px;
     background: var(--folder-bg, var(--sand-lt));
     color: var(--ink);
     font-family: inherit;
     text-align: left;
-    cursor: pointer;
-    /* Same reason as the header: a box-shadow is clipped away with the shape. */
-    filter: drop-shadow(0 -6px 12px rgb(22 24 29 / .09));
-    transition: transform .2s ease;
+    pointer-events: none;
+
+    /* THE BILL. One polygon rather than a tab drawn as a separate element: two
+       shapes meeting is two edges to line up and a seam that shows at every
+       zoom level. */
+    clip-path: polygon(0 0, 34% 0, 40% 16px, 100% 16px, 100% 100%, 0 100%);
+
+    /* --d is how far back this card is; 0 is the one you are reading. One
+       number becomes the offset, the size and the order. */
+    --d: 0;
+    /* UP and NARROWER, so the cards behind show as strips ABOVE the front one
+       — the way you see the tops of the cards in a deck that is fanned towards
+       you. scaleX only, deliberately: a uniform scale pulls the top edge back
+       down by almost exactly what the offset raised it, and the strips cancel
+       out to nothing. */
+    transform: translate3d(0, calc(var(--d) * -10px), 0) scaleX(calc(1 - var(--d) * .045));
+    z-index: calc(20 - var(--d));
+    filter: drop-shadow(0 -5px 14px rgb(22 24 29 / .13));
+    transition: transform .46s cubic-bezier(.22, .68, .28, 1),
+                opacity .34s ease;
   }
-  .folder:active { transform: scale(.985); }
-  .folder:last-child { margin-bottom: 0; }
+
+  /* Dealt away: up and out, the way a card comes off the top of a deck. */
+  .folder.is-dealt {
+    transform: translate3d(0, -128%, 0) scale(.94) rotate(-3deg);
+  }
 
   .folder__k {
-    font-size: 19px; font-weight: 900; letter-spacing: -.02em; line-height: 1.15;
+    font-size: 26px; font-weight: 900; letter-spacing: -.03em; line-height: 1.08;
   }
+  .folder__sub {
+    margin-top: 3px;
+    font-size: 13px; font-weight: 700; color: var(--ink-60);
+  }
+  /* The big number, as in the reference. It is also the only part still legible
+     on a card that is half-covered mid-deal. */
+  /* Under the label rather than pinned to the foot of the card. The deck sits
+     below the hero and the search box, so on a short phone the bottom of the
+     front card is off screen — anything parked down there is a number nobody
+     sees. */
   .folder__n {
-    flex: none;
-    font-size: 12.5px; font-weight: 800; letter-spacing: .03em;
-    color: var(--ink-60);
+    margin-top: 14px;
+    font-size: 58px; font-weight: 900; letter-spacing: -.05em; line-height: 1;
+  }
+  .folder__unit {
+    font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-60);
   }
 
-  /* Colour is the only thing telling one folder from another once they are
-     piled and all you can see is a strip. Tints rather than the reference's
-     saturated blocks, because the label has to stay dark and readable on all
-     six — a set of six saturated fills that all clear 4.5:1 against one text
-     colour is a much narrower palette than it sounds. */
-  .folder[style*="--tint:0"] { --folder-bg: #DDE5F6; }
-  .folder[style*="--tint:1"] { --folder-bg: #E9E4C6; }
-  .folder[style*="--tint:2"] { --folder-bg: #D6E7DC; }
-  .folder[style*="--tint:3"] { --folder-bg: #F6DED9; }
-  .folder[style*="--tint:4"] { --folder-bg: #E2DBEF; }
-  .folder[style*="--tint:5"] { --folder-bg: #CFE4EA; }
-
-  /* Everything sits at the bottom of the pile and reads as the ground the
-     others are stacked on. */
+  /* Colour is what tells one folder from another when all you can see of it is
+     an edge. Tints rather than the saturated blocks in the reference, because
+     the label has to stay dark and readable on every one of the six. */
+  .folder[data-tint="0"] { --folder-bg: #DDE5F6; }
+  .folder[data-tint="1"] { --folder-bg: #E9E4C6; }
+  .folder[data-tint="2"] { --folder-bg: #D6E7DC; }
+  .folder[data-tint="3"] { --folder-bg: #F6DED9; }
+  .folder[data-tint="4"] { --folder-bg: #E2DBEF; }
+  .folder[data-tint="5"] { --folder-bg: #CFE4EA; }
   .folder--all { --folder-bg: var(--paper); }
 
   /* --- the open folder ---------------------------------------------------- */
@@ -2247,21 +2290,20 @@ body.is-sheet-open {
      the x. Same silhouette, same colour — the folder you pressed, opened. */
   .folder-head {
     position: sticky;
-    top: calc(var(--topbar-h, 68px) + 8px);
+    top: calc(var(--topbar-h, 0px) + 8px);
     z-index: 6;
     margin-bottom: 16px;
     padding: 6px 18px 14px;
     border-radius: 18px;
     background: var(--folder-bg, var(--sand-lt));
     clip-path: polygon(0 0, 76% 0, 82% 46px, 100% 46px, 100% 100%, 0 100%);
-    /* clip-path cuts the shadow off with the shape, so the lift comes from a
+    /* clip-path cuts a box-shadow off with the shape, so the lift comes from a
        filter instead — it follows the silhouette. */
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .12));
   }
   .folder-head__bill {
     display: flex; align-items: center; gap: 6px;
     height: 46px;
-    /* Inside the bill, which the clip narrows to 76%. */
     max-width: 74%;
   }
   .folder-head__k {
@@ -2288,16 +2330,19 @@ body.is-sheet-open {
   .folder-head__x:hover { background: #fff; }
   .folder-head__x:active { transform: scale(.9); }
 
-  .folder-head[style*="--tint:0"] { --folder-bg: #DDE5F6; }
-  .folder-head[style*="--tint:1"] { --folder-bg: #E9E4C6; }
-  .folder-head[style*="--tint:2"] { --folder-bg: #D6E7DC; }
-  .folder-head[style*="--tint:3"] { --folder-bg: #F6DED9; }
-  .folder-head[style*="--tint:4"] { --folder-bg: #E2DBEF; }
-  .folder-head[style*="--tint:5"] { --folder-bg: #CFE4EA; }
+  .folder-head[data-tint="0"] { --folder-bg: #DDE5F6; }
+  .folder-head[data-tint="1"] { --folder-bg: #E9E4C6; }
+  .folder-head[data-tint="2"] { --folder-bg: #D6E7DC; }
+  .folder-head[data-tint="3"] { --folder-bg: #F6DED9; }
+  .folder-head[data-tint="4"] { --folder-bg: #E2DBEF; }
+  .folder-head[data-tint="5"] { --folder-bg: #CFE4EA; }
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
-  .folder { transition: none; }
+  /* The deal still happens — it has to, or the deck stops meaning anything —
+     it just happens at once rather than over half a second. */
+  .folder { transition-duration: .01ms; }
+  .deck__rail { scroll-behavior: auto; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */

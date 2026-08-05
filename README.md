@@ -643,42 +643,52 @@ like this invites. An unknown `?p=` falls back to the index.
 
 ### Info folders
 
-Below 900px, Info opens as a **pile of folders** rather than a list — families
-for fishes, `GEAR_GROUPS` for gear, bodies of water for zones. All three already
-exist in the data, so this names them rather than inventing a taxonomy.
+Below 900px, Info opens as a **deck**: the folders sit in one place,
+overlapping, with the bills of the ones behind fanned above the front card.
+Families for fishes, `GEAR_GROUPS` for gear, bodies of water for zones — all
+three already exist in the data, so this names them rather than inventing a
+taxonomy.
 
-**The pile is `position: sticky`, not a transform.** Each folder parks a little
-lower than the one before, so scrolling walks them one on top of the next and
-leaves a strip of each showing. No JS, no wrap-around: it has a first and a
-last, the scrollbar says where you are in it, and a screen reader gets a plain
-list of buttons. Faking it with transforms would have meant owning the scroll,
-and owning the scroll on a touch device means fighting momentum you cannot feel
-from a desktop.
+**The scroll is real and the movement is not.** An invisible rail does the
+scrolling — one deck-height spacer per folder, snapped — and the cards are
+absolutely positioned and animated to match wherever it has landed. Native
+momentum and native snap are the parts that are almost impossible to fake on
+touch, and a scrollbar cannot loop, which is what was asked for.
 
-Each one carries a **bill** — the tab sticking out of the top-left — cut as a
-single `clip-path` polygon rather than a tab drawn as a separate element: two
-shapes meeting is two edges to line up and a seam that shows at every zoom
-level. It also means `box-shadow` is clipped away with the shape, so the lift
-comes from a `drop-shadow` filter, which follows the silhouette.
+**The rail sits on top and takes the taps.** It has to be topmost or a touch
+starting on a card would never reach the scroller and the deck would be inert on
+a phone — so the cards are `pointer-events: none` and the rail reports whichever
+one is at the front, **by calling back** rather than firing a click on a card and
+hoping the event finds its way home.
 
-Pressing one opens it and **the bill grows** — wide enough and tall enough to
-carry the folder's name and an `×`. Same shape, same colour: the folder you
-pressed, opened. The way out sits on the label rather than parked in a corner.
+`--d` is a card's distance from the front. One number becomes the offset, the
+width and the z-order:
 
-**Three states, not two.** `''` is the pile with nothing open, `ALL` is the pile
-opened onto everything, and anything else is one folder. Using `''` for both
+- **`scaleX` only, not `scale`.** A uniform scale pulls the top edge back down by
+  almost exactly what the offset raised it, and the bills cancel out to nothing.
+- **`data-tint`, not an inline custom property.** `style.setProperty('--d')`
+  re-serialises the whole style attribute in normalised form (`--tint: 0`), which
+  silently stopped every `[style*="--tint:0"]` rule matching and left the deck
+  one colour.
+
+Each folder carries a **bill** — the tab on the top-left — cut as a single
+`clip-path` polygon rather than a tab drawn as a separate element: two shapes
+meeting is two edges to line up and a seam that shows at every zoom level. It
+also means `box-shadow` is clipped away with the shape, so the lift comes from a
+`drop-shadow` filter, which follows the silhouette.
+
+Tapping opens the front folder and **the bill grows** to carry its name and an
+`×`. Same shape, same colour: the folder you pressed, opened.
+
+**Three states, not two.** `''` is the deck with nothing open, `ALL` is the deck
+opened onto everything, anything else is one folder. Using `''` for both
 "nothing open" and "browsing everything" meant pressing **Everything** set the
-state it was already in and simply redrew the pile.
+state it was already in and simply redrew the deck — a button that looked dead.
 
-Colour is the only thing telling folders apart once they are piled and all you
-can see is a strip, so the six tints are a real difference rather than shades —
-but tints, not the reference's saturated blocks: six saturated fills that all
-clear 4.5:1 against one text colour is a much narrower palette than it sounds.
-
-**Searching bypasses the pile.** A query is a request to see matches; hiding
-them behind a folder you have to open first would make the search box a
-decoration. Above 900px the chips come back — a wide window has room to show
-every subcategory at once, which is what chips are for.
+**Searching bypasses the deck.** A query is a request to see matches; hiding them
+behind a folder you have to open first would make the search box a decoration.
+Above 900px the chips come back — a wide window has room to show every
+subcategory at once, which is what chips are for.
 
 ### Installing on an iPhone
 
@@ -822,7 +832,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 493 checks, phone width
+python tools/browser_test.py        # terminal 2 — 495 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

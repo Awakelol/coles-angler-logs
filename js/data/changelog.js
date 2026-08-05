@@ -20,9 +20,18 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.6.0';
+export const APP_VERSION = '3.7.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.7.0',
+    date: '2026-08-05',
+    title: 'A deck of folders',
+    changes: [
+      'The folders are a deck now — scroll to deal the next one forward.',
+      'The brand bar is on the home screen only; every other page gets the space back.',
+    ],
+  },
   {
     version: '3.6.0',
     date: '2026-08-05',

@@ -181,17 +181,29 @@ def static_checks():
 
 
 async def ev_pile(page):
-    """Measure the pile: how many, are they sticky, do they step, are they
-    different colours."""
+    """Measure the deck: how many, do they overlap in one place, are they
+    different colours, is exactly one at the front."""
     return await page.eval("""
         const fs = [...document.querySelectorAll('.folder')];
-        const tops = fs.map(f => parseFloat(getComputedStyle(f).top));
+        const boxes = fs.map(f => f.getBoundingClientRect());
         const bgs = new Set(fs.map(f => getComputedStyle(f).backgroundColor));
         return {
             folders: fs.length,
             cards: document.querySelectorAll('.species-card').length,
-            sticky: fs.every(f => getComputedStyle(f).position === 'sticky'),
-            stepped: tops.every((t, i) => i === 0 || t > tops[i - 1]),
+            // ONE PLACE, overlapping — not a list. Centres, not edges: the
+            // cards behind are SCALED DOWN on purpose, so their left edges and
+            // widths differ by design and only the centre line is shared.
+            overlapping: boxes.every(b =>
+                Math.abs((b.left + b.right) / 2 - (boxes[0].left + boxes[0].right) / 2) < 2),
+            spread: Math.round(Math.max(...boxes.slice(0, 5).map(b => b.top))
+                             - Math.min(...boxes.slice(0, 5).map(b => b.top))),
+            front: document.querySelectorAll('.folder.is-front').length,
+            // The rail is what scrolls, and it has to be taller than the deck
+            // or there is nothing to scroll through.
+            scrollable: (() => {
+                const r = document.getElementById('deckRail');
+                return !!r && r.scrollHeight > r.clientHeight * 2;
+            })(),
             distinctColours: bgs.size,
         };
     """)
@@ -761,12 +773,12 @@ async def main():
             grouped = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 // Phone width opens Info as a pile of folders. "Everything" is
                 // the one at the bottom of it, and it carries the ALL sentinel
                 // rather than an empty string — empty means "nothing open".
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -1530,7 +1542,7 @@ async def main():
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
                 const box = document.getElementById('infoSearch');
@@ -1548,7 +1560,7 @@ async def main():
 
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
                     backTo: document.querySelector('[data-tab][aria-selected="true"]')
@@ -2337,8 +2349,8 @@ async def main():
             await page.goto(f"{BASE}/index.html#/info")
             # Phone width lands on the pile of folders. Open Everything so the
             # rest of this block sees the cards it is about.
-            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
-            await page.eval("return document.querySelector('.folder--all').click(), 1;")
+            await page.wait_for("document.getElementById('deckRail')", label="info deck")
+            await page.eval("return document.getElementById('deckRail').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
 
             tabs = await page.eval("""
@@ -2355,7 +2367,7 @@ async def main():
                 // switching tabs lands on that tab's pile — the cards are one
                 // press further in.
                 const openAll = async () => {
-                    document.querySelector('.folder--all')?.click();
+                    document.getElementById('deckRail')?.click();
                     await new Promise(r => setTimeout(r, 350));
                 };
                 const seen = {};
@@ -2385,25 +2397,34 @@ async def main():
             """)
             # --- the pile of folders ----------------------------------------
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.folder--all')", label="pile")
+            await page.wait_for("document.getElementById('deckRail')", label="deck")
             await asyncio.sleep(0.6)
 
             pile = await ev_pile(page)
-            check("info opens as a pile of folders",
+            check("info opens as a deck of folders",
                   pile["folders"] >= 6 and not pile["cards"], str(pile))
-            # Sticky at stepped offsets is what makes it a pile rather than a
-            # list: each one parks lower than the last, leaving a strip of the
-            # one behind showing.
-            check("each folder parks lower than the last",
-                  pile["sticky"] and pile["stepped"], str(pile))
+            # Overlapping in ONE place, a few pixels apart — a deck, not a list.
+            # The first attempt spread them down the page as sticky cards, which
+            # is a different thing that happens to also involve scrolling.
+            check("the folders overlap in one place",
+                  pile["overlapping"] and 0 < pile["spread"] <= 60, str(pile))
+            check("exactly one folder is at the front", pile["front"] == 1, str(pile))
+            check("there is a rail to scroll through them", pile["scrollable"], str(pile))
             # Colour is the only thing telling them apart once piled.
             check("the folders are colour-coded",
                   pile["distinctColours"] >= 5, str(pile))
 
+            # Scroll the rail one card on, then tap it. The cards themselves are
+            # pointer-events: none — the rail is on top so a touch that starts
+            # anywhere in the deck reaches the scroller — so tapping a card is
+            # not how any of this works.
             opened = await page.eval("""
-                const f = [...document.querySelectorAll(".folder")].find(x => x.dataset.folder !== "*");
+                const rail = document.getElementById("deckRail");
+                rail.scrollTop = rail.clientHeight;
+                await new Promise(r => setTimeout(r, 500));
+                const f = document.querySelector(".folder.is-front");
                 const label = f.querySelector(".folder__k").textContent.trim();
-                f.click();
+                rail.click();
                 await new Promise(r => setTimeout(r, 600));
                 const head = document.querySelector(".folder-head");
                 return {
@@ -2415,7 +2436,7 @@ async def main():
                     pileGone: document.querySelectorAll(".folder").length === 0,
                     // The header wears the folder’s colour, so the thing you
                     // opened and the thing you are in are visibly the same.
-                    headTint: head?.getAttribute("style") || "",
+                    headTint: head?.getAttribute("data-tint") || "",
                 };
             """)
             check("pressing a folder opens it",
@@ -2425,7 +2446,7 @@ async def main():
             check("the way out is beside the name",
                   opened["hasX"], str(opened))
             check("the header wears the folder colour",
-                  "--tint" in opened["headTint"], str(opened))
+                  opened["headTint"] != "", str(opened))
 
             closed = await page.eval("""
                 document.querySelector("[data-close-folder]").click();
@@ -2463,9 +2484,9 @@ async def main():
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2512,7 +2533,7 @@ async def main():
             gear_sheet = await page.eval("""
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2553,7 +2574,7 @@ async def main():
                 document.body.classList.remove('is-sheet-open');
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -2566,7 +2587,7 @@ async def main():
             cross = await page.eval("""
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
                 i.value = 'baitcasting';
@@ -2587,7 +2608,7 @@ async def main():
             legacy = await page.eval("""
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
                          sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
@@ -2696,8 +2717,8 @@ async def main():
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
-            await page.eval("return document.querySelector('.folder--all').click(), 1;")
+            await page.wait_for("document.getElementById('deckRail')", label="info deck")
+            await page.eval("return document.getElementById('deckRail').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
@@ -3326,8 +3347,8 @@ async def main():
             print()
             print("Sheet")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.folder--all')", label="info folders")
-            await page.eval("return document.querySelector('.folder--all').click(), 1;")
+            await page.wait_for("document.getElementById('deckRail')", label="info deck")
+            await page.eval("return document.getElementById('deckRail').click(), 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -4509,7 +4530,7 @@ async def main():
                 const rolled = bar.classList.contains('is-rolled');
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 800));
-                document.querySelector('.folder--all')?.click();
+                document.getElementById('deckRail')?.click();
                 await new Promise(r => setTimeout(r, 350));
                 return { rolled, offMap: bar.classList.contains('is-rolled'),
                          tabbable: [...bar.querySelectorAll('a')]

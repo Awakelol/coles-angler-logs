@@ -108,6 +108,12 @@ async function render() {
   syncTabs(route.path);
   syncNavRoll(route.path);
 
+  // The brand bar earns its space on the home screen and nowhere else: every
+  // other page opens with its own name in a heading twice the size, so the bar
+  // is a second title above the real one, costing 68px of a phone screen.
+  document.body.classList.toggle('no-topbar', route.path !== '/');
+  publishTopbarHeight();
+
   // A sheet left open when the route changes would float over the new page.
   // Removing it isn't enough: openSheet() locks the body with position:fixed
   // and a negative top to stop the page scrolling underneath, and only its own
@@ -197,11 +203,18 @@ function buildRegionPicker() {
  * wraps at a narrow width — the map would either fall short or push the page
  * into scrolling, which is the one thing that layout is trying to avoid.
  */
+let publishTopbarHeight = () => {};
+
 function trackTopbarHeight() {
   const bar = document.querySelector('.topbar');
   if (!bar) return;
   const publish = () =>
     document.documentElement.style.setProperty('--topbar-h', `${bar.offsetHeight}px`);
+  // Kept so a route change can republish immediately. A hidden bar measures 0,
+  // which is what the map's height and the folder pile's sticky offsets need —
+  // but waiting for the observer to notice leaves one frame at the old height,
+  // and on the map that frame is a visible jump.
+  publishTopbarHeight = publish;
   publish();
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(publish).observe(bar);

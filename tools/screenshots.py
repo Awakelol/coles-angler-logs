@@ -75,11 +75,13 @@ SHOTS = [
     ("9b-account",   "#/account",    ".acct-name",                   None),
     ("9d-settings-panel", "#/settings?p=data", ".set-back",           None),
     ("9e-info-gear-folders", "#/info?tab=gear", ".folder",             None),
-    ("2c-folders-scrolled", "#/info",  ".folder",
-     "window.scrollTo(0, 520); await new Promise(r=>setTimeout(r,600))"),
+    ("2c-folders-dealt", "#/info",   ".folder",
+     "const r=document.getElementById('deckRail');"
+     "r.scrollTop=r.clientHeight*2; await new Promise(r2=>setTimeout(r2,700))"),
     ("2d-folder-open",  "#/info",      ".folder",
-     "[...document.querySelectorAll('.folder')].find(f=>f.dataset.folder!=='*').click();"
-     "await new Promise(r=>setTimeout(r,700))"),
+     "const r=document.getElementById('deckRail');"
+     "r.scrollTop=r.clientHeight; await new Promise(r2=>setTimeout(r2,500));"
+     "r.click(); await new Promise(r2=>setTimeout(r2,700))"),
     ("9f-account-signin", "#/account", "#authForm",                     None),
     # The + open, so the quick actions and the x are in the tour rather than
     # only in the test assertions.
