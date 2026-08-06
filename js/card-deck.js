@@ -196,17 +196,22 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
   // the tap is handled here and reported by calling back — not by firing a
   // click at a card that cannot receive one.
   /**
-   * Open the front folder by growing it over the page.
+   * Open the front folder by FLIPPING it.
    *
-   * A GHOST DOES THE TRAVELLING, not the card. The card lives inside the deck,
-   * which is `overflow: hidden` and inside a pinned page — it physically cannot
-   * leave. So a plain div is stamped at the card's exact rect in the folder's
-   * own colour, animated to fill the viewport, and removed once the content is
-   * underneath it. Nothing about the deck has to change to allow it.
+   * A card turning over is the one gesture that makes a card-sized thing
+   * becoming a page-sized thing feel like one object rather than two. It also
+   * solves the problem the plain grow had: stretching a card to fill a screen
+   * distorts everything printed on it, and here the stretch happens while the
+   * BACK is facing you — a flat panel of one colour, which cannot look
+   * distorted. By the time it is full-screen you are looking at the back of the
+   * card, and the content fades in onto it.
    *
-   * Scaled from the top-left with a matching translate, because scaling about
-   * the centre and correcting afterwards is two animations that have to agree
-   * to the pixel — and they never quite do at the corners.
+   * Standard CSS 3D: two faces, one rotated 180deg behind the other, both with
+   * backface-visibility hidden so only the one facing you paints.
+   *
+   * The perspective is written INTO the inner element's own transform rather
+   * than set on a parent, because the parent is being scaled by six and a
+   * scaled perspective is not the perspective you asked for.
    */
   function openFront() {
     // Recomputed, not read off the last paint. paint() runs on a rAF, so a tap
@@ -225,44 +230,86 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     }
 
     const r = card.getBoundingClientRect();
+    const bill = card.querySelector('.dcard__bill');
+    const colour = bill ? getComputedStyle(bill).backgroundColor : '';
 
-    // A CLONE OF THE FOLDER, not a rectangle of its colour. The first version
-    // animated a plain div and everything inside stayed put, so the folder
-    // looked like it had been left behind by its own background. Cloning means
-    // the bill, the name and the four photographs are what grows.
-    const ghost = card.cloneNode(true);
-    ghost.classList.add('deck-ghost');
-    ghost.removeAttribute('style');
-    ghost.setAttribute('aria-hidden', 'true');
-    ghost.style.left = `${r.left}px`;
-    ghost.style.top = `${r.top}px`;
-    ghost.style.width = `${r.width}px`;
-    ghost.style.height = `${r.height}px`;
-    document.body.appendChild(ghost);
+    // The clone goes INSIDE a face rather than being one. A .dcard carries its
+    // own absolute positioning and height from the deck, which beat anything
+    // the face needed — the front stayed pinned to the bottom of the box and
+    // never turned, while the back grew over the page on its own. A plain
+    // wrapper is a face this file fully controls.
+    const clone = card.cloneNode(true);
+    clone.removeAttribute('style');
+    clone.setAttribute('aria-hidden', 'true');
 
-    const anim = ghost.animate(
+    const face = document.createElement('div');
+    face.className = 'deck-flip__face deck-flip__front';
+    face.appendChild(clone);
+
+    const back = document.createElement('div');
+    back.className = 'deck-flip__face deck-flip__back';
+    back.style.background = colour;
+
+    const inner = document.createElement('div');
+    inner.className = 'deck-flip__inner';
+    inner.append(face, back);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'deck-flip';
+    wrap.style.left = `${r.left}px`;
+    wrap.style.top = `${r.top}px`;
+    wrap.style.width = `${r.width}px`;
+    wrap.style.height = `${r.height}px`;
+    wrap.appendChild(inner);
+    document.body.appendChild(wrap);
+
+    const sx = innerWidth / r.width;
+    const sy = innerHeight / r.height;
+
+    // The growth is back-loaded on purpose: while the front is still readable
+    // it barely moves, and the scaling happens once the back has taken over.
+    const grow = wrap.animate(
       [
-        { transform: 'translate(0px, 0px) scale(1, 1)', borderRadius: '18px' },
-        {
-          transform: `translate(${-r.left}px, ${-r.top}px) ` +
-                     `scale(${innerWidth / r.width}, ${innerHeight / r.height})`,
-          borderRadius: '0px',
-        },
+        { transform: 'translate(0px,0px) scale(1,1)', offset: 0 },
+        { transform: `translate(${(-r.left) * 0.18}px,${(-r.top) * 0.18}px) ` +
+                     `scale(${1 + (sx - 1) * 0.14},${1 + (sy - 1) * 0.14})`, offset: 0.45 },
+        { transform: `translate(${-r.left}px,${-r.top}px) scale(${sx},${sy})`, offset: 1 },
       ],
-      { duration: 380, easing: 'cubic-bezier(.32,.06,.16,1)', fill: 'forwards' }
+      { duration: 520, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }
     );
 
-    anim.finished.catch(() => {}).then(() => {
-      // The content is built while the colour still covers everything, so the
-      // swap itself is never on screen.
+    inner.animate(
+      [
+        { transform: 'perspective(1400px) rotateY(0deg)' },
+        { transform: 'perspective(1400px) rotateY(180deg)' },
+      ],
+      { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' }
+    );
+
+    // THE REST OF THE DECK GOES WITH IT. The flip is a fixed clone over the
+    // live deck, so without this the card you tapped turns while its twin and
+    // the whole line sit there behind it — the growing panel then covers a
+    // scene that is still moving, which is the part that read as a mess. Timed
+    // to be gone by the halfway point, where the card is edge-on and there is
+    // nothing to see through anyway.
+    root.animate([{ opacity: 1 }, { opacity: 0 }],
+      { duration: 240, easing: 'ease-in', fill: 'forwards' });
+
+    grow.finished.catch(() => {}).then(() => {
+      // Built underneath the back of the card, so the swap is never on screen.
       onOpen(key);
       requestAnimationFrame(() => {
-        const out = ghost.animate([{ opacity: 1 }, { opacity: 0 }],
-          { duration: 220, easing: 'ease-out', fill: 'forwards' });
-        out.finished.catch(() => {}).then(() => ghost.remove());
+        // fill: 'forwards' above left it at 0; this both clears that and is the
+        // fade-in the content arrives on.
+        root.animate([{ opacity: 0 }, { opacity: 1 }],
+          { duration: 280, easing: 'ease-out', fill: 'forwards' });
+        const out = wrap.animate([{ opacity: 1 }, { opacity: 0 }],
+          { duration: 260, easing: 'ease-out', fill: 'forwards' });
+        out.finished.catch(() => {}).then(() => wrap.remove());
       });
     });
   }
+
   rail.addEventListener('click', openFront);
   rail.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {

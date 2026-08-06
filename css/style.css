@@ -2167,27 +2167,60 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* The folder growing over the page when you open it. Outside the media query
-   and outside .deck on purpose: it is appended to <body> because the deck is
-   overflow:hidden inside a pinned page, and a card cannot leave a box that
-   clips it. */
-.deck-ghost {
+/* --- opening a folder: the card turns over ------------------------------- */
+/*
+   Outside the media query and outside .deck on purpose: this is appended to
+   <body>, because the deck is overflow:hidden inside a pinned page and a card
+   cannot leave a box that clips it.
+
+   Two faces, one rotated 180deg behind the other, both with backface-visibility
+   hidden so only the one facing you paints. The wrapper grows; the inner turns.
+*/
+.deck-flip {
   position: fixed;
   z-index: 70;
   transform-origin: 0 0;
   will-change: transform, opacity;
   pointer-events: none;
-  /* It is a clone of a .dcard, which is absolutely positioned inside the deck —
-     these put it back under its own control. */
-  inset: auto;
-  height: auto;
-  opacity: 1 !important;
 }
-/* The clone must not drift while it is growing: the float is for a card sitting
-   in the line, and half a degree of rotation on something scaling by six reads
-   as a wobble. */
-.deck-ghost .dcard__float { animation: none !important; }
-.deck-ghost .dcard__body > * { opacity: 1 !important; }
+.deck-flip__inner {
+  position: relative;
+  width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.deck-flip__face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* The back is a flat panel of the folder's own colour. It is what you are
+   looking at while the card is being stretched to the size of a screen, which
+   is why the stretch never shows. */
+.deck-flip__back {
+  transform: rotateY(180deg);
+  border-radius: 18px;
+}
+/*
+   The clone, put back under its own control.
+
+   Every one of these is undoing something .dcard does for life in the deck:
+   it is absolutely positioned against the deck, sized short of it to leave room
+   for the bills, given a transform by paint() and faded by the swipe. Two
+   classes deep so these win — `.dcard` and `.deck-flip__front` are both one
+   class, and the deck's rules come later in the file.
+*/
+.deck-flip .dcard {
+  position: static;
+  width: 100%; height: 100%;
+  transform: none;
+  opacity: 1;
+}
+/* The float is for a card sitting in the line. Half a degree of rotation on
+   something scaling by six reads as a wobble. */
+.deck-flip .dcard__float { animation: none; }
+/* The body fades out for cards that are not live; the one being opened is. */
+.deck-flip .dcard__body > * { opacity: 1; }
 
 /* --- info: the folder deck ----------------------------------------------- */
 /*

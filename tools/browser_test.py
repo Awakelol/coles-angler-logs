@@ -2398,7 +2398,7 @@ async def main():
                 r.click();
                 // Opening grows the folder over the page first; the content
                 // is not there until that has finished.
-                await new Promise(x => setTimeout(x, 700));
+                await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
@@ -2558,7 +2558,7 @@ async def main():
                 const rail = document.querySelector("[data-deck-rail]");
                 const label = document.querySelector(".dcard.is-live .dcard__k").textContent.trim();
                 rail.click();
-                await new Promise(r => setTimeout(r, 700));
+                await new Promise(r => setTimeout(r, 1000));
                 const head = document.querySelector(".folder-head");
                 return {
                     label,
@@ -2566,7 +2566,7 @@ async def main():
                     // The way out sits ON the bill of what you are in.
                     hasX: !!head?.querySelector("[data-close-folder]"),
                     cards: document.querySelectorAll(".species-card").length,
-                    deckGone: document.querySelectorAll(".dcard").length === 0,
+                    deckGone: document.querySelectorAll("[data-deck] .dcard").length === 0,
                     headTint: head?.getAttribute("data-tint") || "",
                     unpinned: !document.body.classList.contains("deck-locked"),
                 };
@@ -2585,7 +2585,7 @@ async def main():
             closed = await page.eval("""
                 document.querySelector("[data-close-folder]").click();
                 await new Promise(r => setTimeout(r, 700));
-                return { folders: document.querySelectorAll(".dcard").length,
+                return { folders: document.querySelectorAll("[data-deck] .dcard").length,
                          cards: document.querySelectorAll(".species-card").length,
                          // Back on the card you opened, not at the start.
                          live: document.querySelector(".dcard.is-live")?.dataset.key,
@@ -2599,7 +2599,7 @@ async def main():
             # something. An x you have to find was the odd one out.
             dragged = await page.eval("""
                 document.querySelector("[data-deck-rail]").click();
-                await new Promise(r => setTimeout(r, 800));
+                await new Promise(r => setTimeout(r, 1000));
                 const head = document.querySelector(".folder-head");
                 if (!head) return { noHead: true };
                 const b = head.getBoundingClientRect();
@@ -2615,7 +2615,7 @@ async def main():
                 await new Promise(r => setTimeout(r, 900));
                 return {
                     followed: midway.includes("translate"),
-                    backToDeck: document.querySelectorAll(".dcard").length >= 6,
+                    backToDeck: document.querySelectorAll("[data-deck] .dcard").length >= 6,
                     clean: !document.getElementById("infoResults").style.transform,
                 };
             """)
@@ -2636,7 +2636,7 @@ async def main():
                 box.dispatchEvent(new Event("input", { bubbles: true }));
                 await new Promise(r => setTimeout(r, 700));
                 return { cards: document.querySelectorAll(".species-card").length,
-                         folders: document.querySelectorAll(".dcard").length,
+                         folders: document.querySelectorAll("[data-deck] .dcard").length,
                          pinned: document.body.classList.contains("deck-locked") };
             """)
             check("searching goes straight to the matches",
@@ -2918,7 +2918,7 @@ async def main():
                 r.click();
                 // Opening grows the folder over the page first; the content
                 // is not there until that has finished.
-                await new Promise(x => setTimeout(x, 700));
+                await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
@@ -3559,7 +3559,7 @@ async def main():
                 r.click();
                 // Opening grows the folder over the page first; the content
                 // is not there until that has finished.
-                await new Promise(x => setTimeout(x, 700));
+                await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
             await page.wait_for("document.querySelector('.species-card')", label="species")

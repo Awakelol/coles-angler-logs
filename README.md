@@ -727,27 +727,40 @@ bookmark cards. Three things you switch between are a control, not a table of
 contents, and 150px of bookmark to say so was the deck's screen space being
 spent on furniture.
 
-#### Opening: a ghost does the travelling
+#### Opening: the card turns over
 
-Tapping grows the folder over the page. The card cannot do that itself — it
-lives inside a deck that is `overflow: hidden` inside a pinned page, so it
-physically cannot leave. **A clone of it** is stamped at its exact rect,
-animated to fill the viewport, and removed once the content is underneath.
+Tapping flips the folder. A card turning over is the one gesture that makes a
+card-sized thing becoming a page-sized thing feel like one object rather than
+two — and it solves the problem the plain grow had: **stretching a card to fill
+a screen distorts everything printed on it**, and here the stretch happens while
+the BACK is facing you, which is a flat panel of one colour and cannot look
+distorted. By the time it is full-screen you are looking at the back of the
+card, and the content fades in onto it.
 
-The first version animated a plain div in the folder's colour, and everything
-inside stayed put — the folder looked like it had been left behind by its own
-background. Cloning means the bill, the name and the four photographs are what
-grows.
+Standard CSS 3D: two faces, one rotated 180° behind the other, both
+`backface-visibility: hidden` so only the one facing you paints. The perspective
+is written **into the inner element's own transform** rather than set on a
+parent, because the parent is being scaled by six and a scaled perspective is
+not the perspective you asked for.
 
-Scaled from the top-left with a matching translate, because scaling about the
-centre and correcting afterwards is two animations that have to agree to the
-pixel, and they never quite do at the corners. The content is built while the
-colour still covers everything, so the swap itself is never on screen.
+Three things this needs that are easy to miss:
 
-`front` is **recomputed at tap time**, not read off the last paint: `paint()`
-runs on a rAF, so a tap landing between a scroll and its frame would open
-whichever folder was in front one frame ago — which on a fast flick is not the
-one you are looking at.
+- **The clone goes inside a face, it is not one.** A `.dcard` carries its own
+  absolute positioning and height from the deck, and those beat anything the
+  face rule says — the front stayed pinned to the bottom of the box and never
+  turned, while the back grew over the page on its own.
+- **The rest of the deck fades out with it.** The flip is a fixed clone over the
+  live deck, so without this the card you tapped turns while its twin and the
+  whole line sit there behind it, and the growing panel covers a scene that is
+  still moving. Timed to be gone by the halfway point, where the card is
+  edge-on and there is nothing to see through anyway.
+- **`front` is recomputed at tap time**, not read off the last paint: `paint()`
+  runs on a rAF, so a tap landing between a scroll and its frame would open
+  whichever folder was in front one frame ago.
+
+`tools/flip_frames.py` renders it. `captureScreenshot` takes longer than the
+flip does, so a timed capture always lands after it — that tool pauses the
+animation at fixed points and reloads between them instead.
 
 #### Drag the header down to put a folder back
 
