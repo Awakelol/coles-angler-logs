@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.9.0';
+export const APP_VERSION = '3.10.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.10.0',
+    date: '2026-08-06',
+    title: 'Folders you flick through',
+    changes: [
+      'The folders are a line you swipe along — nothing is ever removed, and a counter says where you are.',
+      'The cards drift gently, and follow your thumb instead of jumping on release.',
+      'The page holds still while you swipe, so the gesture is never fighting it.',
+    ],
+  },
   {
     version: '3.9.0',
     date: '2026-08-06',

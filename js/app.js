@@ -112,6 +112,10 @@ async function render() {
   // other page opens with its own name in a heading twice the size, so the bar
   // is a second title above the real one, costing 68px of a phone screen.
   document.body.classList.toggle('no-topbar', route.path !== '/');
+  // Info pins the page while its deck is up. Leaving that set on the way out
+  // would lock every other screen at one viewport with no way to scroll.
+  document.body.classList.remove('deck-locked');
+  document.documentElement.classList.remove('deck-locked');
   publishTopbarHeight();
 
   // A sheet left open when the route changes would float over the new page.

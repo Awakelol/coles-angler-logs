@@ -641,59 +641,75 @@ with “Something broke on this screen”. A test opens every panel in turn and
 fails on an error card, because that is the specific failure splitting a route
 like this invites. An unknown `?p=` falls back to the index.
 
-### Info: the file drawer
+### Info: the folder deck
 
-Below 900px, Info is a drawer of hanging folders. Every folder is present
-from the start and **every label is readable at once**: the bodies overlap,
-but each folder sits one tab-height below the one behind it, so the tabs form
-a column down the drawer. Families for fishes, `GEAR_GROUPS` for gear, bodies
-of water for zones. Each tab carries a small example picture inline with its
-label — a real photograph for a fish family, an icon for gear and waters,
-because there are no photographs of those and a stand-in would be worse than
-an honest symbol.
+Below 900px, Info is a line of folders you swipe through. The front one is
+readable; the rest fan below it, each a little lower and narrower, with its bill
+showing. **Nothing is ever removed** — swiping moves you ALONG the line, and a
+counter says where you are in it. Tap the front card to open it, and the `×` on
+its bill to come back. `js/card-deck.js`.
 
-Tapping a tab opens that folder **in place**: the folders above it do not
-move, the ones below are pushed down by exactly what the content needs, and
-nothing is ever removed. An `x` appears on the open folder's own tab; tapping
-it puts the folder back. `js/file-drawer.js`.
+Each bill carries a picture: a real photograph for a fish family, an icon for
+gear and waters, because there are no photographs of those and a stand-in would
+be worse than an honest symbol.
 
-#### The overlap is a negative margin, not absolute positioning
+#### Two things make it smooth, and both are about not fighting the browser
 
-Folders have to grow when they open, and pushing the ones below down is the
-whole behaviour. Absolutely positioned folders would need every offset
-recomputed in JS on every open — a layout engine, badly reimplemented. Later
-siblings also paint over earlier ones with no `z-index` at all, which is
-exactly the stacking a drawer has.
+**A real scroller does the scrolling.** An invisible rail with one
+viewport-height spacer per card and `scroll-snap-type: y mandatory`. Momentum,
+rubber-banding at the ends, snap-to-card and the exact feel of the platform come
+free. Hand-rolling that on touch means reimplementing a physics engine you
+cannot test from a desktop, and getting it 90% right reads as broken.
 
-The folder silhouette — wide body, narrower tab protruding from the top — is
-one `clip-path` polygon on one element. A tab drawn as a second element is two
-shapes to line up and a seam along the join that shows at every zoom level.
-It also means `box-shadow` is clipped away with the shape, so the depth
-between layers comes from a `drop-shadow` filter, which follows the outline.
+**The cards follow the scroll continuously, not on release.** `--d` is a card's
+distance from the front and it is FRACTIONAL — 2.37, not 2. Every frame
+repositions the whole stack, so the card under your thumb tracks it exactly and
+the one behind is already rising to meet you. Snapping to an index and animating
+between them is what makes a carousel feel like a slideshow.
 
-#### Why there is no Framer Motion
+#### The idle float
 
-It needs React, and this app has no build step, no bundler and no framework.
-`spring()` solves a damped harmonic oscillator by steps and emits the samples
-as a CSS `linear()` easing, which the Web Animations API runs directly — the
-same curve. **`cubic-bezier` cannot express it**: it is monotonic between its
-endpoints, so a bezier spring never overshoots.
+A card sitting still looks printed on the screen; a card breathing looks like an
+object. A 7s keyframe drifts each card a few pixels and a third of a degree,
+staggered by index so the fan breathes rather than pulsing in unison.
 
-**Two springs, deliberately.** The pane's height uses a nearly-critically-
-damped one, because height that overshoots means content clipped and then
-revealed, which reads as a glitch rather than as bounce. The folder's own lift
-is bouncier — that is the part that should feel like it was pulled out of the
-drawer.
+**It lives on an inner element** (`.dcard__float`). The card itself carries the
+stack transform, rewritten on every frame of a drag; an animation on the same
+element would be overwritten sixty times a second. Nesting them means the
+browser composes the two instead of one winning.
 
-#### The content renders inside the folder
+#### The page is pinned while the deck is up
 
-`out()` in `js/pages/info.js` points either at the page or at the open
-folder's pane, and every draw function writes to it. One indirection rather
-than two copies of every list.
+`deck-locked` on **both `<html>` and `<body>`**. `overflow: hidden` on `<body>`
+alone clips the body box but leaves the document scrollable — html's
+`scrollHeight` still counts the content — so the page keeps a couple of hundred
+pixels of travel and the swipe still fights it. A test measures that there is
+nothing left to scroll.
 
-**Searching bypasses the drawer.** A query is a request to see matches, and
-hiding them inside a folder you must open first would make the search box a
-decoration. Above 900px the chips return — a wide window has room to show
+`main` is the flex column, not the first band: the header and the deck are two
+sibling `<section>`s, and sizing the first to the viewport just pushes the
+second off the bottom.
+
+The pin lifts the moment a folder opens — reading needs the page back.
+
+#### Why no Framer Motion
+
+It was the right suggestion for a React app and this is not one: no build step,
+no bundler, no framework. And the physics that matters here is the platform's
+own scroller — its momentum, its rubber-band, its snap. No library beats that,
+because no library *is* that; they all reimplement it and land somewhere close.
+
+#### Two that bite
+
+- **`scroll-snap-type: y mandatory` corrects a programmatic scroll** to a
+  half-position before anything can read it, so the mid-swipe state is
+  unobservable with snapping on. The test turns it off for that one
+  measurement.
+- **`scaleX` only, not `scale`.** A uniform scale pulls the bottom edge back up
+  by nearly what the offset pushed it down, and the slivers cancel to nothing.
+
+**Searching bypasses the deck.** A query is a request to see matches, and it
+unpins the page. Above 900px the chips return — a wide window has room for
 every subcategory at once.
 
 ### Installing on an iPhone
@@ -838,7 +854,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 499 checks, phone width
+python tools/browser_test.py        # terminal 2 — 505 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

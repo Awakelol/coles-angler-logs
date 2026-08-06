@@ -2167,21 +2167,19 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
-/* --- info: the file drawer ----------------------------------------------- */
+/* --- info: the folder deck ----------------------------------------------- */
 /*
-   Hanging folders seen from the front. Every folder is present from the start
-   and every label is readable at once: the bodies overlap, but each folder sits
-   one tab-height below the one behind it, so the tabs form a column down the
-   drawer.
+   Phone only. A line of folders you swipe through — nothing is dismissed, you
+   move ALONG them. The front one is readable; the rest fan below it, each a
+   little lower and narrower, with its bill showing.
 
-   THE OVERLAP IS A NEGATIVE MARGIN, NOT ABSOLUTE POSITIONING. Folders have to
-   be able to grow when they open, and pushing the ones below down is the whole
-   behaviour — absolutely positioned folders would need every offset recomputed
-   in JS on every open, which is a layout engine badly reimplemented.
+   Positions are written by JS every scroll frame (transform, opacity, z-index —
+   compositor properties only). This file owns the SHAPE and the IDLE FLOAT.
 
-   Later siblings paint over earlier ones with no z-index at all, which is
-   exactly the stacking a drawer has: the folder in front is the one nearer the
-   bottom of the list.
+   THE FLOAT IS ON AN INNER ELEMENT. The card itself carries the stack
+   transform, which changes on every frame of a drag; an animation on the same
+   element would be overwritten sixty times a second. Nesting them means the
+   browser composes the two instead of one winning.
 */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
@@ -2189,123 +2187,229 @@ body.is-sheet-open {
   /* Read once, then it is 60px between you and the folders. */
   .band--yellow .subtitle { display: none; }
 
-  .drawer {
-    --tab-h: 52px;
-    /* How much of a closed folder's body shows below its tab. Enough for the
-       shape to read as a folder rather than as a row. */
-    --body-peek: 14px;
-    display: flow-root;
-    padding-bottom: 8px;
-  }
+  /* --- a page that does not scroll under the gesture ---------------------- */
+  /*
+     While the deck is up, Info is exactly one screen: header, then deck,
+     nothing below. Any page scroll here competes with the swipe — you would
+     drag a card and move the page instead, which is the single fastest way to
+     make a carousel feel broken.
 
-  .ffold {
-    position: relative;
-    /* A closed folder occupies its tab plus a sliver of body; the rest is
-       behind the folder in front. */
-    min-height: calc(var(--tab-h) + var(--body-peek));
-    background: var(--fold-bg, var(--sand-lt));
-    border-radius: 18px;
-    /* THE FOLDER SHAPE. Body full width, tab narrower and protruding from the
-       top edge — one polygon, because a tab drawn as a second element is two
-       shapes to line up and a seam along the join at every zoom level. */
-    clip-path: polygon(0 0, 62% 0, 66% var(--tab-h), 100% var(--tab-h), 100% 100%, 0 100%);
-    /* clip-path cuts a box-shadow off with the shape, so the depth between
-       layers comes from a filter — it follows the silhouette. */
-    filter: drop-shadow(0 -3px 10px rgb(22 24 29 / .13));
+     MAIN is the column, not the first band. The header and the deck are two
+     sibling <section>s; sizing the first one to the viewport just pushes the
+     second one off the bottom, which is exactly what happened.
+  */
+  html.deck-locked, body.deck-locked { height: 100%; overflow: hidden; }
+  body.deck-locked main {
+    height: calc(100dvh - var(--tab-space) - env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column;
+    overflow: hidden;
   }
-
-  /* Each folder starts one tab below the one behind it. The first keeps its
-     own top; every other is pulled up over its predecessor's body. */
-  .ffold + .ffold {
-    margin-top: calc(-1 * var(--body-peek));
-  }
-
-  .ffold__tab {
-    display: flex; align-items: center;
-    height: var(--tab-h);
-    margin: 0;
-    /* The tab is 62% wide before the clip; the button fills it. */
-    width: 66%;
-  }
-
-  .ffold__grip {
-    flex: 1; min-width: 0;
-    display: flex; align-items: center; gap: 10px;
-    height: 100%;
-    padding: 0 8px 0 14px;
-    border: 0; background: none; color: inherit;
-    font-family: inherit; text-align: left;
-    cursor: pointer;
-  }
-
-  /* The example picture, inline with the label. Square and cropped so a
-     photograph and an icon take the same room and the tabs stay a column. */
-  .ffold__pic {
+  /* The header takes what it needs. */
+  body.deck-locked main > .band:first-child {
     flex: none;
-    display: grid; place-items: center;
-    width: 32px; height: 32px;
-    border-radius: 9px; overflow: hidden;
-    background: rgb(255 255 255 / .6);
+    padding: 14px 16px 10px;
+    border-bottom: 0;
   }
-  .ffold__pic img,
-  .ffold__pic .species-photo {
+  /* The deck takes the rest. */
+  body.deck-locked main > .band:last-child {
+    flex: 1; min-height: 0;
+    display: flex;
+    padding: 0 16px 6px;
+    border-bottom: 0;
+  }
+  body.deck-locked main > .band:last-child > .wrap {
+    flex: 1; min-height: 0; display: flex;
+  }
+  body.deck-locked #infoResults { flex: 1; min-height: 0; display: flex; width: 100%; }
+  body.deck-locked .display { font-size: clamp(28px, 7.5vw, 36px); margin-bottom: 0; }
+  body.deck-locked .eyebrow { margin-bottom: 2px; }
+
+  /* --- the deck ----------------------------------------------------------- */
+
+  .deck { position: relative; flex: 1; min-height: 210px; width: 100%; }
+  .deck__cards { position: absolute; inset: 0 0 22px; }
+
+  /* Transparent, on top, and the only thing that scrolls. */
+  .deck__rail {
+    position: absolute; inset: 0 0 22px; z-index: 10;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    cursor: pointer;
+    /* The rail owns the vertical gesture; nothing else may claim it. */
+    touch-action: pan-y;
+  }
+  .deck__rail::-webkit-scrollbar { display: none; }
+  .deck__rail > i { display: block; height: 100%; scroll-snap-align: start; }
+  .deck__rail:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 22px; }
+
+  .dcard {
+    position: absolute; left: 0; right: 0; top: 0;
+    /* Short of the deck by four steps, so the four cards behind have somewhere
+       to be. Full height and they hang below the deck's own box, which clips
+       them — you get one sliver instead of a fan. */
+    height: calc(100% - 64px);
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  /* The folder. A wide body with a narrower bill on the top-left, cut as one
+     polygon — two shapes meeting is two edges to line up and a seam that shows
+     at every zoom level. */
+  .dcard__float {
+    height: 100%;
+    padding: 0 18px 16px;
+    border-radius: 20px;
+    background: var(--folder-bg, var(--paper));
+    color: var(--ink);
+    clip-path: polygon(0 0, 62% 0, 68% 54px, 100% 54px, 100% 100%, 0 100%);
+    /* clip-path cuts a box-shadow off with the shape, so depth comes from a
+       filter, which follows the silhouette. */
+    filter: drop-shadow(0 8px 18px rgb(22 24 29 / .16));
+    display: flex; flex-direction: column;
+    /* Floating in space. Small on purpose: at this size it reads as the card
+       being an object rather than as the page wobbling. Staggered by index so
+       the fan breathes rather than pulsing in unison. */
+    animation: dcard-float 7s ease-in-out infinite;
+    animation-delay: calc(var(--i) * -1.7s);
+  }
+
+  @keyframes dcard-float {
+    0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+    28%  { transform: translate3d(1px, -4px, 0) rotate(.32deg); }
+    54%  { transform: translate3d(-1px, -1.5px, 0) rotate(-.22deg); }
+    76%  { transform: translate3d(.5px, -5px, 0) rotate(.16deg); }
+    100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  }
+
+  /* The bill: the tab you read the folder by. */
+  .dcard__bill {
+    height: 54px; width: 62%;
+    display: flex; align-items: center; gap: 9px;
+    padding-right: 12px;
+    min-width: 0;
+  }
+  .dcard__art {
+    flex: none;
+    width: 34px; height: 34px;
+    display: grid; place-items: center;
+    border-radius: 10px; overflow: hidden;
+    background: rgb(255 255 255 / .55);
+  }
+  .dcard__art img,
+  .dcard__art .species-photo {
     width: 100%; height: 100%; object-fit: cover; display: block;
     border-radius: 0; box-shadow: none;
   }
-  .ffold__pic .species-photo img { width: 100%; height: 100%; object-fit: cover; }
-  .ffold__pic svg { width: 22px; height: 22px; }
-
-  .ffold__label {
-    flex: 1; min-width: 0;
-    font-size: 15.5px; font-weight: 800; letter-spacing: -.015em;
+  .dcard__art .species-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .dcard__art svg { width: 24px; height: 24px; }
+  .dcard__k {
+    min-width: 0;
+    font-size: 16px; font-weight: 900; letter-spacing: -.02em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .ffold__n {
-    flex: none;
-    font-size: 12.5px; font-weight: 800; color: var(--ink-60);
+
+  /* Everything below the bill belongs to the front card. On the ones behind,
+     only the bill is showing anyway. */
+  .dcard__body {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding-top: 10px;
+  }
+  .dcard__sub {
+    margin: 0 0 auto;
+    font-size: 13.5px; font-weight: 700; color: var(--ink-60);
+  }
+  .dcard__count { margin: 0; }
+  .dcard__n {
+    display: block;
+    font-size: 52px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
+  }
+  .dcard__unit {
+    display: block;
+    font-size: 11.5px; font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-60);
+  }
+  /* Fades with the card rather than snapping — the body is the part that stops
+     being relevant the moment a card is no longer the one you are reading. */
+  .dcard:not(.is-live) .dcard__body { opacity: 0; }
+  .dcard__body { transition: opacity .28s ease; }
+
+  .deck__hint {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    margin: 0; height: 22px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 11.5px; font-weight: 800; letter-spacing: .05em;
+    color: var(--ink-30);
+  }
+  .deck__dots {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-60);
   }
 
-  .ffold__x {
+  .dcard[data-tint="0"] { --folder-bg: #DDE5F6; }
+  .dcard[data-tint="1"] { --folder-bg: #E9E4C6; }
+  .dcard[data-tint="2"] { --folder-bg: #D6E7DC; }
+  .dcard[data-tint="3"] { --folder-bg: #F6DED9; }
+  .dcard[data-tint="4"] { --folder-bg: #E2DBEF; }
+  .dcard[data-tint="5"] { --folder-bg: #CFE4EA; }
+
+  /* --- the opened folder --------------------------------------------------- */
+
+  /* The bill grows to carry the name and the way out. Same shape, same colour:
+     the folder you tapped, opened. */
+  .folder-head {
+    position: sticky;
+    top: calc(var(--topbar-h, 0px) + 8px);
+    z-index: 6;
+    margin-bottom: 16px;
+    padding: 6px 18px 14px;
+    border-radius: 18px;
+    background: var(--folder-bg, var(--sand-lt));
+    clip-path: polygon(0 0, 76% 0, 82% 46px, 100% 46px, 100% 100%, 0 100%);
+    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .12));
+  }
+  .folder-head__bill {
+    display: flex; align-items: center; gap: 6px;
+    height: 46px;
+    max-width: 74%;
+  }
+  .folder-head__k {
+    margin: 0; min-width: 0;
+    font-size: 19px; font-weight: 900; letter-spacing: -.02em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .folder-head__n {
+    margin: 6px 0 0;
+    font-size: 12.5px; font-weight: 800; color: var(--ink-60);
+  }
+  .folder-head__x {
     flex: none;
     display: grid; place-items: center;
-    width: 34px; height: 34px; margin-right: 6px;
+    width: 32px; height: 32px;
     border: 0; border-radius: 50%;
-    background: rgb(255 255 255 / .7); color: var(--ink);
+    background: rgb(255 255 255 / .65); color: var(--ink);
     cursor: pointer;
     transition: background-color .2s ease, transform .2s ease;
   }
-  .ffold__x:hover { background: #fff; }
-  .ffold__x:active { transform: scale(.9); }
+  .folder-head__x:hover { background: #fff; }
+  .folder-head__x:active { transform: scale(.9); }
 
-  /* --- open ---------------------------------------------------------------- */
-
-  /* The open folder keeps its place in the drawer: the ones above it do not
-     move, and the ones below are pushed down by exactly the height of what it
-     is showing. Nothing is removed, nothing reshuffles. */
-  .ffold.is-open {
-    filter: drop-shadow(0 -4px 20px rgb(22 24 29 / .18));
-  }
-  .ffold__inner {
-    padding: 4px 14px 18px;
-    overflow: hidden;
-  }
-  /* The content sits on the folder's own colour, so a species card inside the
-     Snapper folder is visibly inside the Snapper folder. */
-  .ffold__inner .section-head { margin-top: 6px; }
-
-  .ffold[data-tint="0"] { --fold-bg: #DDE5F6; }
-  .ffold[data-tint="1"] { --fold-bg: #E9E4C6; }
-  .ffold[data-tint="2"] { --fold-bg: #D6E7DC; }
-  .ffold[data-tint="3"] { --fold-bg: #F6DED9; }
-  .ffold[data-tint="4"] { --fold-bg: #E2DBEF; }
-  .ffold[data-tint="5"] { --fold-bg: #CFE4EA; }
-  .ffold--all { --fold-bg: var(--paper); }
+  .folder-head[data-tint="0"] { --folder-bg: #DDE5F6; }
+  .folder-head[data-tint="1"] { --folder-bg: #E9E4C6; }
+  .folder-head[data-tint="2"] { --folder-bg: #D6E7DC; }
+  .folder-head[data-tint="3"] { --folder-bg: #F6DED9; }
+  .folder-head[data-tint="4"] { --folder-bg: #E2DBEF; }
+  .folder-head[data-tint="5"] { --folder-bg: #CFE4EA; }
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
-  /* The JS checks the same query and skips the springs rather than running
-     them at 1ms, which stutters. */
-  .ffold { transition: none; }
+  /* The float is decoration; the fan is information. Only the decoration goes. */
+  .dcard__float { animation: none; }
+  .dcard__body { transition: none; }
+  .deck__rail { scroll-behavior: auto; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */

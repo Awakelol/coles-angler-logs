@@ -37,16 +37,31 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screensho
 # name -> (hash route, css selector to wait for, optional JS to run first)
 SHOTS = [
     ("1-home",       "#/",           ".kpi__v, .empty",              None),
-    ("2-info-fishes", "#/info",      ".species-card",                None),
-    ("2b-species-cards", "#/info",   ".species-card",
-     "window.scrollTo(0, 1150); await new Promise(r => setTimeout(r, 1400))"),
-    ("3-species-detail", "#/info",   ".species-card",
-     "document.querySelectorAll('.species-card')[4].click()"),
-    ("3b-info-gear", "#/info?tab=gear", ".gear-card",                None),
-    ("3c-gear-detail", "#/info?tab=gear", ".gear-card",
+    ("2-info-deck",  "#/info",       ".dcard",                       None),
+    ("2b-deck-mid",  "#/info",       ".dcard",
+     "const r=document.querySelector('[data-deck-rail]');"
+     "r.style.scrollSnapType='none'; r.scrollTop=r.clientHeight*0.45;"
+     "r.dispatchEvent(new Event('scroll'));"
+     "await new Promise(x=>setTimeout(x,280))"),
+    ("2c-deck-third", "#/info",      ".dcard",
+     "const r=document.querySelector('[data-deck-rail]');"
+     "r.scrollTop=r.clientHeight*3; r.dispatchEvent(new Event('scroll'));"
+     "await new Promise(x=>setTimeout(x,500))"),
+    ("2d-folder-open", "#/info",     ".dcard",
+     "document.querySelector('[data-deck-rail]').click();"
+     "await new Promise(x=>setTimeout(x,800))"),
+    ("3-species-detail", "#/info",   ".dcard",
+     "document.querySelector('[data-deck-rail]').click();"
+     "await new Promise(x=>setTimeout(x,700));"
+     "document.querySelectorAll('.species-card')[4].click();"
+     "await new Promise(x=>setTimeout(x,500))"),
+    ("3b-info-gear", "#/info?tab=gear", ".dcard",                    None),
+    ("3c-gear-detail", "#/info?tab=gear", ".dcard",
+     "document.querySelector('[data-deck-rail]').click();"
+     "await new Promise(x=>setTimeout(x,700));"
      "document.querySelectorAll('.gear-card')[1].click();"
-     "await new Promise(r=>setTimeout(r,600))"),
-    ("3d-info-zones", "#/info?tab=zones", ".zone-card",              None),
+     "await new Promise(x=>setTimeout(x,600))"),
+    ("3d-info-zones", "#/info?tab=zones", ".dcard",                  None),
     ("4-map",        "#/map",        "#mapWeather .now-card__temp",  None),
     ("4b-map-forecast", "#/map",     "#mapWeather .now-card__temp",
      "const d=document.getElementById('wxDeck');"

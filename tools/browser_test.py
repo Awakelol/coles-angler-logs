@@ -181,29 +181,33 @@ def static_checks():
 
 
 async def ev_pile(page):
-    """Measure the drawer: every folder present, every tab readable, staggered
-    one tab-height apart with the bodies overlapping."""
+    """Measure the deck: every card present, bills readable, fanned downward
+    from one place, and breathing."""
     return await page.eval("""
-        const fs = [...document.querySelectorAll('.ffold')];
+        const fs = [...document.querySelectorAll('.dcard')].filter(c => !c.hidden);
         const boxes = fs.map(f => f.getBoundingClientRect());
-        const tabs = fs.map(f => f.querySelector('.ffold__tab').getBoundingClientRect());
-        const bgs = new Set(fs.map(f => getComputedStyle(f).backgroundColor));
+        const bills = fs.map(f => f.querySelector('.dcard__bill').getBoundingClientRect());
+        const bgs = new Set(fs.map(f => getComputedStyle(f.querySelector('.dcard__float')).backgroundColor));
         return {
-            folders: fs.length,
+            folders: document.querySelectorAll('.dcard').length,
+            shown: fs.length,
             cards: document.querySelectorAll('.species-card').length,
-            // Every label legible at once — the whole point of staggering them
-            // rather than piling them.
-            allLabelled: fs.every(f => (f.querySelector('.ffold__label')?.textContent || '').trim()),
-            allIllustrated: fs.every(f => !!f.querySelector('.ffold__pic')?.innerHTML.trim()),
-            // Staggered downward, one after another.
-            descending: boxes.every((b, i) => i === 0 || b.top > boxes[i - 1].top),
-            // ...and the bodies OVERLAP: each folder starts before the one
-            // before it has finished. A drawer, not a list.
-            overlapping: boxes.every((b, i) => i === 0 || b.top < boxes[i - 1].bottom),
-            // No tab is covered by the folder in front of it.
-            tabsClear: tabs.every((t, i) => i === tabs.length - 1 || t.bottom <= tabs[i + 1].top + 1),
-            // The folder shape: a tab narrower than the body it sits on.
-            tabNarrower: tabs.every((t, i) => t.width < boxes[i].width - 20),
+            allLabelled: fs.every(f => (f.querySelector('.dcard__k')?.textContent || '').trim()),
+            allIllustrated: fs.every(f => !!f.querySelector('.dcard__art')?.innerHTML.trim()),
+            // One place: the cards behind are scaled horizontally, so only the
+            // centre line is shared — comparing left edges would be wrong.
+            centred: boxes.every(b =>
+                Math.abs((b.left + b.right) / 2 - (boxes[0].left + boxes[0].right) / 2) < 2),
+            descending: bills.every((b, i) => i === 0 || b.top > bills[i - 1].top),
+            // The folder shape: a bill narrower than the body under it.
+            billNarrower: bills.every((b, i) => b.width < boxes[i].width - 20),
+            // The idle float, running and staggered so the fan breathes rather
+            // than pulsing in unison.
+            floating: fs.every(f => {
+                const cs = getComputedStyle(f.querySelector('.dcard__float'));
+                return cs.animationName !== 'none' && parseFloat(cs.animationDuration) > 1;
+            }) && new Set(fs.slice(0, 4).map(f =>
+                getComputedStyle(f.querySelector('.dcard__float')).animationDelay)).size > 1,
             distinctColours: bgs.size,
         };
     """)
@@ -773,12 +777,12 @@ async def main():
             grouped = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 // Phone width opens Info as a pile of folders. "Everything" is
                 // the one at the bottom of it, and it carries the ALL sentinel
                 // rather than an empty string — empty means "nothing open".
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -1542,7 +1546,7 @@ async def main():
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
                 const box = document.getElementById('infoSearch');
@@ -1560,7 +1564,7 @@ async def main():
 
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
                     backTo: document.querySelector('[data-tab][aria-selected="true"]')
@@ -2172,13 +2176,13 @@ async def main():
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
                 "identify": ("#/identify", "#takePhoto"),
-                "info-fishes": ("#/info", ".ffold, .species-card"),
-                "info-gear": ("#/info?tab=gear", ".ffold, .gear-card"),
-                "info-zones": ("#/info?tab=zones", ".ffold, .zone-card"),
+                "info-fishes": ("#/info", ".dcard, .species-card"),
+                "info-gear": ("#/info?tab=gear", ".dcard, .gear-card"),
+                "info-zones": ("#/info?tab=zones", ".dcard, .zone-card"),
                 "conditions": ("#/conditions", ".now-card__temp, .notice--error"),
                 "log": ("#/log", ".kpi__v, #authForm"),
-                "legacy-species": ("#/species", ".ffold, .species-card"),
-                "legacy-tips": ("#/tips", ".ffold, .tip-card"),
+                "legacy-species": ("#/species", ".dcard, .species-card"),
+                "legacy-tips": ("#/tips", ".dcard, .tip-card"),
                 "settings": ("#/settings", ".set-row"),
                 "settings-panel": ("#/settings?p=tides", "#saveTides"),
             }
@@ -2349,9 +2353,9 @@ async def main():
             await page.goto(f"{BASE}/index.html#/info")
             # Phone width lands on the pile of folders. Open Everything so the
             # rest of this block sees the cards it is about.
-            await page.wait_for("document.querySelector('.ffold')", label="drawer")
+            await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return 1;")
+            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
 
             tabs = await page.eval("""
@@ -2368,7 +2372,7 @@ async def main():
                 // switching tabs lands on that tab's pile — the cards are one
                 // press further in.
                 const openAll = async () => {
-                    (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                    (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                     await new Promise(r => setTimeout(r, 350));
                 };
                 const seen = {};
@@ -2396,103 +2400,148 @@ async def main():
                 seen.backToFishes = await wait('.species-card');
                 return seen;
             """)
-            # --- the pile of folders ----------------------------------------
+            # --- the deck ---------------------------------------------------
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.ffold')", label="drawer")
-            await asyncio.sleep(0.6)
+            await page.wait_for("document.querySelector('.dcard')", label="deck")
+            await asyncio.sleep(0.7)
 
             pile = await ev_pile(page)
-            restingTops = await page.eval("""
-                return [...document.querySelectorAll('.ffold')]
-                    .map(f => Math.round(f.getBoundingClientRect().top));
-            """)
-            check("info opens as a drawer of folders",
+            check("info opens as a deck of folders",
                   pile["folders"] >= 6 and not pile["cards"], str(pile))
-            # Staggered so every label is readable at once, with the bodies
-            # overlapping. The previous build was a deck where only the front
-            # card could be read; this is a cabinet drawer.
-            check("the folders stagger downward and overlap",
-                  pile["descending"] and pile["overlapping"], str(pile))
-            check("no tab is covered by the folder in front",
-                  pile["tabsClear"], str(pile))
-            check("every tab carries a label and a picture",
+            # Fanned DOWNWARD from one place: every card shares a centre line and
+            # each sits lower than the one in front, so its bill shows.
+            check("the cards fan downward from one place",
+                  pile["centred"] and pile["descending"], str(pile))
+            check("every bill carries a label and a picture",
                   pile["allLabelled"] and pile["allIllustrated"], str(pile))
-            check("a folder is a tab narrower than its body",
-                  pile["tabNarrower"], str(pile))
+            check("a folder is a bill narrower than its body",
+                  pile["billNarrower"], str(pile))
             check("the folders are colour-coded",
                   pile["distinctColours"] >= 5, str(pile))
+            # The idle float is what stops a card looking printed on the screen.
+            check("the cards float rather than sit still",
+                  pile["floating"], str(pile))
 
-            # Tap a tab. Nothing is dismissed and nothing moves out of the
-            # way — the folders above stay exactly where they were.
+            # THE PAGE MUST NOT SCROLL under the swipe. A page that moves when
+            # you drag a card steals the gesture, which is the fastest way to
+            # make a carousel feel broken.
+            locked = await page.eval("""
+                const doc = document.documentElement;
+                return {
+                    klass: document.body.classList.contains("deck-locked"),
+                    bodyOverflow: getComputedStyle(document.body).overflow,
+                    // Nothing to scroll to in the first place.
+                    room: doc.scrollHeight - doc.clientHeight,
+                };
+            """)
+            check("the page is pinned while the deck is up",
+                  locked["klass"] and locked["bodyOverflow"] == "hidden"
+                  and locked["room"] <= 2, str(locked))
+
+            # Swiping moves you ALONG the line — continuously, and without
+            # removing anything. The rail is a real scroller, so this drives it
+            # the way a finger would.
+            swiped = await page.eval("""
+                const rail = document.querySelector("[data-deck-rail]");
+                const cards = [...document.querySelectorAll(".dcard")];
+                const before = cards.length;
+                const frontOf = () => document.querySelector(".dcard.is-live")?.dataset.key;
+                const first = frontOf();
+
+                // Mid-swipe: the stack must follow continuously, not snap on
+                // release. Half a step should leave the front card half-gone.
+                //
+                // Snapping is turned off for the measurement, because `y
+                // mandatory` CORRECTS a programmatic scroll to a half position —
+                // the browser puts it back on a snap point before anything can
+                // read it, so the honest state is unobservable with it on.
+                const snap = getComputedStyle(rail).scrollSnapType;
+                rail.style.scrollSnapType = "none";
+                rail.scrollTop = rail.clientHeight * 0.5;
+                rail.dispatchEvent(new Event("scroll"));
+                await new Promise(r => requestAnimationFrame(r));
+                await new Promise(r => requestAnimationFrame(r));
+                const midOpacity = parseFloat(getComputedStyle(cards[0]).opacity);
+                rail.style.scrollSnapType = "";
+
+                rail.scrollTop = rail.clientHeight;
+                rail.dispatchEvent(new Event("scroll"));
+                await new Promise(r => setTimeout(r, 400));
+                return {
+                    first,
+                    after: frontOf(),
+                    stillAllThere: document.querySelectorAll(".dcard").length === before,
+                    midOpacity,
+                    snap,
+                };
+            """)
+            check("swiping moves along the line",
+                  swiped["after"] and swiped["after"] != swiped["first"], str(swiped))
+            check("nothing is ever removed", swiped["stillAllThere"], str(swiped))
+            # Partway through, the leaving card is partly faded. Snapping to an
+            # index and animating between them would read as a slideshow.
+            check("the stack follows the swipe continuously",
+                  0.05 < swiped["midOpacity"] < 0.95, str(swiped))
+            check("the rail snaps card to card",
+                  "mandatory" in swiped["snap"], str(swiped))
+
             opened = await page.eval("""
-                const fs = [...document.querySelectorAll(".ffold")];
-                const target = fs[2];
-                const label = target.querySelector(".ffold__label").textContent.trim();
-                const beforeTops = fs.map(f => Math.round(f.getBoundingClientRect().top));
-                const beforeCount = fs.length;
-
-                target.querySelector(".ffold__grip").click();
-                await new Promise(r => setTimeout(r, 900));
-
-                const after = [...document.querySelectorAll(".ffold")];
-                const afterTops = after.map(f => Math.round(f.getBoundingClientRect().top));
+                const rail = document.querySelector("[data-deck-rail]");
+                const label = document.querySelector(".dcard.is-live .dcard__k").textContent.trim();
+                rail.click();
+                await new Promise(r => setTimeout(r, 700));
+                const head = document.querySelector(".folder-head");
                 return {
                     label,
-                    stillAllThere: after.length === beforeCount,
-                    aboveUnmoved: afterTops.slice(0, 2).every((t, i) =>
-                        Math.abs(t - beforeTops[i]) <= 1),
-                    belowPushed: afterTops[3] > beforeTops[3] + 40,
-                    inside: !!target.querySelector(".ffold__inner .species-card"),
+                    headLabel: head?.querySelector(".folder-head__k")?.textContent.trim(),
+                    // The way out sits ON the bill of what you are in.
+                    hasX: !!head?.querySelector("[data-close-folder]"),
                     cards: document.querySelectorAll(".species-card").length,
-                    xOnTab: !!target.querySelector(".ffold__tab .ffold__x:not([hidden])"),
-                    othersHaveNoX: after.filter(f => f !== target)
-                        .every(f => f.querySelector(".ffold__x").hidden),
-                    expanded: target.querySelector(".ffold__grip").getAttribute("aria-expanded"),
+                    deckGone: document.querySelectorAll(".dcard").length === 0,
+                    headTint: head?.getAttribute("data-tint") || "",
+                    unpinned: !document.body.classList.contains("deck-locked"),
                 };
             """)
-            check("tapping a tab opens that folder",
-                  opened["cards"] > 0 and opened["expanded"] == "true", str(opened))
-            check("the content opens inside the folder", opened["inside"], str(opened))
-            check("no folder is ever removed", opened["stillAllThere"], str(opened))
-            check("the folders above it do not move", opened["aboveUnmoved"], str(opened))
-            check("the folders below make room", opened["belowPushed"], str(opened))
-            check("the x sits on the open folder own tab",
-                  opened["xOnTab"] and opened["othersHaveNoX"], str(opened))
+            check("tapping opens the front folder",
+                  opened["cards"] > 0 and opened["deckGone"], str(opened))
+            check("the open folder says which one it is",
+                  opened["headLabel"] == opened["label"], str(opened))
+            check("the way out is on its bill", opened["hasX"], str(opened))
+            check("the header wears the folder colour",
+                  opened["headTint"] != "", str(opened))
+            # Reading needs the page back. Pinning is for the deck only.
+            check("the page scrolls again once a folder is open",
+                  opened["unpinned"], str(opened))
 
             closed = await page.eval("""
-                const fs = [...document.querySelectorAll(".ffold")];
-                const target = fs[2];
-                target.querySelector("[data-close]").click();
-                await new Promise(r => setTimeout(r, 900));
-                const after = [...document.querySelectorAll(".ffold")];
-                return {
-                    folders: after.length,
-                    cards: document.querySelectorAll(".species-card").length,
-                    expanded: target.querySelector(".ffold__grip").getAttribute("aria-expanded"),
-                    tops: after.map(f => Math.round(f.getBoundingClientRect().top)),
-                };
+                document.querySelector("[data-close-folder]").click();
+                await new Promise(r => setTimeout(r, 700));
+                return { folders: document.querySelectorAll(".dcard").length,
+                         cards: document.querySelectorAll(".species-card").length,
+                         // Back on the card you opened, not at the start.
+                         live: document.querySelector(".dcard.is-live")?.dataset.key,
+                         pinned: document.body.classList.contains("deck-locked") };
             """)
-            check("the x closes the folder",
-                  closed["folders"] >= 6 and not closed["cards"]
-                  and closed["expanded"] == "false", str(closed))
-            # "Restoring the full resting view exactly as before" is the phrase,
-            # so it is measured: every folder back within a pixel of the
-            # arrangement the drawer had before anything was opened.
-            check("closing restores the resting arrangement exactly",
-                  closed["tops"] == restingTops, f'{closed["tops"][:6]} vs {restingTops[:6]}')
+            check("the x goes back to the deck",
+                  closed["folders"] >= 6 and not closed["cards"], str(closed))
+            check("the deck is pinned again", closed["pinned"], str(closed))
+            check("you come back to the card you opened",
+                  closed["live"] == swiped["after"], str(closed))
 
-            # A query is a request to SEE matches. Hiding them behind a folder
-            # you have to open first would make the search box a decoration.
+            # A query is a request to SEE matches. Hiding them behind a card you
+            # have to open first would make the search box a decoration.
             searched = await page.eval("""
                 const box = document.getElementById("infoSearch");
                 box.value = "tuna";
                 box.dispatchEvent(new Event("input", { bubbles: true }));
                 await new Promise(r => setTimeout(r, 700));
                 return { cards: document.querySelectorAll(".species-card").length,
-                         folders: document.querySelectorAll(".ffold").length };
+                         folders: document.querySelectorAll(".dcard").length,
+                         pinned: document.body.classList.contains("deck-locked") };
             """)
             check("searching goes straight to the matches",
                   searched["cards"] > 0 and not searched["folders"], str(searched))
+            check("searching unpins the page", not searched["pinned"], str(searched))
 
             check("info offers three tabs", tabs["threeTabs"] == 3, str(tabs))
             check("gear tab lists gear", tabs["gear"] and tabs["gearCount"] >= 20, str(tabs))
@@ -2508,9 +2557,9 @@ async def main():
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2557,7 +2606,7 @@ async def main():
             gear_sheet = await page.eval("""
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2598,7 +2647,7 @@ async def main():
                 document.body.classList.remove('is-sheet-open');
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -2611,7 +2660,7 @@ async def main():
             cross = await page.eval("""
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
                 i.value = 'baitcasting';
@@ -2632,7 +2681,7 @@ async def main():
             legacy = await page.eval("""
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
                          sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
@@ -2741,9 +2790,9 @@ async def main():
             # -------------------------------------------------- species UI
             print("\nSpecies guide")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.ffold')", label="drawer")
+            await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return 1;")
+            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
@@ -3372,9 +3421,9 @@ async def main():
             print()
             print("Sheet")
             await page.goto(f"{BASE}/index.html#/info")
-            await page.wait_for("document.querySelector('.ffold')", label="drawer")
+            await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return 1;")
+            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -4556,7 +4605,7 @@ async def main():
                 const rolled = bar.classList.contains('is-rolled');
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const g = document.querySelector('.ffold--all .ffold__grip'); if (g && g.getAttribute('aria-expanded') !== 'true') g.click(); return !!g; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
                 await new Promise(r => setTimeout(r, 350));
                 return { rolled, offMap: bar.classList.contains('is-rolled'),
                          tabbable: [...bar.querySelectorAll('a')]
