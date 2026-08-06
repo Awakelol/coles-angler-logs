@@ -263,19 +263,36 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     wrap.appendChild(inner);
     document.body.appendChild(wrap);
 
-    const sx = innerWidth / r.width;
-    const sy = innerHeight / r.height;
+    /*
+     * ONE SCALE FACTOR, NOT TWO.
+     *
+     * Fitting a card to a viewport exactly means scaling x and y by different
+     * amounts — a 360x270 card into a 390x844 screen is 1.08 across and 3.1
+     * down. That is not a zoom, it is a rubber sheet: every photograph on the
+     * card is pulled into a smear on the way, and no easing rescues it.
+     *
+     * So it zooms UNIFORMLY, by whichever factor covers the screen, and simply
+     * overflows on the other axis. Nothing distorts because nothing has to —
+     * and the overflow costs nothing, because what is overflowing by the end
+     * is the back of the card, which is one flat colour.
+     */
+    //
+     // The 1.35 is coverage, not taste. rotateY under perspective foreshortens
+     // the panel as it turns, so a factor that exactly covers the screen at 0
+     // degrees leaves wedges of page showing at the top and bottom at 140 —
+     // and the back is a flat colour, so over-covering costs nothing at all.
+    const k = Math.max(innerWidth / r.width, innerHeight / r.height) * 1.35;
+    // Card centre to screen centre. The scale is about the centre too, so the
+    // two compose without either having to correct for the other.
+    const dx = innerWidth / 2 - (r.left + r.width / 2);
+    const dy = innerHeight / 2 - (r.top + r.height / 2);
 
-    // The growth is back-loaded on purpose: while the front is still readable
-    // it barely moves, and the scaling happens once the back has taken over.
     const grow = wrap.animate(
       [
-        { transform: 'translate(0px,0px) scale(1,1)', offset: 0 },
-        { transform: `translate(${(-r.left) * 0.18}px,${(-r.top) * 0.18}px) ` +
-                     `scale(${1 + (sx - 1) * 0.14},${1 + (sy - 1) * 0.14})`, offset: 0.45 },
-        { transform: `translate(${-r.left}px,${-r.top}px) scale(${sx},${sy})`, offset: 1 },
+        { transform: 'translate(0px,0px) scale(1)' },
+        { transform: `translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px) scale(${k.toFixed(3)})` },
       ],
-      { duration: 520, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }
+      { duration: 520, easing: 'cubic-bezier(.42,0,.22,1)', fill: 'forwards' }
     );
 
     inner.animate(

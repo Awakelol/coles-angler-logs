@@ -20,9 +20,17 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.14.0';
+export const APP_VERSION = '3.14.1';
 
 export const CHANGELOG = [
+  {
+    version: '3.14.1',
+    date: '2026-08-07',
+    title: 'The folder zooms instead of stretching',
+    changes: [
+      'Opening a folder now zooms it evenly, so nothing on it gets pulled out of shape.',
+    ],
+  },
   {
     version: '3.14.0',
     date: '2026-08-07',

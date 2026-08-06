@@ -737,6 +737,18 @@ the BACK is facing you, which is a flat panel of one colour and cannot look
 distorted. By the time it is full-screen you are looking at the back of the
 card, and the content fades in onto it.
 
+**One scale factor, never two.** Fitting a card to a viewport *exactly* means
+scaling x and y by different amounts — a 360×270 card into a 390×844 screen is
+1.08 across and 3.1 down. That is not a zoom, it is a rubber sheet, and every
+photograph on the card is pulled into a smear on the way. No easing rescues it.
+
+So it zooms **uniformly**, by whichever factor covers the screen, and simply
+overflows on the other axis. Nothing distorts because nothing has to, and the
+overflow costs nothing — what is overflowing by the end is the back of the card,
+which is one flat colour. The factor carries a ×1.35 on top: `rotateY` under
+perspective foreshortens the panel as it turns, so a factor that exactly covers
+at 0° leaves wedges of page showing at 140°.
+
 Standard CSS 3D: two faces, one rotated 180° behind the other, both
 `backface-visibility: hidden` so only the one facing you paints. The perspective
 is written **into the inner element's own transform** rather than set on a

@@ -2179,7 +2179,10 @@ body.is-sheet-open {
 .deck-flip {
   position: fixed;
   z-index: 70;
-  transform-origin: 0 0;
+  /* Centre, not the corner: the zoom is uniform and moves the card's middle to
+     the screen's middle, so both parts of the transform share an origin and
+     neither has to correct for the other. */
+  transform-origin: 50% 50%;
   will-change: transform, opacity;
   pointer-events: none;
 }
