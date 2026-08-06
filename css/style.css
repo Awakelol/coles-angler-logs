@@ -2177,7 +2177,17 @@ body.is-sheet-open {
   transform-origin: 0 0;
   will-change: transform, opacity;
   pointer-events: none;
+  /* It is a clone of a .dcard, which is absolutely positioned inside the deck —
+     these put it back under its own control. */
+  inset: auto;
+  height: auto;
+  opacity: 1 !important;
 }
+/* The clone must not drift while it is growing: the float is for a card sitting
+   in the line, and half a degree of rotation on something scaling by six reads
+   as a wobble. */
+.deck-ghost .dcard__float { animation: none !important; }
+.deck-ghost .dcard__body > * { opacity: 1 !important; }
 
 /* --- info: the folder deck ----------------------------------------------- */
 /*
@@ -2296,8 +2306,9 @@ body.is-sheet-open {
      everything still to come stacks above it. */
   .dcard {
     position: absolute; left: 0; right: 0; bottom: 0;
-    /* Short of the deck by four steps, so the four bills above have room. */
-    height: calc(100% - 168px);
+    /* Short of the deck by three steps, so the three bills above have room.
+       The fourth was 42px the photographs needed more. */
+    height: calc(100% - 126px);
     pointer-events: none;
     will-change: transform, opacity;
   }
@@ -2365,21 +2376,21 @@ body.is-sheet-open {
   .dcard__body {
     flex: 1; min-height: 0;
     display: flex; flex-direction: column;
-    padding: 12px;
+    padding: 12px 12px 10px;
     /* Square where it meets the bill above it, rounded everywhere else. */
     border-radius: 0 18px 18px 18px;
     background: var(--folder-bg, var(--paper));
   }
 
-  /* THE PICTURES ARE THE BODY. Four of them, in a square, because a folder you
-     are choosing between thirty-odd of is chosen by what is in it — a number
-     tells you how many, a photograph tells you what. */
+  /* THE PICTURES ARE THE BODY. Four of them, because a folder you are choosing
+     between thirty-odd of is chosen by what is in it — a number tells you how
+     many, a photograph tells you what. */
   .dcard__shots {
     flex: 1; min-height: 0;
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-auto-rows: 1fr;
-    gap: 6px;
+    gap: 8px;
   }
   /* One or two look wrong in a 2x2 with holes in it, so they take the width. */
   .dcard__shots[data-n="1"] { grid-template-columns: 1fr; }
@@ -2388,22 +2399,52 @@ body.is-sheet-open {
     display: grid; place-items: center;
     overflow: hidden;
     border-radius: 12px;
-    background: rgb(255 255 255 / .45);
+    /* A dark wash, not a white one. White at 45% is invisible on the white
+       "Everything" folder, which left the gear icons floating in nothing. This
+       reads as a tile on all seven grounds. */
+    background: rgb(22 24 29 / .07);
   }
+
+  /*
+     THE CELL DECIDES THE SHAPE, NOT THE PHOTOGRAPH.
+
+     `.species-photo` carries `aspect-ratio: 4/3` and `object-fit: contain` for
+     the Info list, where a whole fish on a tinted ground is right. In here that
+     fought the grid cell: the ratio pinned each image to its own shape while
+     the cell had another, so some letterboxed, some overflowed, and no two
+     were cropped alike. Resetting the ratio and covering the cell makes all
+     four consistent.
+
+     Cropping top and bottom is the RIGHT crop for a fish — they are long and
+     horizontal, and the middle band is the whole animal.
+  */
   .dcard__shot img,
   .dcard__shot .species-photo {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    border-radius: 0; box-shadow: none;
+    display: block;
+    width: 100%; height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
   }
-  .dcard__shot .species-photo img { width: 100%; height: 100%; object-fit: cover; }
-  .dcard__shot svg { width: 40px; height: 40px; }
-  /* The gap-filler when a species has no photograph — it is a labelled hole in
-     the Info list, and at this size the label has nowhere to go. */
+  .dcard__shot .species-photo--none {
+    display: grid; place-items: center;
+    width: 100%; height: 100%;
+    aspect-ratio: auto;
+    border: 0; border-radius: 0;
+    background: rgb(255 255 255 / .3);
+  }
+  /* At this size the label has nowhere to go, and the icon says it already. */
   .dcard__shot .species-photo--none span { display: none; }
+  /* Proportional, not fixed: an icon is the whole content of its tile and a
+     34px glyph in a 160px cell reads as a mistake rather than as a picture. */
+  .dcard__shot svg { width: 48%; height: 48%; }
 
   .dcard__sub {
     flex: none;
-    margin: 10px 2px 2px;
+    margin: 9px 2px 0;
     font-size: 12.5px; font-weight: 700; color: var(--ink-60);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
@@ -2446,7 +2487,14 @@ body.is-sheet-open {
     z-index: 6;
     margin-bottom: 16px;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .14));
+    /* The header is a drag handle, so the browser must not claim the vertical
+       gesture for scrolling before it reaches us. The body below still scrolls
+       normally — only this strip is ours. */
+    touch-action: none;
+    cursor: grab;
+    user-select: none; -webkit-user-select: none;
   }
+  .folder-head:active { cursor: grabbing; }
   .folder-head__bill {
     display: flex; align-items: center; gap: 8px;
     height: 44px; width: 76%;

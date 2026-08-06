@@ -51,8 +51,13 @@ const STEP = 42;
 const SHRINK = 0.022;
 /** How far a card that has gone past the front travels — downward, out of the way. */
 const EXIT = 170;
-/** Cards further ahead than this are behind other bills anyway. */
-const DEPTH = 4;
+/**
+ * How many upcoming bills to show.
+ *
+ * Three rather than four: the fourth bill was 42px the front folder's body did
+ * not have, and its four photographs were the thing being squeezed for it.
+ */
+const DEPTH = 3;
 
 /**
  * One folder.
@@ -160,7 +165,11 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
       // coming. A card you have passed drops away downward.
       const y = d >= 0 ? -d * STEP : -d * EXIT;
       const sx = d >= 0 ? 1 - d * SHRINK : 1;
-      const fade = d >= 0 ? 1 : Math.max(0, 1 + d / 1.15);
+      // A card you have passed goes fully invisible almost at once rather than
+      // fading across the whole step. Half-transparent, it sat over the folder
+      // arriving behind it and you read both at the same time, which is worse
+      // than either — the point of the swipe is to look at ONE thing.
+      const fade = d >= 0 ? 1 : Math.max(0, 1 + d / 0.16);
 
       card.style.transform = `translate3d(0,${y.toFixed(2)}px,0) scaleX(${sx.toFixed(4)})`;
       card.style.opacity = fade.toFixed(3);
@@ -216,14 +225,19 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     }
 
     const r = card.getBoundingClientRect();
-    const bill = card.querySelector('.dcard__bill');
-    const ghost = document.createElement('div');
-    ghost.className = 'deck-ghost';
+
+    // A CLONE OF THE FOLDER, not a rectangle of its colour. The first version
+    // animated a plain div and everything inside stayed put, so the folder
+    // looked like it had been left behind by its own background. Cloning means
+    // the bill, the name and the four photographs are what grows.
+    const ghost = card.cloneNode(true);
+    ghost.classList.add('deck-ghost');
+    ghost.removeAttribute('style');
+    ghost.setAttribute('aria-hidden', 'true');
     ghost.style.left = `${r.left}px`;
     ghost.style.top = `${r.top}px`;
     ghost.style.width = `${r.width}px`;
     ghost.style.height = `${r.height}px`;
-    ghost.style.background = bill ? getComputedStyle(bill).backgroundColor : '';
     document.body.appendChild(ghost);
 
     const anim = ghost.animate(

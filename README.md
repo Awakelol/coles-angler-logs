@@ -731,9 +731,13 @@ spent on furniture.
 
 Tapping grows the folder over the page. The card cannot do that itself — it
 lives inside a deck that is `overflow: hidden` inside a pinned page, so it
-physically cannot leave. A plain div is stamped at the card's exact rect in the
-folder's own colour, animated to fill the viewport, and removed once the content
-is underneath it. Nothing about the deck has to change to allow it.
+physically cannot leave. **A clone of it** is stamped at its exact rect,
+animated to fill the viewport, and removed once the content is underneath.
+
+The first version animated a plain div in the folder's colour, and everything
+inside stayed put — the folder looked like it had been left behind by its own
+background. Cloning means the bill, the name and the four photographs are what
+grows.
 
 Scaled from the top-left with a matching translate, because scaling about the
 centre and correcting afterwards is two animations that have to agree to the
@@ -744,6 +748,41 @@ colour still covers everything, so the swap itself is never on screen.
 runs on a rAF, so a tap landing between a scroll and its frame would open
 whichever folder was in front one frame ago — which on a fast flick is not the
 one you are looking at.
+
+#### Drag the header down to put a folder back
+
+An open folder is a window over the deck, and every other panel in this app
+that covers something can be pushed back down. An `×` you had to find was the
+odd one out, so the bill is a drag handle too. It moves the whole results pane,
+so the content travels with its header rather than sliding out from under it.
+
+`touch-action: none` on that strip only — the browser would otherwise claim the
+vertical gesture for scrolling before it reached us, and the body below still
+needs to scroll normally.
+
+#### The pictures
+
+**The cell decides the shape, not the photograph.** `.species-photo` carries
+`aspect-ratio: 4/3` and `object-fit: contain` for the Info list, where a whole
+fish on a tinted ground is right. In the deck that fought the grid cell — the
+ratio pinned each image to its own shape while the cell had another, so some
+letterboxed, some overflowed, and no two were cropped alike. Resetting the ratio
+and covering the cell makes all four consistent.
+
+Cropping top and bottom is the *right* crop for a fish: they are long and
+horizontal, and the middle band is the whole animal.
+
+Tiles are washed with `rgb(22 24 29 / .07)`, not white. White at 45% is
+invisible on the white *Everything* folder, which left the gear icons floating
+in nothing. Icons are sized in percent for the same reason — a 34px glyph in a
+160px cell reads as a mistake rather than as a picture.
+
+**Three upcoming bills, not four.** The fourth was 42px the front folder's body
+did not have, and its photographs were what got squeezed for it.
+
+**A folder you have passed goes invisible almost at once** rather than fading
+across the whole step. Half-transparent, it sat over the folder arriving behind
+it and you read both at the same time, which is worse than either.
 
 #### The page is pinned while the deck is up
 
@@ -921,7 +960,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 509 checks, phone width
+python tools/browser_test.py        # terminal 2 — 512 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

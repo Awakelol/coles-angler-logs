@@ -2472,8 +2472,10 @@ async def main():
             check("only the front folder drifts", pile["floatingOne"], str(pile))
             check("a folder is a bill narrower than its body",
                   pile["billNarrower"], str(pile))
+            # Four visible cards — the front one plus three bills — so four
+            # distinct fills is all of them.
             check("the folders are colour-coded",
-                  pile["distinctColours"] >= 5, str(pile))
+                  pile["distinctColours"] >= 4, str(pile))
             # The idle float is what stops a card looking printed on the screen.
             check("the cards float rather than sit still",
                   pile["floating"], str(pile))
@@ -2521,7 +2523,13 @@ async def main():
                 rail.dispatchEvent(new Event("scroll"));
                 await new Promise(r => requestAnimationFrame(r));
                 await new Promise(r => requestAnimationFrame(r));
-                const midOpacity = parseFloat(getComputedStyle(cards[0]).opacity);
+                // Measured on the card ARRIVING, not the one leaving. A passed
+                // card is deliberately invisible almost at once now, so its
+                // opacity says nothing about whether the stack is interpolating.
+                // Its neighbour's offset does: partway through a step it must
+                // be partway between its two resting positions.
+                const midY = new DOMMatrixReadOnly(
+                    getComputedStyle(cards[1]).transform).f;
                 rail.style.scrollSnapType = "";
 
                 rail.scrollTop = rest - rail.clientHeight;
@@ -2531,17 +2539,18 @@ async def main():
                     first,
                     after: frontOf(),
                     stillAllThere: document.querySelectorAll(".dcard").length === before,
-                    midOpacity,
+                    midY,
                     snap,
                 };
             """)
             check("swiping moves along the line",
                   swiped["after"] and swiped["after"] != swiped["first"], str(swiped))
             check("nothing is ever removed", swiped["stillAllThere"], str(swiped))
-            # Partway through, the leaving card is partly faded. Snapping to an
-            # index and animating between them would read as a slideshow.
+            # Partway through a step the next card is partway to the front —
+            # strictly between its two resting offsets. Snapping to an index and
+            # animating between them would read as a slideshow.
             check("the stack follows the swipe continuously",
-                  0.05 < swiped["midOpacity"] < 0.95, str(swiped))
+                  -42 < swiped["midY"] < -1, str(swiped))
             check("the rail snaps card to card",
                   "mandatory" in swiped["snap"], str(swiped))
 
@@ -2585,6 +2594,37 @@ async def main():
             check("the x goes back to the deck",
                   closed["folders"] >= 6 and not closed["cards"], str(closed))
             check("the deck is pinned again", closed["pinned"], str(closed))
+            # The open folder is a window over the deck: pushing its header down
+            # puts it away, like every other panel in this app that covers
+            # something. An x you have to find was the odd one out.
+            dragged = await page.eval("""
+                document.querySelector("[data-deck-rail]").click();
+                await new Promise(r => setTimeout(r, 800));
+                const head = document.querySelector(".folder-head");
+                if (!head) return { noHead: true };
+                const b = head.getBoundingClientRect();
+                const x = b.left + b.width / 2, y0 = b.top + 12;
+                const p = (t, y) => new PointerEvent(t, { bubbles: true, pointerId: 5,
+                                                          clientX: x, clientY: y });
+                head.dispatchEvent(p("pointerdown", y0));
+                for (let i = 1; i <= 6; i++) {
+                    head.dispatchEvent(p("pointermove", y0 + i * 30));
+                }
+                const midway = document.getElementById("infoResults").style.transform;
+                head.dispatchEvent(p("pointerup", y0 + 180));
+                await new Promise(r => setTimeout(r, 900));
+                return {
+                    followed: midway.includes("translate"),
+                    backToDeck: document.querySelectorAll(".dcard").length >= 6,
+                    clean: !document.getElementById("infoResults").style.transform,
+                };
+            """)
+            check("the open folder follows a drag on its header",
+                  dragged.get("followed"), str(dragged))
+            check("dragging it down puts it back", dragged.get("backToDeck"), str(dragged))
+            # A transform left on the pane would offset the deck underneath it.
+            check("the drag leaves no transform behind", dragged.get("clean"), str(dragged))
+
             check("you come back to the card you opened",
                   closed["live"] == swiped["after"], str(closed))
 

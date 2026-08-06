@@ -842,10 +842,8 @@ export function mount(root, ctx) {
     draw();
   });
 
-  // The x on an open folder's bill. Delegated on the results pane, because the
-  // header is redrawn with the content every time.
-  results.addEventListener('click', (e) => {
-    if (!e.target.closest('[data-close-folder]')) return;
+  /** Put the open folder away and go back to the line. */
+  function closeFolder() {
     open[tab] = '';
     if (tab === 'fishes') {
       for (const b of filterBar.querySelectorAll('[data-family]')) {
@@ -854,7 +852,57 @@ export function mount(root, ctx) {
     }
     syncHash();
     draw();
+  }
+
+  // The x on an open folder's bill. Delegated on the results pane, because the
+  // header is redrawn with the content every time.
+  results.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close-folder]')) closeFolder();
   });
+
+  // DRAG THE HEADER DOWN TO PUT THE FOLDER BACK. The bill is the top edge of
+  // what is, in effect, a window over the deck — every other panel in this app
+  // that covers something can be pushed back down, and a folder that could only
+  // be closed by finding a small x was the odd one out.
+  //
+  // Delegated the same way, and it moves the WHOLE results pane so the content
+  // travels with its header rather than sliding out from under it.
+  let drag = null;
+  results.addEventListener('pointerdown', (e) => {
+    const head = e.target.closest('.folder-head');
+    if (!head || e.target.closest('[data-close-folder]')) return;
+    drag = { id: e.pointerId, y0: e.clientY, moved: false };
+  });
+  results.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = e.clientY - drag.y0;
+    if (!drag.moved && Math.abs(dy) < 8) return;
+    drag.moved = true;
+    // Upward is resisted: there is nowhere for it to go, and rubber-banding
+    // says so more clearly than refusing to move.
+    const y = dy > 0 ? dy : dy * 0.2;
+    results.style.transition = '';
+    results.style.transform = `translate3d(0,${y.toFixed(1)}px,0)`;
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = e.clientY - drag.y0;
+    const moved = drag.moved;
+    drag = null;
+    results.style.transition = 'transform .32s cubic-bezier(.2,.7,.3,1)';
+    results.style.transform = '';
+    if (moved && dy > 110) {
+      // Let it fall the rest of the way before the deck replaces it.
+      results.style.transform = 'translate3d(0,100%,0)';
+      setTimeout(() => {
+        results.style.transition = '';
+        results.style.transform = '';
+        closeFolder();
+      }, 200);
+    }
+  };
+  results.addEventListener('pointerup', endDrag);
+  results.addEventListener('pointercancel', () => { drag = null; results.style.transform = ''; });
 
   draw();
 
