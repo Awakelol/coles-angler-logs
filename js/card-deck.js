@@ -41,12 +41,12 @@ import { esc } from './ui.js';
 /**
  * How far each upcoming card sits ABOVE the one in front, in px.
  *
- * Tied to the bill's height on purpose: at exactly one bill per step, each card
- * still to come shows its whole tab and nothing else — its name and its picture,
- * readable, with its body hidden behind the card you are reading. A smaller step
- * would show a slice of a label, which is worse than showing none.
+ * A little more than the bill's height (38px), so every upcoming folder shows
+ * its whole tab and nothing else. The few pixels of slack are for the idle
+ * float: the front card drifts up to 4px, and at exactly one bill per step it
+ * would clip the name of the one above it at the top of every drift.
  */
-const STEP = 38;
+const STEP = 42;
 /** How much narrower each card behind is, per step. Barely — labels must stay legible. */
 const SHRINK = 0.022;
 /** How far a card that has gone past the front travels — downward, out of the way. */
@@ -62,6 +62,7 @@ const DEPTH = 4;
  * where there is one, an icon where there is not.
  */
 function cardHtml(item, i) {
+  const shots = (item.images || []).slice(0, 4);
   return `
     <article class="dcard${item.tint == null ? ' dcard--all' : ''}"
              data-key="${esc(item.key)}" data-index="${i}"
@@ -69,15 +70,14 @@ function cardHtml(item, i) {
              style="--i:${i}" aria-label="${esc(item.label)}">
       <div class="dcard__float">
         <div class="dcard__bill">
-          <span class="dcard__art">${item.image || ''}</span>
           <span class="dcard__k">${esc(item.label)}</span>
+          <span class="dcard__n">${esc(String(item.count))}</span>
         </div>
         <div class="dcard__body">
+          <div class="dcard__shots" data-n="${shots.length}">
+            ${shots.map((h) => `<span class="dcard__shot">${h}</span>`).join('')}
+          </div>
           <p class="dcard__sub">${esc(item.blurb || '')}</p>
-          <p class="dcard__count">
-            <span class="dcard__n">${esc(String(item.count))}</span>
-            <span class="dcard__unit">${esc(item.noun || '')}</span>
-          </p>
         </div>
       </div>
     </article>`;
@@ -129,9 +129,20 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
    * scrollTop and writes only transform/opacity/z-index — the three things the
    * compositor can do without touching the main thread again.
    */
+  /** How far along the line we are, 0..n-1. */
+  function progress() {
+    // INVERTED. The folders come from above, so the gesture that brings the
+    // next one down is a downward drag — which is a scroll UP. The rail starts
+    // at its end and works back, so pulling down advances the line. Mapping it
+    // the other way round meant swiping up to fetch something from above, and
+    // the hand and the eye disagreed about which way the stack was moving.
+    const max = Math.max(1, rail.scrollHeight - rail.clientHeight);
+    return (max - rail.scrollTop) / step();
+  }
+
   function paint() {
     queued = 0;
-    const p = rail.scrollTop / step();
+    const p = progress();
 
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
@@ -175,7 +186,69 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
   // deck reaches the scroller. That makes the cards pointer-events: none, so
   // the tap is handled here and reported by calling back — not by firing a
   // click at a card that cannot receive one.
-  const openFront = () => onOpen(cards[front]?.dataset.key || '');
+  /**
+   * Open the front folder by growing it over the page.
+   *
+   * A GHOST DOES THE TRAVELLING, not the card. The card lives inside the deck,
+   * which is `overflow: hidden` and inside a pinned page — it physically cannot
+   * leave. So a plain div is stamped at the card's exact rect in the folder's
+   * own colour, animated to fill the viewport, and removed once the content is
+   * underneath it. Nothing about the deck has to change to allow it.
+   *
+   * Scaled from the top-left with a matching translate, because scaling about
+   * the centre and correcting afterwards is two animations that have to agree
+   * to the pixel — and they never quite do at the corners.
+   */
+  function openFront() {
+    // Recomputed, not read off the last paint. paint() runs on a rAF, so a tap
+    // that lands between a scroll and its frame would open whichever folder was
+    // in front one frame ago — which on a fast flick is not the one you are
+    // looking at.
+    front = Math.max(0, Math.min(cards.length - 1, Math.round(progress())));
+    const card = cards[front];
+    const key = card?.dataset.key || '';
+    if (!card) return;
+
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof card.animate !== 'function') {
+      onOpen(key);
+      return;
+    }
+
+    const r = card.getBoundingClientRect();
+    const bill = card.querySelector('.dcard__bill');
+    const ghost = document.createElement('div');
+    ghost.className = 'deck-ghost';
+    ghost.style.left = `${r.left}px`;
+    ghost.style.top = `${r.top}px`;
+    ghost.style.width = `${r.width}px`;
+    ghost.style.height = `${r.height}px`;
+    ghost.style.background = bill ? getComputedStyle(bill).backgroundColor : '';
+    document.body.appendChild(ghost);
+
+    const anim = ghost.animate(
+      [
+        { transform: 'translate(0px, 0px) scale(1, 1)', borderRadius: '18px' },
+        {
+          transform: `translate(${-r.left}px, ${-r.top}px) ` +
+                     `scale(${innerWidth / r.width}, ${innerHeight / r.height})`,
+          borderRadius: '0px',
+        },
+      ],
+      { duration: 380, easing: 'cubic-bezier(.32,.06,.16,1)', fill: 'forwards' }
+    );
+
+    anim.finished.catch(() => {}).then(() => {
+      // The content is built while the colour still covers everything, so the
+      // swap itself is never on screen.
+      onOpen(key);
+      requestAnimationFrame(() => {
+        const out = ghost.animate([{ opacity: 1 }, { opacity: 0 }],
+          { duration: 220, easing: 'ease-out', fill: 'forwards' });
+        out.finished.catch(() => {}).then(() => ghost.remove());
+      });
+    });
+  }
   rail.addEventListener('click', openFront);
   rail.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -184,15 +257,14 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     }
   });
 
-  // Where the line opens. Closing a folder comes back with its key so it lands
-  // on the card you were reading rather than at the start.
+  // Where the line opens. Card 0 lives at the BOTTOM of the rail now, so the
+  // resting position is the end of the scroller, not the start.
+  const restFor = (i) => Math.max(0, (cards.length - 1 - i) * step());
   const startAt = cards.findIndex((c) => c.dataset.key === startKey);
-  if (startAt > 0) {
-    front = startAt;
-    // Instant: this is a restore, not a journey. Animating it would look like
-    // the deck scrolling away from you the moment you closed a folder.
-    rail.scrollTop = startAt * step();
-  }
+  if (startAt >= 0) front = startAt;
+  // Instant: this is a restore, not a journey. Animating it would look like
+  // the deck scrolling away from you the moment you closed a folder.
+  rail.scrollTop = restFor(front);
   if (dots) dots.textContent = `${front + 1} / ${cards.length}`;
   paint();
 

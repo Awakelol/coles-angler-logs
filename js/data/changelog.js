@@ -20,9 +20,20 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.11.0';
+export const APP_VERSION = '3.12.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.12.0',
+    date: '2026-08-07',
+    title: 'Folders you can see into',
+    changes: [
+      'Each folder shows four photographs of what is inside it.',
+      'Pull down to bring the next folder forward — the way they are stacked.',
+      'Tapping one grows it over the page instead of cutting to it.',
+      'The title moved in with the search box, and the categories are small buttons.',
+    ],
+  },
   {
     version: '3.11.0',
     date: '2026-08-07',

@@ -2167,6 +2167,18 @@ body.is-sheet-open {
   max-width: 30ch;
 }
 
+/* The folder growing over the page when you open it. Outside the media query
+   and outside .deck on purpose: it is appended to <body> because the deck is
+   overflow:hidden inside a pinned page, and a card cannot leave a box that
+   clips it. */
+.deck-ghost {
+  position: fixed;
+  z-index: 70;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
 /* --- info: the folder deck ----------------------------------------------- */
 /*
    Phone only. A line of folders you swipe through — nothing is dismissed, you
@@ -2193,13 +2205,15 @@ body.is-sheet-open {
      between are a control, not a table of contents, and 150px of bookmark to say
      so was the deck's screen space being spent on furniture.
   */
+  /* flex-direction: row is not redundant — the base .bookmarks is a column
+     (the desktop bookmark stack), and `display: flex` alone inherits it. */
   .bookmarks {
-    display: flex; gap: 7px;
+    display: flex; flex-direction: row; gap: 6px;
   }
   .bookmark {
     flex: 1; min-width: 0;
-    flex-direction: row; align-items: center; justify-content: center; gap: 6px;
-    margin: 0; padding: 9px 8px;
+    flex-direction: row; align-items: center; justify-content: center; gap: 0;
+    margin: 0; padding: 7px 6px;
     border-radius: 999px;
     background: var(--sand-lt);
     box-shadow: none;
@@ -2210,13 +2224,19 @@ body.is-sheet-open {
     transform: none;
   }
   .bookmark__icon { display: none; }
+  /* The count goes. The card you land on says how many are in it, and three
+     numbers in the switcher were paying for that twice. */
+  .bookmark__count { display: none; }
   .bookmark__label {
-    font-size: 13px; font-weight: 800; letter-spacing: -.01em;
+    font-size: 12.5px; font-weight: 800; letter-spacing: -.01em;
   }
-  .bookmark__count {
-    font-size: 11px; font-weight: 800; opacity: .7;
-    /* The label already says what it is; the number is the detail. */
-    letter-spacing: 0;
+
+  /* The title, in the same widget as the search box. */
+  .info-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .info-head .display { margin: 0; font-size: 30px; line-height: 1; }
+  .info-head .eyebrow {
+    margin: 0; text-align: left; flex: 1; min-width: 0;
+    font-size: 9.5px; letter-spacing: .12em;
   }
 
   /* --- a page that does not scroll under the gesture ---------------------- */
@@ -2277,7 +2297,7 @@ body.is-sheet-open {
   .dcard {
     position: absolute; left: 0; right: 0; bottom: 0;
     /* Short of the deck by four steps, so the four bills above have room. */
-    height: calc(100% - 152px);
+    height: calc(100% - 168px);
     pointer-events: none;
     will-change: transform, opacity;
   }
@@ -2300,11 +2320,12 @@ body.is-sheet-open {
     height: 100%;
     display: flex; flex-direction: column;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .17));
-    /* Floating in space. Small on purpose: at this size it reads as the card
-       being an object rather than as the page wobbling. Staggered by index so
-       the line breathes rather than pulsing in unison. */
+  }
+  /* ONLY THE FRONT ONE FLOATS. Every card drifting at once read as the page
+     itself being unsteady; one card moving reads as that card being the live
+     object and the rest being filed behind it. */
+  .dcard.is-live .dcard__float {
     animation: dcard-float 7s ease-in-out infinite;
-    animation-delay: calc(var(--i) * -1.7s);
   }
 
   @keyframes dcard-float {
@@ -2319,58 +2340,76 @@ body.is-sheet-open {
      bill and nothing more. */
   .dcard__bill {
     flex: none;
-    height: 38px; width: 64%;
-    display: flex; align-items: center; gap: 8px;
-    padding: 0 12px 0 11px;
+    height: 38px; width: 66%;
+    display: flex; align-items: baseline; gap: 7px;
+    padding: 0 14px;
     border-radius: 14px 14px 0 0;
     background: var(--folder-bg, var(--paper));
     min-width: 0;
   }
-  .dcard__art {
-    flex: none;
-    width: 24px; height: 24px;
-    display: grid; place-items: center;
-    border-radius: 7px; overflow: hidden;
-    background: rgb(255 255 255 / .6);
-  }
-  .dcard__art img,
-  .dcard__art .species-photo {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    border-radius: 0; box-shadow: none;
-  }
-  .dcard__art .species-photo img { width: 100%; height: 100%; object-fit: cover; }
-  .dcard__art svg { width: 18px; height: 18px; }
   .dcard__k {
     min-width: 0;
+    align-self: center;
     font-size: 14.5px; font-weight: 900; letter-spacing: -.02em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Beside the name and quieter than it: the name is what you are choosing by,
+     the number is the detail you check once you have. */
+  .dcard__n {
+    flex: none; align-self: center;
+    font-size: 12.5px; font-weight: 800;
+    opacity: .5;
+    font-variant-numeric: tabular-nums;
   }
 
   .dcard__body {
     flex: 1; min-height: 0;
-    display: flex; flex-direction: column; justify-content: space-between;
-    padding: 16px 20px 20px;
+    display: flex; flex-direction: column;
+    padding: 12px;
     /* Square where it meets the bill above it, rounded everywhere else. */
     border-radius: 0 18px 18px 18px;
     background: var(--folder-bg, var(--paper));
   }
+
+  /* THE PICTURES ARE THE BODY. Four of them, in a square, because a folder you
+     are choosing between thirty-odd of is chosen by what is in it — a number
+     tells you how many, a photograph tells you what. */
+  .dcard__shots {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: 6px;
+  }
+  /* One or two look wrong in a 2x2 with holes in it, so they take the width. */
+  .dcard__shots[data-n="1"] { grid-template-columns: 1fr; }
+  .dcard__shots[data-n="2"] { grid-template-columns: 1fr; }
+  .dcard__shot {
+    display: grid; place-items: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: rgb(255 255 255 / .45);
+  }
+  .dcard__shot img,
+  .dcard__shot .species-photo {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    border-radius: 0; box-shadow: none;
+  }
+  .dcard__shot .species-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .dcard__shot svg { width: 40px; height: 40px; }
+  /* The gap-filler when a species has no photograph — it is a labelled hole in
+     the Info list, and at this size the label has nowhere to go. */
+  .dcard__shot .species-photo--none span { display: none; }
+
   .dcard__sub {
-    margin: 0;
-    font-size: 13.5px; font-weight: 700; color: var(--ink-60);
-  }
-  .dcard__count { margin: 0; }
-  .dcard__n {
-    display: block;
-    font-size: 50px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
-  }
-  .dcard__unit {
-    display: block;
-    font-size: 11.5px; font-weight: 800; letter-spacing: .07em;
-    text-transform: uppercase; color: var(--ink-60);
+    flex: none;
+    margin: 10px 2px 2px;
+    font-size: 12.5px; font-weight: 700; color: var(--ink-60);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   /* The body belongs to the card you are reading. On the ones above, only the
-     bill is showing anyway — fading it stops a half-covered number flashing
-     past mid-swipe. */
+     bill is showing anyway — fading it stops half a photograph flashing past
+     mid-swipe. */
   .dcard:not(.is-live) .dcard__body > * { opacity: 0; }
   .dcard__body > * { transition: opacity .28s ease; }
 

@@ -650,8 +650,28 @@ see what is next. **Nothing is ever removed**; swiping moves you ALONG the line,
 and a counter says where you are in it. Tap the front card to open it, and the
 `×` on its bill to come back. `js/card-deck.js`.
 
-One step per bill height, deliberately. A smaller step shows a slice of a label,
-which is worse than showing none.
+The step is a little more than the bill's height. The slack is for the idle
+float: the front folder drifts up to 4px, and at exactly one bill per step it
+would clip the name above it at the top of every drift.
+
+**The swipe is inverted.** The folders come from above, so the gesture that
+brings the next one down is a downward drag — a scroll *up*. Card 0 rests at the
+END of the rail and the line works back from there. Mapped the other way round
+you swipe up to fetch something from above, and the hand and the eye disagree
+about which way the stack is moving.
+
+**Four example pictures are the body** of the front folder — a family's own
+fish, and for a body of water the fish actually caught in it. Gear gets its own
+icons; there are no gear photographs, and a stand-in would be a picture of
+nothing pretending to be a picture of something. A number says how many, a
+photograph says what, and you are choosing between thirty-odd of these.
+
+The count sits **beside the name at half opacity**: the name is what you choose
+by, the number is the detail you check once you have.
+
+**Only the front folder drifts.** Every card moving at once read as the page
+being unsteady; one moving reads as that card being the live object and the rest
+being filed behind it.
 
 Each bill carries a picture: a real photograph for a fish family, an icon for
 gear and waters, because there are no photographs of those and a stand-in would
@@ -706,6 +726,24 @@ The three categories are **small pills under the search box**, not stacked
 bookmark cards. Three things you switch between are a control, not a table of
 contents, and 150px of bookmark to say so was the deck's screen space being
 spent on furniture.
+
+#### Opening: a ghost does the travelling
+
+Tapping grows the folder over the page. The card cannot do that itself — it
+lives inside a deck that is `overflow: hidden` inside a pinned page, so it
+physically cannot leave. A plain div is stamped at the card's exact rect in the
+folder's own colour, animated to fill the viewport, and removed once the content
+is underneath it. Nothing about the deck has to change to allow it.
+
+Scaled from the top-left with a matching translate, because scaling about the
+centre and correcting afterwards is two animations that have to agree to the
+pixel, and they never quite do at the corners. The content is built while the
+colour still covers everything, so the swap itself is never on screen.
+
+`front` is **recomputed at tap time**, not read off the last paint: `paint()`
+runs on a rAF, so a tap landing between a scroll and its frame would open
+whichever folder was in front one frame ago — which on a fast flick is not the
+one you are looking at.
 
 #### The page is pinned while the deck is up
 
@@ -883,7 +921,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 506 checks, phone width
+python tools/browser_test.py        # terminal 2 — 509 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 

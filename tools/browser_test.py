@@ -195,7 +195,22 @@ async def ev_pile(page):
             shown: fs.length,
             cards: document.querySelectorAll('.species-card').length,
             allLabelled: fs.every(f => (f.querySelector('.dcard__k')?.textContent || '').trim()),
-            allIllustrated: fs.every(f => !!f.querySelector('.dcard__art')?.innerHTML.trim()),
+            // The pictures are the BODY now, four of them, not one in the bill.
+            allIllustrated: fs.every(f => f.querySelectorAll('.dcard__shot').length >= 1),
+            frontShots: (document.querySelector('.dcard.is-live')
+                ?.querySelectorAll('.dcard__shot').length) || 0,
+            // The count sits beside the name and quieter than it.
+            countBesideName: fs.every(f => {
+                const k = f.querySelector('.dcard__k'), n = f.querySelector('.dcard__n');
+                if (!k || !n) return false;
+                const kb = k.getBoundingClientRect(), nb = n.getBoundingClientRect();
+                return nb.left >= kb.right - 1
+                    && parseFloat(getComputedStyle(n).opacity) < 0.8;
+            }),
+            // Only the folder you are reading drifts.
+            floatingOne: fs.filter(f =>
+                getComputedStyle(f.querySelector('.dcard__float')).animationName !== 'none'
+            ).length === 1,
             // One place: the cards behind are scaled horizontally, so only the
             // centre line is shared — comparing left edges would be wrong.
             centred: boxes.every(b =>
@@ -210,11 +225,12 @@ async def ev_pile(page):
             billNarrower: bills.every((b, i) => b.width < boxes[i].width - 20),
             // The idle float, running and staggered so the fan breathes rather
             // than pulsing in unison.
-            floating: fs.every(f => {
-                const cs = getComputedStyle(f.querySelector('.dcard__float'));
+            floating: (() => {
+                const live = document.querySelector('.dcard.is-live .dcard__float');
+                if (!live) return false;
+                const cs = getComputedStyle(live);
                 return cs.animationName !== 'none' && parseFloat(cs.animationDuration) > 1;
-            }) && new Set(fs.slice(0, 4).map(f =>
-                getComputedStyle(f.querySelector('.dcard__float')).animationDelay)).size > 1,
+            })(),
             distinctColours: bgs.size,
         };
     """)
@@ -784,12 +800,18 @@ async def main():
             grouped = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 // Phone width opens Info as a pile of folders. "Everything" is
                 // the one at the bottom of it, and it carries the ALL sentinel
                 // rather than an empty string — empty means "nothing open".
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -1553,7 +1575,10 @@ async def main():
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
                 const box = document.getElementById('infoSearch');
@@ -1571,7 +1596,10 @@ async def main():
 
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
                     backTo: document.querySelector('[data-tab][aria-selected="true"]')
@@ -2362,7 +2390,17 @@ async def main():
             # rest of this block sees the cards it is about.
             await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
+            await page.eval("""
+                const r = document.querySelector('[data-deck-rail]');
+                if (!r) return 0;
+                r.scrollTop = r.scrollHeight;
+                r.dispatchEvent(new Event('scroll'));
+                r.click();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(x => setTimeout(x, 700));
+                return 1;
+            """)
             await page.wait_for("document.querySelector('.species-card')", label="info fishes")
 
             tabs = await page.eval("""
@@ -2379,7 +2417,10 @@ async def main():
                 // switching tabs lands on that tab's pile — the cards are one
                 // press further in.
                 const openAll = async () => {
-                    (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                    (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                     await new Promise(r => setTimeout(r, 350));
                 };
                 const seen = {};
@@ -2421,8 +2462,14 @@ async def main():
                   pile["centred"] and pile["ascending"], str(pile))
             check("every upcoming name is fully readable",
                   pile["billsClear"], str(pile))
-            check("every bill carries a label and a picture",
-                  pile["allLabelled"] and pile["allIllustrated"], str(pile))
+            check("every bill carries a label", pile["allLabelled"], str(pile))
+            # The pictures are what you choose by: a number says how many, a
+            # photograph says what.
+            check("the front folder shows four examples",
+                  pile["frontShots"] >= 4, str(pile))
+            check("the count sits beside the name, quieter",
+                  pile["countBesideName"], str(pile))
+            check("only the front folder drifts", pile["floatingOne"], str(pile))
             check("a folder is a bill narrower than its body",
                   pile["billNarrower"], str(pile))
             check("the folders are colour-coded",
@@ -2464,16 +2511,20 @@ async def main():
                 // mandatory` CORRECTS a programmatic scroll to a half position —
                 // the browser puts it back on a snap point before anything can
                 // read it, so the honest state is unobservable with it on.
+                //
+                // The line runs the other way now: card 0 rests at the END of
+                // the rail, and advancing means scrolling UP.
+                const rest = rail.scrollHeight - rail.clientHeight;
                 const snap = getComputedStyle(rail).scrollSnapType;
                 rail.style.scrollSnapType = "none";
-                rail.scrollTop = rail.clientHeight * 0.5;
+                rail.scrollTop = rest - rail.clientHeight * 0.5;
                 rail.dispatchEvent(new Event("scroll"));
                 await new Promise(r => requestAnimationFrame(r));
                 await new Promise(r => requestAnimationFrame(r));
                 const midOpacity = parseFloat(getComputedStyle(cards[0]).opacity);
                 rail.style.scrollSnapType = "";
 
-                rail.scrollTop = rail.clientHeight;
+                rail.scrollTop = rest - rail.clientHeight;
                 rail.dispatchEvent(new Event("scroll"));
                 await new Promise(r => setTimeout(r, 400));
                 return {
@@ -2566,9 +2617,15 @@ async def main():
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2615,7 +2672,10 @@ async def main():
             gear_sheet = await page.eval("""
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
                 await new Promise(r => setTimeout(r, 500));
@@ -2656,7 +2716,10 @@ async def main():
                 document.body.classList.remove('is-sheet-open');
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
                     .map(e => e.textContent.trim());
@@ -2669,7 +2732,10 @@ async def main():
             cross = await page.eval("""
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
                 i.value = 'baitcasting';
@@ -2690,7 +2756,10 @@ async def main():
             legacy = await page.eval("""
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
                          sheet: document.querySelector('.sheet__head h2')?.textContent || '' };
@@ -2801,7 +2870,17 @@ async def main():
             await page.goto(f"{BASE}/index.html#/info")
             await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
+            await page.eval("""
+                const r = document.querySelector('[data-deck-rail]');
+                if (!r) return 0;
+                r.scrollTop = r.scrollHeight;
+                r.dispatchEvent(new Event('scroll'));
+                r.click();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(x => setTimeout(x, 700));
+                return 1;
+            """)
             await page.wait_for("document.querySelector('.species-card')", label="species cards")
             total = await page.eval("return document.querySelectorAll('.species-card').length;")
             check("all species listed", total >= 25, f"got {total}")
@@ -3432,7 +3511,17 @@ async def main():
             await page.goto(f"{BASE}/index.html#/info")
             await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
-            await page.eval("(() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })(); return 1;")
+            await page.eval("""
+                const r = document.querySelector('[data-deck-rail]');
+                if (!r) return 0;
+                r.scrollTop = r.scrollHeight;
+                r.dispatchEvent(new Event('scroll'));
+                r.click();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(x => setTimeout(x, 700));
+                return 1;
+            """)
             await page.wait_for("document.querySelector('.species-card')", label="species")
 
             sheet = await page.eval("""
@@ -4614,7 +4703,10 @@ async def main():
                 const rolled = bar.classList.contains('is-rolled');
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = 0; r.click(); return true; } return false; })();
+                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
+                // Opening grows the folder over the page first; the content
+                // is not there until that has finished.
+                await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 return { rolled, offMap: bar.classList.contains('is-rolled'),
                          tabbable: [...bar.querySelectorAll('a')]

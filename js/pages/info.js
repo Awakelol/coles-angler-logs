@@ -220,11 +220,16 @@ export function render(ctx) {
   return `
     <section class="band band--yellow">
       <div class="wrap">
-        <p class="eyebrow">${esc(ctx.region.name)} &middot; ${species.length} fish &middot; ${GEAR.length} gear &middot; ${zones.length} zones</p>
-        <h1 class="display">Info</h1>
-        <p class="subtitle">Everything worth knowing before you go: what swims here, what to bring, and where to stand.</p>
-
         <div class="card card--tight" style="gap:12px">
+          <!-- The title lives in the same widget as the search box: they are
+               both "what am I looking at and how do I narrow it", and a heading
+               floating above an unrelated card was two things pretending to be
+               separate. -->
+          <div class="info-head">
+            <h1 class="display">Info</h1>
+            <p class="eyebrow">${esc(ctx.region.name)} &middot; ${species.length} fish &middot; ${GEAR.length} gear &middot; ${zones.length} zones</p>
+          </div>
+
           <div class="search-row">
             <input type="search" id="infoSearch" placeholder="Search fishes, gear and waters…"
                    aria-label="Search information" autocomplete="off">
@@ -317,6 +322,45 @@ const FOLDER_TINTS = 6;
 const ALL = '*';
 
 /**
+ * Four example pictures for a folder's body.
+ *
+ * Real photographs wherever the data has them — a family's own fish, and for a
+ * body of water the fish that are actually caught in it. Gear has no
+ * photographs, so it gets its own icons rather than a stand-in image, which
+ * would be a picture of nothing pretending to be a picture of something.
+ *
+ * Fewer than four is fine and common; the grid closes up around what it has.
+ */
+function folderArts(tab, key, species, zones) {
+  const shot = (sp) => speciesArt(sp, { size: 150 });
+
+  if (tab === 'gear') {
+    const items = key ? GEAR.filter((g) => g.group === key) : GEAR;
+    return items.slice(0, 4).map(
+      (g) => icon(g.icon || 'box', { size: 46, palette: g.palette || 'slate' })
+    );
+  }
+
+  if (tab === 'zones') {
+    // A water's fish, via the zones in it. Several zones share species, so the
+    // ids are deduplicated before any of them is drawn.
+    const inWater = key ? zones.filter((z) => z.water === key) : zones;
+    const ids = [];
+    for (const z of inWater) {
+      for (const id of z.species || []) if (!ids.includes(id)) ids.push(id);
+    }
+    const withPhotos = ids.map(getSpecies).filter((sp) => sp && photoFor(sp.id));
+    if (withPhotos.length) return withPhotos.slice(0, 4).map(shot);
+    return inWater.slice(0, 4).map(() => icon('wave', { size: 46, palette: 'ocean' }));
+  }
+
+  const pool = key ? species.filter((sp) => sp.family === key) : species;
+  const withPhotos = pool.filter((sp) => photoFor(sp.id));
+  if (withPhotos.length) return withPhotos.slice(0, 4).map(shot);
+  return pool.slice(0, 4).map(() => icon('fish', { size: 46, palette: 'ocean' }));
+}
+
+/**
  * One card's picture.
  *
  * Fishes get a real photograph — the first species in the family that has one.
@@ -346,19 +390,6 @@ function folderHeadHtml(label, count, tint) {
       </div>
       <p class="folder-head__n">${esc(count)}</p>
     </div>`;
-}
-
-function folderArt(tab, key, species, ctx) {
-  if (tab === 'fishes') {
-    const first = species.find((s) => s.family === key && photoFor(s.id));
-    if (first) return speciesArt(first, { size: 92 });
-    return icon('fish', { size: 58, palette: 'ocean' });
-  }
-  if (tab === 'gear') {
-    const item = GEAR.find((g) => g.group === key);
-    return icon(item?.icon || 'box', { size: 58, palette: item?.palette || 'slate' });
-  }
-  return icon('wave', { size: 58, palette: 'ocean' });
 }
 
 export function mount(root, ctx) {
@@ -657,9 +688,9 @@ export function mount(root, ctx) {
     // "Everything" leads the line, so the first card is the one that does not
     // ask you to choose.
     const cards = [
-      { key: ALL, label: 'Everything', blurb: 'The whole list, ungrouped',
+      { key: ALL, label: 'Everything', blurb: `All ${all} ${noun()}, ungrouped`,
         count: all, noun: noun(), tint: null,
-        image: folderArt(tab, null, species, ctx) },
+        images: folderArts(tab, null, species, zones) },
       ...items.map((f, i) => ({
         key: f.key,
         label: f.label,
@@ -667,7 +698,7 @@ export function mount(root, ctx) {
         count: f.count,
         noun: noun(),
         tint: i % FOLDER_TINTS,
-        image: folderArt(tab, f.key, species, ctx),
+        images: folderArts(tab, f.key, species, zones),
       })),
     ];
 
