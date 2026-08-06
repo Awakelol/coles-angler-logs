@@ -38,14 +38,21 @@
 
 import { esc } from './ui.js';
 
-/** How far each card behind sits below the one in front, in px. */
-const STEP = 15;
-/** How much narrower each card behind is, per step. */
-const SHRINK = 0.04;
-/** How far a card that has gone past the front travels upward. */
-const EXIT = 150;
-/** Cards further back than this are behind other cards anyway. */
-const DEPTH = 5;
+/**
+ * How far each upcoming card sits ABOVE the one in front, in px.
+ *
+ * Tied to the bill's height on purpose: at exactly one bill per step, each card
+ * still to come shows its whole tab and nothing else — its name and its picture,
+ * readable, with its body hidden behind the card you are reading. A smaller step
+ * would show a slice of a label, which is worse than showing none.
+ */
+const STEP = 38;
+/** How much narrower each card behind is, per step. Barely — labels must stay legible. */
+const SHRINK = 0.022;
+/** How far a card that has gone past the front travels — downward, out of the way. */
+const EXIT = 170;
+/** Cards further ahead than this are behind other bills anyway. */
+const DEPTH = 4;
 
 /**
  * One folder.
@@ -56,7 +63,8 @@ const DEPTH = 5;
  */
 function cardHtml(item, i) {
   return `
-    <article class="dcard" data-key="${esc(item.key)}" data-index="${i}"
+    <article class="dcard${item.tint == null ? ' dcard--all' : ''}"
+             data-key="${esc(item.key)}" data-index="${i}"
              ${item.tint == null ? '' : `data-tint="${item.tint}"`}
              style="--i:${i}" aria-label="${esc(item.label)}">
       <div class="dcard__float">
@@ -136,9 +144,10 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
       }
       card.hidden = false;
 
-      // Past the front, a card slides up and out of the way. Before it, it
-      // sits lower and narrower — the fan.
-      const y = d >= 0 ? d * STEP : d * EXIT;
+      // THE LINE COMES FROM THE TOP. Cards still to come stack UPWARD, each
+      // showing its bill above the one in front, so you can read what is
+      // coming. A card you have passed drops away downward.
+      const y = d >= 0 ? -d * STEP : -d * EXIT;
       const sx = d >= 0 ? 1 - d * SHRINK : 1;
       const fade = d >= 0 ? 1 : Math.max(0, 1 + d / 1.15);
 

@@ -225,6 +225,15 @@ export function render(ctx) {
         <p class="subtitle">Everything worth knowing before you go: what swims here, what to bring, and where to stand.</p>
 
         <div class="card card--tight" style="gap:12px">
+          <div class="search-row">
+            <input type="search" id="infoSearch" placeholder="Search fishes, gear and waters…"
+                   aria-label="Search information" autocomplete="off">
+            <button class="search-row__cam" id="infoPhoto" aria-pressed="${tab === PHOTO}"
+                    aria-label="Identify a fish from a photo" title="Identify from a photo">
+              ${icon('camera', { size: 26, palette: 'slate' })}
+            </button>
+          </div>
+
           <div class="bookmarks" id="infoTabs" role="tablist" aria-label="Information category">
             ${TABS.map(
               (t) => `
@@ -235,15 +244,6 @@ export function render(ctx) {
                 <span class="bookmark__count">${esc(t.count ? t.count(ctx) : '')}</span>
               </button>`
             ).join('')}
-          </div>
-
-          <div class="search-row">
-            <input type="search" id="infoSearch" placeholder="Search fishes, gear and waters…"
-                   aria-label="Search information" autocomplete="off">
-            <button class="search-row__cam" id="infoPhoto" aria-pressed="${tab === PHOTO}"
-                    aria-label="Identify a fish from a photo" title="Identify from a photo">
-              ${icon('camera', { size: 26, palette: 'slate' })}
-            </button>
           </div>
 
           <div class="chips" id="familyFilters">

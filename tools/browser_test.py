@@ -187,7 +187,9 @@ async def ev_pile(page):
         const fs = [...document.querySelectorAll('.dcard')].filter(c => !c.hidden);
         const boxes = fs.map(f => f.getBoundingClientRect());
         const bills = fs.map(f => f.querySelector('.dcard__bill').getBoundingClientRect());
-        const bgs = new Set(fs.map(f => getComputedStyle(f.querySelector('.dcard__float')).backgroundColor));
+        // The bill carries the fill now, not the wrapper — the folder is two
+        // rounded boxes sharing a background, so the wrapper is transparent.
+        const bgs = new Set(fs.map(f => getComputedStyle(f.querySelector('.dcard__bill')).backgroundColor));
         return {
             folders: document.querySelectorAll('.dcard').length,
             shown: fs.length,
@@ -198,7 +200,12 @@ async def ev_pile(page):
             // centre line is shared — comparing left edges would be wrong.
             centred: boxes.every(b =>
                 Math.abs((b.left + b.right) / 2 - (boxes[0].left + boxes[0].right) / 2) < 2),
-            descending: bills.every((b, i) => i === 0 || b.top > bills[i - 1].top),
+            // UPWARD: the folder you are reading is the lowest, and the ones
+            // still to come stack above it.
+            ascending: bills.every((b, i) => i === 0 || b.top < bills[i - 1].top),
+            // ...and each upcoming bill is COMPLETELY clear of the one in front,
+            // because a name you can only see a slice of is worse than none.
+            billsClear: bills.every((b, i) => i === 0 || b.bottom <= bills[i - 1].top + 2),
             // The folder shape: a bill narrower than the body under it.
             billNarrower: bills.every((b, i) => b.width < boxes[i].width - 20),
             // The idle float, running and staggered so the fan breathes rather
@@ -2410,8 +2417,10 @@ async def main():
                   pile["folders"] >= 6 and not pile["cards"], str(pile))
             # Fanned DOWNWARD from one place: every card shares a centre line and
             # each sits lower than the one in front, so its bill shows.
-            check("the cards fan downward from one place",
-                  pile["centred"] and pile["descending"], str(pile))
+            check("the line comes from the top",
+                  pile["centred"] and pile["ascending"], str(pile))
+            check("every upcoming name is fully readable",
+                  pile["billsClear"], str(pile))
             check("every bill carries a label and a picture",
                   pile["allLabelled"] and pile["allIllustrated"], str(pile))
             check("a folder is a bill narrower than its body",

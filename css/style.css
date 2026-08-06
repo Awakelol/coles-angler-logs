@@ -2170,16 +2170,16 @@ body.is-sheet-open {
 /* --- info: the folder deck ----------------------------------------------- */
 /*
    Phone only. A line of folders you swipe through — nothing is dismissed, you
-   move ALONG them. The front one is readable; the rest fan below it, each a
-   little lower and narrower, with its bill showing.
+   move ALONG them.
+
+   THE LINE COMES FROM THE TOP. The folder you are reading sits at the bottom of
+   the deck; the ones still to come stack above it, each showing its bill. One
+   step per bill height, so every upcoming folder shows its whole tab — name and
+   picture — and nothing else. A smaller step would show a slice of a label,
+   which is worse than showing none.
 
    Positions are written by JS every scroll frame (transform, opacity, z-index —
    compositor properties only). This file owns the SHAPE and the IDLE FLOAT.
-
-   THE FLOAT IS ON AN INNER ELEMENT. The card itself carries the stack
-   transform, which changes on every frame of a drag; an animation on the same
-   element would be overwritten sixty times a second. Nesting them means the
-   browser composes the two instead of one winning.
 */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
@@ -2187,16 +2187,46 @@ body.is-sheet-open {
   /* Read once, then it is 60px between you and the folders. */
   .band--yellow .subtitle { display: none; }
 
+  /* --- the three categories, under the search box ------------------------- */
+  /*
+     Small pills rather than the stacked bookmark cards. Three things you switch
+     between are a control, not a table of contents, and 150px of bookmark to say
+     so was the deck's screen space being spent on furniture.
+  */
+  .bookmarks {
+    display: flex; gap: 7px;
+  }
+  .bookmark {
+    flex: 1; min-width: 0;
+    flex-direction: row; align-items: center; justify-content: center; gap: 6px;
+    margin: 0; padding: 9px 8px;
+    border-radius: 999px;
+    background: var(--sand-lt);
+    box-shadow: none;
+    transform: none;
+  }
+  .bookmark[aria-selected="true"] {
+    background: var(--blue); color: var(--on-accent);
+    transform: none;
+  }
+  .bookmark__icon { display: none; }
+  .bookmark__label {
+    font-size: 13px; font-weight: 800; letter-spacing: -.01em;
+  }
+  .bookmark__count {
+    font-size: 11px; font-weight: 800; opacity: .7;
+    /* The label already says what it is; the number is the detail. */
+    letter-spacing: 0;
+  }
+
   /* --- a page that does not scroll under the gesture ---------------------- */
   /*
      While the deck is up, Info is exactly one screen: header, then deck,
-     nothing below. Any page scroll here competes with the swipe — you would
-     drag a card and move the page instead, which is the single fastest way to
-     make a carousel feel broken.
+     nothing below. Any page scroll here competes with the swipe.
 
      MAIN is the column, not the first band. The header and the deck are two
      sibling <section>s; sizing the first one to the viewport just pushes the
-     second one off the bottom, which is exactly what happened.
+     second one off the bottom.
   */
   html.deck-locked, body.deck-locked { height: 100%; overflow: hidden; }
   body.deck-locked main {
@@ -2204,13 +2234,11 @@ body.is-sheet-open {
     display: flex; flex-direction: column;
     overflow: hidden;
   }
-  /* The header takes what it needs. */
   body.deck-locked main > .band:first-child {
     flex: none;
     padding: 14px 16px 10px;
     border-bottom: 0;
   }
-  /* The deck takes the rest. */
   body.deck-locked main > .band:last-child {
     flex: 1; min-height: 0;
     display: flex;
@@ -2226,7 +2254,7 @@ body.is-sheet-open {
 
   /* --- the deck ----------------------------------------------------------- */
 
-  .deck { position: relative; flex: 1; min-height: 210px; width: 100%; }
+  .deck { position: relative; flex: 1; min-height: 230px; width: 100%; }
   .deck__cards { position: absolute; inset: 0 0 22px; }
 
   /* Transparent, on top, and the only thing that scrolls. */
@@ -2238,65 +2266,72 @@ body.is-sheet-open {
     overscroll-behavior: contain;
     scrollbar-width: none;
     cursor: pointer;
-    /* The rail owns the vertical gesture; nothing else may claim it. */
     touch-action: pan-y;
   }
   .deck__rail::-webkit-scrollbar { display: none; }
   .deck__rail > i { display: block; height: 100%; scroll-snap-align: start; }
   .deck__rail:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 22px; }
 
+  /* Anchored to the BOTTOM: the card you are reading is the lowest one, and
+     everything still to come stacks above it. */
   .dcard {
-    position: absolute; left: 0; right: 0; top: 0;
-    /* Short of the deck by four steps, so the four cards behind have somewhere
-       to be. Full height and they hang below the deck's own box, which clips
-       them — you get one sliver instead of a fan. */
-    height: calc(100% - 64px);
+    position: absolute; left: 0; right: 0; bottom: 0;
+    /* Short of the deck by four steps, so the four bills above have room. */
+    height: calc(100% - 152px);
     pointer-events: none;
     will-change: transform, opacity;
   }
 
-  /* The folder. A wide body with a narrower bill on the top-left, cut as one
-     polygon — two shapes meeting is two edges to line up and a seam that shows
-     at every zoom level. */
+  /*
+     THE FOLDER IS TWO ROUNDED BOXES, NOT ONE CLIPPED ONE.
+
+     It was a single element with a clip-path polygon, which cuts SQUARE corners
+     wherever the path turns — border-radius is applied before the clip, so the
+     bill's corners came out sharp against rounded everything-else, and the
+     drop-shadow traced that mismatch. A bill and a body sharing one background,
+     each rounded on the corners that are actually outside edges, gives the same
+     silhouette with every corner correct. Their shared edge is invisible
+     because it is the same colour meeting itself.
+
+     The shadow lives on the WRAPPER, so it follows the union of the two rather
+     than outlining each.
+  */
   .dcard__float {
     height: 100%;
-    padding: 0 18px 16px;
-    border-radius: 20px;
-    background: var(--folder-bg, var(--paper));
-    color: var(--ink);
-    clip-path: polygon(0 0, 62% 0, 68% 54px, 100% 54px, 100% 100%, 0 100%);
-    /* clip-path cuts a box-shadow off with the shape, so depth comes from a
-       filter, which follows the silhouette. */
-    filter: drop-shadow(0 8px 18px rgb(22 24 29 / .16));
     display: flex; flex-direction: column;
+    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .17));
     /* Floating in space. Small on purpose: at this size it reads as the card
        being an object rather than as the page wobbling. Staggered by index so
-       the fan breathes rather than pulsing in unison. */
+       the line breathes rather than pulsing in unison. */
     animation: dcard-float 7s ease-in-out infinite;
     animation-delay: calc(var(--i) * -1.7s);
   }
 
   @keyframes dcard-float {
     0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
-    28%  { transform: translate3d(1px, -4px, 0) rotate(.32deg); }
-    54%  { transform: translate3d(-1px, -1.5px, 0) rotate(-.22deg); }
-    76%  { transform: translate3d(.5px, -5px, 0) rotate(.16deg); }
+    28%  { transform: translate3d(1px, -3px, 0) rotate(.28deg); }
+    54%  { transform: translate3d(-1px, -1px, 0) rotate(-.2deg); }
+    76%  { transform: translate3d(.5px, -4px, 0) rotate(.14deg); }
     100% { transform: translate3d(0, 0, 0) rotate(0deg); }
   }
 
-  /* The bill: the tab you read the folder by. */
+  /* The tab. 38px tall, which is exactly one step, so a card behind shows its
+     bill and nothing more. */
   .dcard__bill {
-    height: 54px; width: 62%;
-    display: flex; align-items: center; gap: 9px;
-    padding-right: 12px;
+    flex: none;
+    height: 38px; width: 64%;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px 0 11px;
+    border-radius: 14px 14px 0 0;
+    background: var(--folder-bg, var(--paper));
     min-width: 0;
   }
   .dcard__art {
     flex: none;
-    width: 34px; height: 34px;
+    width: 24px; height: 24px;
     display: grid; place-items: center;
-    border-radius: 10px; overflow: hidden;
-    background: rgb(255 255 255 / .55);
+    border-radius: 7px; overflow: hidden;
+    background: rgb(255 255 255 / .6);
   }
   .dcard__art img,
   .dcard__art .species-photo {
@@ -2304,38 +2339,40 @@ body.is-sheet-open {
     border-radius: 0; box-shadow: none;
   }
   .dcard__art .species-photo img { width: 100%; height: 100%; object-fit: cover; }
-  .dcard__art svg { width: 24px; height: 24px; }
+  .dcard__art svg { width: 18px; height: 18px; }
   .dcard__k {
     min-width: 0;
-    font-size: 16px; font-weight: 900; letter-spacing: -.02em;
+    font-size: 14.5px; font-weight: 900; letter-spacing: -.02em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  /* Everything below the bill belongs to the front card. On the ones behind,
-     only the bill is showing anyway. */
   .dcard__body {
     flex: 1; min-height: 0;
-    display: flex; flex-direction: column; justify-content: flex-end;
-    padding-top: 10px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 16px 20px 20px;
+    /* Square where it meets the bill above it, rounded everywhere else. */
+    border-radius: 0 18px 18px 18px;
+    background: var(--folder-bg, var(--paper));
   }
   .dcard__sub {
-    margin: 0 0 auto;
+    margin: 0;
     font-size: 13.5px; font-weight: 700; color: var(--ink-60);
   }
   .dcard__count { margin: 0; }
   .dcard__n {
     display: block;
-    font-size: 52px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
+    font-size: 50px; font-weight: 900; letter-spacing: -.05em; line-height: .95;
   }
   .dcard__unit {
     display: block;
     font-size: 11.5px; font-weight: 800; letter-spacing: .07em;
     text-transform: uppercase; color: var(--ink-60);
   }
-  /* Fades with the card rather than snapping — the body is the part that stops
-     being relevant the moment a card is no longer the one you are reading. */
-  .dcard:not(.is-live) .dcard__body { opacity: 0; }
-  .dcard__body { transition: opacity .28s ease; }
+  /* The body belongs to the card you are reading. On the ones above, only the
+     bill is showing anyway — fading it stops a half-covered number flashing
+     past mid-swipe. */
+  .dcard:not(.is-live) .dcard__body > * { opacity: 0; }
+  .dcard__body > * { transition: opacity .28s ease; }
 
   .deck__hint {
     position: absolute; left: 0; right: 0; bottom: 0;
@@ -2344,71 +2381,76 @@ body.is-sheet-open {
     font-size: 11.5px; font-weight: 800; letter-spacing: .05em;
     color: var(--ink-30);
   }
-  .deck__dots {
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-60);
-  }
+  .deck__dots { font-variant-numeric: tabular-nums; color: var(--ink-60); }
 
-  .dcard[data-tint="0"] { --folder-bg: #DDE5F6; }
-  .dcard[data-tint="1"] { --folder-bg: #E9E4C6; }
-  .dcard[data-tint="2"] { --folder-bg: #D6E7DC; }
-  .dcard[data-tint="3"] { --folder-bg: #F6DED9; }
-  .dcard[data-tint="4"] { --folder-bg: #E2DBEF; }
-  .dcard[data-tint="5"] { --folder-bg: #CFE4EA; }
+  /*
+     Brighter than the first set. Those were pastels on an off-white page, which
+     put about 4% lightness between a folder and the paper behind it — the
+     colour was there but it did not read as colour, it read as a smudge. These
+     sit far enough from --cream to be seen while staying light enough to carry
+     the same dark text at well over 4.5:1.
+  */
+  .dcard[data-tint="0"] { --folder-bg: #A9C6F2; }
+  .dcard[data-tint="1"] { --folder-bg: #EDD98A; }
+  .dcard[data-tint="2"] { --folder-bg: #9BD9B4; }
+  .dcard[data-tint="3"] { --folder-bg: #F7B9A8; }
+  .dcard[data-tint="4"] { --folder-bg: #C7B4EC; }
+  .dcard[data-tint="5"] { --folder-bg: #93D4E4; }
+  .dcard--all { --folder-bg: var(--paper); }
 
   /* --- the opened folder --------------------------------------------------- */
 
-  /* The bill grows to carry the name and the way out. Same shape, same colour:
-     the folder you tapped, opened. */
+  /* Same two-box construction as the card, for the same reason. */
   .folder-head {
     position: sticky;
     top: calc(var(--topbar-h, 0px) + 8px);
     z-index: 6;
     margin-bottom: 16px;
-    padding: 6px 18px 14px;
-    border-radius: 18px;
-    background: var(--folder-bg, var(--sand-lt));
-    clip-path: polygon(0 0, 76% 0, 82% 46px, 100% 46px, 100% 100%, 0 100%);
-    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .12));
+    filter: drop-shadow(0 6px 14px rgb(22 24 29 / .14));
   }
   .folder-head__bill {
-    display: flex; align-items: center; gap: 6px;
-    height: 46px;
-    max-width: 74%;
+    display: flex; align-items: center; gap: 8px;
+    height: 44px; width: 76%;
+    padding: 0 14px;
+    border-radius: 16px 16px 0 0;
+    background: var(--folder-bg, var(--sand-lt));
   }
   .folder-head__k {
     margin: 0; min-width: 0;
-    font-size: 19px; font-weight: 900; letter-spacing: -.02em;
+    font-size: 17px; font-weight: 900; letter-spacing: -.02em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .folder-head__n {
-    margin: 6px 0 0;
+    margin: 0;
+    padding: 12px 18px 14px;
+    border-radius: 0 18px 18px 18px;
+    background: var(--folder-bg, var(--sand-lt));
     font-size: 12.5px; font-weight: 800; color: var(--ink-60);
   }
   .folder-head__x {
-    flex: none;
+    flex: none; margin-left: auto;
     display: grid; place-items: center;
-    width: 32px; height: 32px;
+    width: 30px; height: 30px;
     border: 0; border-radius: 50%;
-    background: rgb(255 255 255 / .65); color: var(--ink);
+    background: rgb(255 255 255 / .7); color: var(--ink);
     cursor: pointer;
     transition: background-color .2s ease, transform .2s ease;
   }
   .folder-head__x:hover { background: #fff; }
   .folder-head__x:active { transform: scale(.9); }
 
-  .folder-head[data-tint="0"] { --folder-bg: #DDE5F6; }
-  .folder-head[data-tint="1"] { --folder-bg: #E9E4C6; }
-  .folder-head[data-tint="2"] { --folder-bg: #D6E7DC; }
-  .folder-head[data-tint="3"] { --folder-bg: #F6DED9; }
-  .folder-head[data-tint="4"] { --folder-bg: #E2DBEF; }
-  .folder-head[data-tint="5"] { --folder-bg: #CFE4EA; }
+  .folder-head[data-tint="0"] { --folder-bg: #A9C6F2; }
+  .folder-head[data-tint="1"] { --folder-bg: #EDD98A; }
+  .folder-head[data-tint="2"] { --folder-bg: #9BD9B4; }
+  .folder-head[data-tint="3"] { --folder-bg: #F7B9A8; }
+  .folder-head[data-tint="4"] { --folder-bg: #C7B4EC; }
+  .folder-head[data-tint="5"] { --folder-bg: #93D4E4; }
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
   /* The float is decoration; the fan is information. Only the decoration goes. */
   .dcard__float { animation: none; }
-  .dcard__body { transition: none; }
+  .dcard__body > * { transition: none; }
   .deck__rail { scroll-behavior: auto; }
 }
 

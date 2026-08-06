@@ -643,11 +643,15 @@ like this invites. An unknown `?p=` falls back to the index.
 
 ### Info: the folder deck
 
-Below 900px, Info is a line of folders you swipe through. The front one is
-readable; the rest fan below it, each a little lower and narrower, with its bill
-showing. **Nothing is ever removed** — swiping moves you ALONG the line, and a
-counter says where you are in it. Tap the front card to open it, and the `×` on
-its bill to come back. `js/card-deck.js`.
+Below 900px, Info is a line of folders you swipe through. **The line comes from
+the top**: the folder you are reading sits at the bottom, and the ones still to
+come stack above it, each showing its whole bill — name and picture — so you can
+see what is next. **Nothing is ever removed**; swiping moves you ALONG the line,
+and a counter says where you are in it. Tap the front card to open it, and the
+`×` on its bill to come back. `js/card-deck.js`.
+
+One step per bill height, deliberately. A smaller step shows a slice of a label,
+which is worse than showing none.
 
 Each bill carries a picture: a real photograph for a fish family, an icon for
 gear and waters, because there are no photographs of those and a stand-in would
@@ -667,6 +671,19 @@ repositions the whole stack, so the card under your thumb tracks it exactly and
 the one behind is already rising to meet you. Snapping to an index and animating
 between them is what makes a carousel feel like a slideshow.
 
+#### A folder is two rounded boxes, not one clipped one
+
+It was a single element with a `clip-path` polygon, which cuts **square corners**
+wherever the path turns — `border-radius` is applied before the clip, so the
+bill's corners came out sharp against rounded everything-else, and the
+`drop-shadow` traced that mismatch as a hard edge inside the card.
+
+A bill and a body sharing one background, each rounded only on the corners that
+are actually outside edges, gives the same silhouette with every corner correct.
+Their shared edge is invisible because it is the same colour meeting itself, and
+the shadow lives on the **wrapper** so it follows the union rather than
+outlining each box.
+
 #### The idle float
 
 A card sitting still looks printed on the screen; a card breathing looks like an
@@ -677,6 +694,18 @@ staggered by index so the fan breathes rather than pulsing in unison.
 stack transform, rewritten on every frame of a drag; an animation on the same
 element would be overwritten sixty times a second. Nesting them means the
 browser composes the two instead of one winning.
+
+#### The colours
+
+The first set were pastels on an off-white page: about 4% lightness between a
+folder and the paper behind it. The colour was there but it did not read as
+colour, it read as a smudge. These sit far enough from `--cream` to be seen
+while staying light enough to carry the same dark text at well over 4.5:1.
+
+The three categories are **small pills under the search box**, not stacked
+bookmark cards. Three things you switch between are a control, not a table of
+contents, and 150px of bookmark to say so was the deck's screen space being
+spent on furniture.
 
 #### The page is pinned while the deck is up
 
@@ -854,7 +883,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 505 checks, phone width
+python tools/browser_test.py        # terminal 2 — 506 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 
