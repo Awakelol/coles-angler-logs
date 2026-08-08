@@ -2418,9 +2418,9 @@ body.is-sheet-open {
     background: var(--folder-bg, var(--paper));
   }
 
-  /* THE PICTURES ARE THE BODY. Four of them, because a folder you are choosing
-     between thirty-odd of is chosen by what is in it — a number tells you how
-     many, a photograph tells you what. */
+  /* THE PICTURES ARE THE BODY. Four of them, in a square, because a folder you
+     are choosing between thirty-odd of is chosen by what is in it — a number
+     tells you how many, a photograph tells you what. */
   .dcard__shots {
     flex: 1; min-height: 0;
     display: grid;
@@ -2428,55 +2428,60 @@ body.is-sheet-open {
     grid-auto-rows: 1fr;
     gap: 8px;
   }
-  /* One or two look wrong in a 2x2 with holes in it, so they take the width. */
+  /* One on its own takes the whole body. */
   .dcard__shots[data-n="1"] { grid-template-columns: 1fr; }
-  .dcard__shots[data-n="2"] { grid-template-columns: 1fr; }
+  /*
+     TWO SIT SIDE BY SIDE, and it is worth saying why they are not bigger.
+
+     The body is about 4:3 and so is every photograph in the set, and two 4:3
+     boxes do not tile into a 4:3 space: whichever way you turn them, each comes
+     out at roughly half linear size. That is geometry, not a bug in the grid,
+     and the only way past it is to crop.
+
+     Cropping was tried — full-width letterbox cells at 2.7:1 — and it is worse.
+     `cover` takes the middle band, and these photographs do not all put the
+     fish in the middle, so half of them came out as a stripe of sand with a
+     tail leaving the frame. Two smaller photographs that are whole beat two
+     large ones that are wrong.
+
+     Side by side rather than stacked so the pair uses the full width and reads
+     as a deliberate arrangement instead of two stamps adrift in colour.
+  */
+  .dcard__shots[data-n="2"] { grid-template-columns: 1fr 1fr; }
+  /* Three in a two-column grid leaves an empty quarter. The last one takes the
+     whole row instead, so every count fills its box. */
+  .dcard__shots[data-n="3"] .dcard__shot:last-child { grid-column: span 2; }
+
+  /*
+     THE CELL IS THE LARGEST 4:3 THAT FITS ITS TRACK, not the track itself.
+     Every photograph in the set is 4:3 (1400x1050 and friends), so a cell of
+     that shape crops nothing. Stretched to fill the track instead, a two-shot
+     folder gave each photo a 431x196 box — 2.2:1 — and `cover` ate the top and
+     bottom fins off every fish in it.
+
+     aspect-ratio with BOTH maximums is what makes it safe: the box is the
+     biggest 4:3 rectangle that fits, so it can never overflow the card however
+     short the phone, and the self-alignment centres what is left over.
+  */
   .dcard__shot {
+    aspect-ratio: 4 / 3;
+    max-width: 100%; max-height: 100%;
+    align-self: center; justify-self: center;
     display: grid; place-items: center;
     overflow: hidden;
     border-radius: 12px;
-    /* A dark wash, not a white one. White at 45% is invisible on the white
-       "Everything" folder, which left the gear icons floating in nothing. This
-       reads as a tile on all seven grounds. */
-    background: rgb(22 24 29 / .07);
+    background: rgb(255 255 255 / .45);
   }
-
-  /*
-     THE CELL DECIDES THE SHAPE, NOT THE PHOTOGRAPH.
-
-     `.species-photo` carries `aspect-ratio: 4/3` and `object-fit: contain` for
-     the Info list, where a whole fish on a tinted ground is right. In here that
-     fought the grid cell: the ratio pinned each image to its own shape while
-     the cell had another, so some letterboxed, some overflowed, and no two
-     were cropped alike. Resetting the ratio and covering the cell makes all
-     four consistent.
-
-     Cropping top and bottom is the RIGHT crop for a fish — they are long and
-     horizontal, and the middle band is the whole animal.
-  */
   .dcard__shot img,
   .dcard__shot .species-photo {
-    display: block;
-    width: 100%; height: 100%;
-    aspect-ratio: auto;
-    object-fit: cover;
-    object-position: center;
-    border-radius: 0;
-    box-shadow: none;
-    background: none;
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    border-radius: 0; box-shadow: none;
   }
-  .dcard__shot .species-photo--none {
-    display: grid; place-items: center;
-    width: 100%; height: 100%;
-    aspect-ratio: auto;
-    border: 0; border-radius: 0;
-    background: rgb(255 255 255 / .3);
-  }
-  /* At this size the label has nowhere to go, and the icon says it already. */
+  .dcard__shot .species-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .dcard__shot svg { width: 40px; height: 40px; }
+  /* The gap-filler when a species has no photograph — it is a labelled hole in
+     the Info list, and at this size the label has nowhere to go. */
   .dcard__shot .species-photo--none span { display: none; }
-  /* Proportional, not fixed: an icon is the whole content of its tile and a
-     34px glyph in a 160px cell reads as a mistake rather than as a picture. */
-  .dcard__shot svg { width: 48%; height: 48%; }
 
   .dcard__sub {
     flex: none;

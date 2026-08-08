@@ -20,9 +20,17 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.14.1';
+export const APP_VERSION = '3.14.2';
 
 export const CHANGELOG = [
+  {
+    version: '3.14.2',
+    date: '2026-08-07',
+    title: 'Folder photographs sit properly',
+    changes: [
+      'Folders with two or three photographs lay them out without cropping or gaps.',
+    ],
+  },
   {
     version: '3.14.1',
     date: '2026-08-07',
