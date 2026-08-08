@@ -525,7 +525,10 @@ async def main():
                                '--band-coral','--band-violet','--art-bg','--art-bg-2',
                                '--invert-bg','--invert-fg','--notice-warn','--notice-error',
                                '--skeleton-a','--skeleton-b'];
-                const bad = names.filter(n => !/^(#[0-9a-f]{3,8}|rgba?\\()/i.test(read(n)));
+                // `transparent` is a real answer for the bands in dark mode —
+                // they get out of the bloom's way rather than painting over it.
+                const bad = names.filter(n =>
+                    !/^(#[0-9a-f]{3,8}|rgba?\\(|transparent$)/i.test(read(n)));
 
                 t.setTheme('system');
                 const sys = t.resolvedTheme();
@@ -533,32 +536,43 @@ async def main():
             """)
             check("light theme applies", theme["light"]["attr"] == "light" and
                   theme["light"]["bg"].upper() == "#F6F4EA", str(theme["light"]))
-            # Dark mode is deliberately locked off while the light palette is
-            # rebuilt, so setTheme('dark') no longer reaches it. The rules are
-            # still in the stylesheet and still have to be intact for the day
-            # the lock comes off — so they are read from the sheet, not the page.
-            locked = await page.eval("""
+            # Dark mode is back on, and it is not an inversion of light — it is
+            # its own palette, so this checks the values it actually has.
+            check("dark theme applies",
+                  theme["dark"]["attr"] == "dark"
+                  and theme["dark"]["bg"].upper() == "#0B0E17"
+                  and theme["dark"]["scheme"] == "dark", str(theme["dark"]))
+            unlocked = await page.eval(
+                "const t = await import('./js/theme.js'); return !t.THEME_LOCKED;")
+            check("the theme picker is unlocked", unlocked, str(unlocked))
+
+            # The accent has to change DIRECTION between themes. #2B4593 is a
+            # strong colour on cream and nearly invisible on #0B0E17, so dark
+            # uses a light blue with dark text — the same relationship inverted.
+            accent = await page.eval("""
                 const t = await import('./js/theme.js');
-                const css = await (await fetch('./css/style.css')).text();
-                const block = css.split(':root[data-theme="dark"]')[1] || '';
-                const body = block.slice(0, block.indexOf('}'));
-                const val = (n) => (body.match(new RegExp(n + ':\\s*([^;]+);')) || [])[1]?.trim();
-                return {
-                    lockedOn: t.THEME_LOCKED === true,
-                    forced: t.getTheme(),
-                    darkCanvas: val('--cream'), darkInk: val('--ink'),
-                    darkLine: val('--line'), darkShadow: val('--shadow'),
-                    darkBw: val('--border-w'),
+                const read = (n) => getComputedStyle(document.documentElement)
+                    .getPropertyValue(n).trim();
+                const lum = (hex) => {
+                    const h = hex.replace('#','');
+                    const v = [0,2,4].map(i => parseInt(h.slice(i,i+2),16)/255)
+                        .map(c => c <= .03928 ? c/12.92 : Math.pow((c+.055)/1.055, 2.4));
+                    return .2126*v[0] + .7152*v[1] + .0722*v[2];
                 };
+                t.setTheme('light');
+                const l = { blue: read('--blue'), rail: read('--rail-bg') };
+                t.setTheme('dark');
+                const d = { blue: read('--blue'), rail: read('--rail-bg') };
+                t.setTheme('system');
+                return { l, d, lBlue: lum(l.blue), dBlue: lum(d.blue) };
             """)
-            check("light mode is forced while the palette is rebuilt",
-                  locked["lockedOn"] and locked["forced"] == "light", str(locked))
-            check("the dark rules survive the lock, ready to switch back on",
-                  (locked["darkCanvas"] or "").upper() == "#0D1117"
-                  and (locked["darkInk"] or "").upper() == "#E6EDF3"
-                  and (locked["darkLine"] or "").upper() == "#30363D"
-                  and locked["darkShadow"] == "none" and locked["darkBw"] == "1px",
-                  str(locked))
+            check("the accent inverts with the theme",
+                  accent["dBlue"] > accent["lBlue"] + 0.25, str(accent))
+            # The rail is the app's one dark surface. Bound to --ink it flipped
+            # with the text and turned white on a black page.
+            check("the rail stays dark in both themes",
+                  accent["d"]["rail"].upper() == "#141926", str(accent["d"]))
+
             # The phone's chrome tints to the page canvas, whatever it is.
             check("theme-color follows the canvas",
                   theme["light"]["meta"].upper() == theme["light"]["bg"].upper(),

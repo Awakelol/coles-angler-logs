@@ -220,6 +220,11 @@ async def main():
                 print("  (dark sweep skipped — THEME_LOCKED is on; those screens"
                       " would come out light under dark names)")
 
+            # PIN LIGHT for the main sweep. Headless reports a dark system
+            # preference, and now that the picker is unlocked `system` honours
+            # it — so every shot named for the light theme came out dark.
+            await page.eval("const t = await import('./js/theme.js'); t.setTheme('light'); return 1;")
+
             made = []
             for name, route, sel, action in shots:
                 await page.send("Page.navigate", url=f"{BASE}/index.html{route}")

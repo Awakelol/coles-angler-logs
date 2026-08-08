@@ -38,12 +38,17 @@
   /* The bands were five loud colour blocks. On this palette they are near-white
      tints instead: the references get their rhythm from cards floating on one
      calm ground, not from the page changing colour under you. */
-  --band-cream:  var(--cream);
-  --band-sky:    #EDEFF7;
-  --band-yellow: var(--sand-lt);
-  --band-green:  #EAF1EC;
-  --band-coral:  #F7EDE8;
-  --band-violet: #EFEDF7;
+  /* TRANSPARENT, IN BOTH THEMES. The bands used to be near-white tints, and
+     an opaque band — however faint — paints over the bloom behind it, which
+     meant the light theme had a gradient it could never show. One calm ground
+     with light on it, cards floating over it, and the hairline between bands
+     doing the separating. */
+  --band-cream:  transparent;
+  --band-sky:    transparent;
+  --band-yellow: transparent;
+  --band-green:  transparent;
+  --band-coral:  transparent;
+  --band-violet: transparent;
 
   /* Panel behind art and photos. */
   --art-bg:      var(--blue-lt);
@@ -76,6 +81,33 @@
   --shadow:    0 2px 10px rgb(22 24 29 / .06);
   --shadow-lg: 0 10px 30px rgb(22 24 29 / .10);
 
+  /* THE BLOOM. Coloured light rising from below the fold and falling off
+     before it reaches the top — the shape every one of the references uses.
+     Light mode keeps it faint: on cream it is a warmth in the corner of the
+     eye, not a light show. Dark mode is where it does the work. */
+  --bloom-a: rgb(43 69 147 / .17);
+  --bloom-b: rgb(224 168 66 / .15);
+  --bloom-c: rgb(76 154 106 / .10);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+
+  /* The rail is the app's one dark surface and stays dark in BOTH themes.
+     Bound to --ink it inverted with the text and turned white on a black
+     page, which is the one thing a rail must never do. */
+  --rail-bg: var(--ink);
+  --now-bg: var(--invert-bg);
+  --now-fg: var(--invert-fg);
+
+  /* Folder tints, as tokens rather than hexes buried in the deck rules, so
+     dark can supply its own set without duplicating the layout. */
+  --tint-0: #A9C6F2;
+  --tint-1: #EDD98A;
+  --tint-2: #9BD9B4;
+  --tint-3: #F7B9A8;
+  --tint-4: #C7B4EC;
+  --tint-5: #93D4E4;
+  --tint-fg: var(--ink);
+  --tint-plain: var(--paper);
+
   --tab-h: 62px;
   --fab-d: 58px;           /* the + , in the middle slot of the bar */
   --fab-rise: 14px;        /* how far its centre sits above the bar's */
@@ -91,67 +123,96 @@
   --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
 }
 
-/* --- dark theme -----------------------------------------------------------
+/* --- dark ------------------------------------------------------------------
    Applied via <html data-theme="dark">, set by an inline script in index.html
    before first paint. `system` is resolved in JS rather than with a media
    query here, so an explicit light choice still wins on a dark phone.
 
-   Modelled on GitHub's mobile app, which is a different philosophy from the
-   light theme rather than an inversion of it. Light mode is neo-brutalist:
-   thick near-black outlines and hard offset shadows on cream. GitHub's dark
-   is flat — a near-black canvas, cards lifted by surface colour alone, and
-   hairline dividers instead of outlines. Trying to keep the chunky borders on
-   a dark canvas reads as a wireframe, so dark mode drops them: --border-w
-   goes hairline and the offset shadows go away entirely.
+   NOT AN INVERSION. Light is cream paper with one strong blue on it. Dark is a
+   deep blue-black room with light coming from somewhere below — the references
+   Gabriel picked are all glow on near-black, so dark mode is where the bloom
+   actually earns its place and the accents get to be luminous rather than
+   solid.
 
-   Colours are GitHub's own dark tokens (canvas #0D1117, surface #151B23,
-   border #30363D, fg #E6EDF3, muted #8B949E) so it sits naturally beside
-   the app in the screenshot.                                              */
+   The blue has to change direction. #2B4593 is a strong colour on cream and
+   nearly invisible on #0B0E17, so dark uses a light blue with dark text on it
+   — the same relationship, upside down.
+--------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  --cream:   #0D1117;   /* canvas */
-  --paper:   #151B23;   /* raised surface */
-  --ink:     #E6EDF3;   /* primary text */
-  --ink-60:  #8B949E;   /* muted text */
-  --ink-30:  #6E7681;
+  --blue:    #93AEFF;   /* the one strong colour, now the light one */
+  --blue-dk: #B9C9FF;   /* "stronger" means lighter here — hover, pressed */
+  --blue-lt: #1C2440;   /* tinted fills, a wash of the accent over canvas */
+  --sand:    #2A2A22;
+  --sand-lt: #1A1B16;
 
-  /* GitHub's accent set — vivid on near-black, unlike the pastel light ones. */
-  --yellow:  #D29922;
-  --sky:     #58A6FF;
-  --sky-deep:#4493F8;
-  --coral:   #DB6D28;
-  --green:   #3FB950;
-  --violet:  #AB7DF8;
+  --cream:   #0B0E17;   /* canvas: blue-black, not neutral black */
+  --paper:   #141926;   /* raised surface */
+  --ink:     #EAECF2;
+  --ink-60:  #98A0B4;
+  --ink-30:  #6B7286;
 
-  /* Bands are barely-there tints. Bright colour blocks are the light theme's
-     idea; here the section rhythm comes from a whisper of hue over canvas. */
-  --band-cream:  #0D1117;
-  --band-sky:    #0E1620;
-  --band-yellow: #14120C;
-  --band-green:  #0C1410;
-  --band-coral:  #14100C;
-  --band-violet: #110F19;
+  --yellow:  #E8C55C;
+  --sky:     var(--blue-lt);
+  --sky-deep:var(--blue);
+  --coral:   #F08A62;
+  --green:   #5FC98C;
+  --violet:  #A78BFA;
 
-  --art-bg:      #10202E;
-  --art-bg-2:    #16293A;
+  /* Bands are a whisper over canvas. Colour blocks are the light theme's idea;
+     here the rhythm comes from the bloom behind everything. */
+  --band-cream:  transparent;
+  --band-sky:    transparent;
+  --band-yellow: transparent;
+  --band-green:  transparent;
+  --band-coral:  transparent;
+  --band-violet: transparent;
 
-  --invert-bg:   #21262D;
-  --invert-fg:   #E6EDF3;
+  --art-bg:      #101828;
+  --art-bg-2:    #16203a;
 
-  --notice-warn:  #1E1A0B;
-  --notice-error: #1F1315;
-  --skeleton-a:   #161B22;
-  --skeleton-b:   #21262D;
-  --attribution:  rgba(13, 17, 23, .85);
+  --invert-bg:   #EAECF2;
+  --invert-fg:   #0B0E17;
 
-  /* Text on the vivid accent fills. GitHub's blue and green are mid-tone, so
-     near-black still reads on them. */
-  --on-accent: #0D1117;
+  --notice-warn:  #1F1B0C;
+  --notice-error: #231314;
+  --skeleton-a:   #161C2A;
+  --skeleton-b:   #1E2537;
+  --attribution:  rgba(11, 14, 23, .85);
 
-  --line:        #30363D;
+  /* The accent is light now, so what sits on it is dark. */
+  --on-accent: #0B0E17;
+
+  --line:        #262E44;
   --border-w:    1px;
   --border-w-sm: 1px;
+  /* Shadows do nothing on near-black. Depth comes from surface lightness and
+     from the bloom, the way it does in every one of the references. */
   --shadow:      none;
-  --shadow-lg:   none;
+  --shadow-lg:   0 10px 30px rgb(0 0 0 / .45);
+
+  /* The rail stays dark in both themes — see the token's note in :root. */
+  --rail-bg: #141926;
+  --now-bg: #172033;
+  --now-fg: var(--ink);
+
+  /* THE BLOOM. Three soft lights low on the screen. This is the whole look of
+     the references: not a linear gradient across a panel, but coloured light
+     rising from below the fold and falling off before it reaches the top. */
+  --bloom-a: rgb(99 91 255 / .55);
+  --bloom-b: rgb(168 85 247 / .34);
+  --bloom-c: rgb(56 189 248 / .26);
+  --bloom-veil: rgb(11 14 23 / 0);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
+
+  /* Folder tints: deep and luminous rather than pastel, with light text. */
+  --tint-0: #26365F;
+  --tint-1: #3A3418;
+  --tint-2: #1B3B2C;
+  --tint-3: #43221F;
+  --tint-4: #322246;
+  --tint-5: #14333F;
+  --tint-fg: #EAECF2;
+  --tint-plain: #1C2334;
 }
 
 /* Flatten the light theme's tactile flourishes: pressing a card shifted it
@@ -174,20 +235,68 @@
   box-shadow: none;
 }
 
-/* GitHub groups list rows in one rounded surface with hairline dividers,
-   rather than giving every row its own outline. */
+/* Rows grouped in one surface with hairline dividers, rather than every row
+   carrying its own outline. */
 :root[data-theme="dark"] .tide-row + .tide-row,
 :root[data-theme="dark"] .catch-row + .catch-row {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
 
+/* The map is the one surface with imagery of its own, and a bright tile sheet
+   on a dark app is a torch in a dark room. */
+:root[data-theme="dark"] #fishMap .leaflet-tile-pane {
+  filter: brightness(.82) saturate(.85);
+}
+
+/* --- the bloom -------------------------------------------------------------
+   Coloured light rising from below the fold — the shape every one of the
+   references uses. Radial rather than linear because they glow from a source
+   off the bottom of the screen, and a linear gradient has a direction but no
+   source.
+
+   IT LIVES ON <html>, NOT ON A PSEUDO-ELEMENT, and that is the whole story of
+   getting it to work. The obvious build is `body::before { position: fixed;
+   z-index: -2 }` and it renders nothing you can see: a negative z-index child
+   paints in step 2 of its stacking context while a non-positioned parent's
+   background paints in step 3, so the bloom went under body's own background.
+   Every computed style said the gradient was present, fixed, full-viewport and
+   correct; every pixel came back flat canvas.
+
+   The root's background cannot be painted over, because it IS the canvas. One
+   element, four layers, no stacking context to reason about.
+
+   `background-attachment: fixed` is what makes it read as the room the app is
+   in rather than a picture printed on the page: scrolling moves the content
+   over the light instead of dragging the light along with it.
+
+   The grain is the topmost layer and its alpha is baked into the SVG, because
+   a background layer cannot carry its own opacity. Without it the wide colour
+   ramps band visibly on an OLED phone — 300 bytes of feTurbulence breaks the
+   bands up, and a tiling PNG would not be 300 bytes.
+--------------------------------------------------------------------------- */
+html {
+  background-color: var(--cream);
+  background-image:
+    var(--grain),
+    radial-gradient(115% 58% at 50% 114%, var(--bloom-a), transparent 66%),
+    radial-gradient(78% 46% at 10% 104%, var(--bloom-b), transparent 64%),
+    radial-gradient(82% 48% at 94% 98%, var(--bloom-c), transparent 64%);
+  background-attachment: fixed;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+}
+/* Body must stay clear, or it paints the canvas out again. */
+body { background-color: transparent; background-image: none; }
+
 * { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--cream);
+  /* NO `background` SHORTHAND HERE. It resets background-image to none, and
+     this rule comes after the bloom block — so the shorthand was quietly
+     deleting the gradient every time, while the computed styles further up
+     still looked correct. The canvas colour is set with the bloom, on <html>. */
   color: var(--ink);
   font-family: var(--font);
   -webkit-text-size-adjust: 100%;
@@ -515,7 +624,7 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
    palette made this gold; on blue-and-off-white a gold button is the loudest
    thing on a calm page and it is not the most important. */
 .btn--primary {
-  background: var(--blue); color: #fff;
+  background: var(--blue); color: var(--on-accent);
   border-color: var(--blue);
   box-shadow: 0 4px 14px rgb(43 69 147 / .28);
 }
@@ -631,8 +740,12 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- conditions ---------------------------------------------------------- */
 
+/* The one card that inverts on purpose: in light it is the dark slab the
+   temperature sits on. In dark there is nothing to invert TO — a light slab in
+   a dark room is a hole in the page — so it becomes a raised surface like every
+   other card and the accent does the work. */
 .now-card {
-  background: var(--invert-bg); color: var(--invert-fg);
+  background: var(--now-bg); color: var(--now-fg);
   border: var(--border-w) solid var(--line); border-radius: var(--radius);
   padding: 20px; box-shadow: var(--shadow-lg);
 }
@@ -799,7 +912,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 /* The chosen one comes to the front and takes the strong colour. */
 .bookmark[aria-selected="true"] {
   background: var(--blue);
-  color: #fff;
+  color: var(--on-accent);
   z-index: 2;
   transform: translateY(-2px);
   box-shadow: 0 8px 22px rgb(43 69 147 / .28);
@@ -1515,7 +1628,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   border: 0; border-radius: 50%;
   display: grid; place-items: center;
   background: var(--blue);
-  color: #fff;
+  color: var(--on-accent);
   font-family: inherit; padding: 0;
   cursor: pointer;
   box-shadow: 0 10px 20px rgb(43 69 147 / .38);
@@ -1734,7 +1847,7 @@ body:has(.map-screen) { padding-bottom: 0; }
     display: flex; flex-direction: column; align-items: stretch;
     gap: 2px;
     padding: 16px 12px;
-    background: var(--ink);
+    background: var(--rail-bg);
     border: 0;
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
@@ -1800,10 +1913,10 @@ body:has(.map-screen) { padding-bottom: 0; }
      anything drawn outside the padding box is cut off. */
   .tabbar a[aria-current="page"] {
     background: var(--blue);
-    color: #fff;
+    color: var(--on-accent);
   }
-  .tabbar a[aria-current="page"] svg { color: #fff; }
-  .tabbar a[aria-current="page"]:hover { background: var(--blue); color: #fff; }
+  .tabbar a[aria-current="page"] svg { color: var(--on-accent); }
+  .tabbar a[aria-current="page"]:hover { background: var(--blue); color: var(--on-accent); }
 
   /* Brand first, then the thing you came to do, then the places you can go. */
   .rail__head { order: -2; }
@@ -2367,6 +2480,9 @@ body.is-sheet-open {
     height: 100%;
     display: flex; flex-direction: column;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .17));
+    /* Follows the tint, so the dark theme's deep folders carry light text
+       without a second set of rules for everything inside them. */
+    color: var(--tint-fg);
   }
   /* ONLY THE FRONT ONE FLOATS. Every card drifting at once read as the page
      itself being unsteady; one card moving reads as that card being the live
@@ -2470,7 +2586,7 @@ body.is-sheet-open {
     display: grid; place-items: center;
     overflow: hidden;
     border-radius: 12px;
-    background: rgb(255 255 255 / .45);
+    background: rgb(127 127 127 / .18);
   }
   .dcard__shot img,
   .dcard__shot .species-photo {
@@ -2511,13 +2627,13 @@ body.is-sheet-open {
      sit far enough from --cream to be seen while staying light enough to carry
      the same dark text at well over 4.5:1.
   */
-  .dcard[data-tint="0"] { --folder-bg: #A9C6F2; }
-  .dcard[data-tint="1"] { --folder-bg: #EDD98A; }
-  .dcard[data-tint="2"] { --folder-bg: #9BD9B4; }
-  .dcard[data-tint="3"] { --folder-bg: #F7B9A8; }
-  .dcard[data-tint="4"] { --folder-bg: #C7B4EC; }
-  .dcard[data-tint="5"] { --folder-bg: #93D4E4; }
-  .dcard--all { --folder-bg: var(--paper); }
+  .dcard[data-tint="0"] { --folder-bg: var(--tint-0); }
+  .dcard[data-tint="1"] { --folder-bg: var(--tint-1); }
+  .dcard[data-tint="2"] { --folder-bg: var(--tint-2); }
+  .dcard[data-tint="3"] { --folder-bg: var(--tint-3); }
+  .dcard[data-tint="4"] { --folder-bg: var(--tint-4); }
+  .dcard[data-tint="5"] { --folder-bg: var(--tint-5); }
+  .dcard--all { --folder-bg: var(--tint-plain); }
 
   /* --- the opened folder --------------------------------------------------- */
 
@@ -2528,6 +2644,7 @@ body.is-sheet-open {
     z-index: 6;
     margin-bottom: 16px;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .14));
+    color: var(--tint-fg);
     /* The header is a drag handle, so the browser must not claim the vertical
        gesture for scrolling before it reaches us. The body below still scrolls
        normally — only this strip is ours. */
@@ -2560,19 +2677,19 @@ body.is-sheet-open {
     display: grid; place-items: center;
     width: 30px; height: 30px;
     border: 0; border-radius: 50%;
-    background: rgb(255 255 255 / .7); color: var(--ink);
+    background: rgb(127 127 127 / .22); color: var(--tint-fg);
     cursor: pointer;
     transition: background-color .2s ease, transform .2s ease;
   }
-  .folder-head__x:hover { background: #fff; }
+  .folder-head__x:hover { background: rgb(127 127 127 / .34); }
   .folder-head__x:active { transform: scale(.9); }
 
-  .folder-head[data-tint="0"] { --folder-bg: #A9C6F2; }
-  .folder-head[data-tint="1"] { --folder-bg: #EDD98A; }
-  .folder-head[data-tint="2"] { --folder-bg: #9BD9B4; }
-  .folder-head[data-tint="3"] { --folder-bg: #F7B9A8; }
-  .folder-head[data-tint="4"] { --folder-bg: #C7B4EC; }
-  .folder-head[data-tint="5"] { --folder-bg: #93D4E4; }
+  .folder-head[data-tint="0"] { --folder-bg: var(--tint-0); }
+  .folder-head[data-tint="1"] { --folder-bg: var(--tint-1); }
+  .folder-head[data-tint="2"] { --folder-bg: var(--tint-2); }
+  .folder-head[data-tint="3"] { --folder-bg: var(--tint-3); }
+  .folder-head[data-tint="4"] { --folder-bg: var(--tint-4); }
+  .folder-head[data-tint="5"] { --folder-bg: var(--tint-5); }
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
@@ -2721,7 +2838,7 @@ body.is-sheet-open {
   width: 62px; height: 62px;
   border-radius: 50%;
   display: grid; place-items: center;
-  background: var(--blue); color: #fff;
+  background: var(--blue); color: var(--on-accent);
   font-size: 26px; font-weight: 900;
   box-shadow: 0 6px 18px rgb(43 69 147 / .3);
 }
@@ -2743,7 +2860,7 @@ body.is-sheet-open {
   display: grid; place-items: center;
   width: 100%; height: 100%;
   border-radius: 50%; overflow: hidden;
-  background: var(--blue); color: #fff;
+  background: var(--blue); color: var(--on-accent);
   font-family: inherit; font-size: 32px; font-weight: 900; letter-spacing: -.02em;
   box-shadow: 0 6px 18px rgb(43 69 147 / .3);
 }

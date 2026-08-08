@@ -18,13 +18,13 @@ export const THEMES = ['light', 'dark', 'system'];
 // Rather than ship a half-retuned dark mode, the picker is hidden and light is
 // forced. The theme system itself is untouched — flip this back to false and
 // the setting returns, along with whatever dark mode currently looks like.
-export const THEME_LOCKED = true;
+export const THEME_LOCKED = false;
 
 // Matches the --cream / page background of each theme, so the phone's status
 // bar and PWA chrome tint to match instead of staying stuck on yellow.
 // Must match --cream / the page canvas for each theme, or the phone's status
 // bar sits a shade off the top of the page. Dark is GitHub's canvas colour.
-const THEME_COLOR = { light: '#F6F4EA', dark: '#0d1117' };
+const THEME_COLOR = { light: '#F6F4EA', dark: '#0B0E17' };
 
 export function getTheme() {
   if (THEME_LOCKED) return 'light';

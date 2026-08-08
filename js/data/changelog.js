@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.14.2';
+export const APP_VERSION = '3.15.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.15.0',
+    date: '2026-08-07',
+    title: 'Dark mode, and light in the room',
+    changes: [
+      'Dark mode is back — a deep blue-black with the accent turned light, not an inversion.',
+      'A soft glow rises behind every screen, faint on cream and rich in the dark.',
+      'Settings › Appearance lets you pick light, dark, or follow your phone.',
+    ],
+  },
   {
     version: '3.14.2',
     date: '2026-08-07',

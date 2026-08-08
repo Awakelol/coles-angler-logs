@@ -843,6 +843,55 @@ because no library *is* that; they all reimplement it and land somewhere close.
 unpins the page. Above 900px the chips return — a wide window has room for
 every subcategory at once.
 
+### The bloom
+
+Coloured light rising from below the fold — the shape the reference designs all
+use. Radial rather than linear, because they glow from a source off the bottom
+of the screen and a linear gradient has a direction but no source. Faint on
+cream, pronounced on the dark canvas, plus a grain layer.
+
+**It lives on `<html>`, and that is the whole story of getting it to work.**
+
+The obvious build is `body::before { position: fixed; z-index: -2 }`. It renders
+nothing you can see: a negative-`z-index` child paints in step 2 of its stacking
+context while a non-positioned parent's background paints in step 3, so the
+bloom went *under* body's own background. Every computed style said the gradient
+was present, fixed, full-viewport and correct; every pixel came back flat canvas.
+
+Moving it to the root fixed that — and then it still did not paint, because
+`html, body { background: var(--cream) }` sits **later** in the file and the
+`background` *shorthand* resets `background-image` to `none`. Two independent
+causes with the same symptom. The rule sets `color` only now.
+
+`background-attachment: fixed` is what makes it read as the room the app is in
+rather than a picture printed on the page. The grain is the topmost layer with
+its alpha **baked into the SVG**, because a background layer cannot carry its
+own opacity — without it the wide colour ramps band visibly on an OLED phone.
+
+### Dark mode
+
+Unlocked, and **not an inversion**. Light is cream paper with one strong blue on
+it; dark is a deep blue-black room with light coming from below. The accent
+changes *direction*: `#2B4593` is strong on cream and nearly invisible on
+`#0B0E17`, so dark uses a light blue with dark text — the same relationship
+upside down.
+
+Which means **`color: #fff` on the accent was a bug waiting for dark mode.**
+Every one of those is `var(--on-accent)` now. The desktop-rail contrast test
+caught it the moment the lock came off: white on `#93AEFF` is 2.16:1.
+
+Three surfaces must NOT follow the text colour, and each has its own token:
+
+| Token | Why |
+|---|---|
+| `--rail-bg` | Bound to `--ink` the desktop rail turned white on a black page |
+| `--now-bg` / `--now-fg` | The weather card inverts on purpose in light; in dark there is nothing to invert *to*, and it rendered as a white slab |
+| `--tint-0`…`--tint-5`, `--tint-fg` | Folder colours are pastels on cream and deep tints on black, with the text following |
+
+The bands are `transparent` in **both** themes. An opaque band, however faint,
+paints over the bloom — which is why the light theme had a gradient it could
+never show.
+
 ### Installing on an iPhone
 
 Safari → Share → **Add to Home Screen**. Nothing special is needed: the
@@ -985,7 +1034,7 @@ mode only changes icons and the fish that still have no photograph.
 
 ```bash
 python -m http.server 8777          # terminal 1
-python tools/browser_test.py        # terminal 2 — 512 checks, phone width
+python tools/browser_test.py        # terminal 2 — 514 checks, phone width
 python tools/desktop_check.py       # terminal 2 — 30 checks, 1440x900
 ```
 
