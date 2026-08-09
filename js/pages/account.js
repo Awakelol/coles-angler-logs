@@ -63,7 +63,7 @@ function initials(name) {
  * the account page's hue already exists, so a banner that is anything else is
  * a second identity fighting the first. No upload to manage either.
  */
-function profileHeaderHtml({ name, handle, sub, avatar, editable }) {
+function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
   return `
     <div class="prof">
       <div class="prof__cover">
@@ -82,16 +82,28 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable }) {
                  </span>
                </button>
                <input type="file" id="avatarInput" accept="image/*" hidden>`
-            : `<div class="acct-photo prof__pic" aria-hidden="true">
-                 <span class="acct-photo__fill acct-photo__fill--empty">
-                   <svg viewBox="0 0 24 24" width="34" height="34">
-                     <path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/>
-                   </svg>
-                 </span>
+            : // Not a button, but still YOUR face. `editable` decides whether
+              // the picture is a control, not whether there is a picture —
+              // conflating the two left the profile showing a stranger's
+              // silhouette while the editor two taps away showed the photo.
+              `<div class="acct-photo prof__pic">
+                 <span class="acct-photo__fill${avatar ? '' : ' acct-photo__fill--empty'}"
+                       id="avatarFill">${
+                         avatar
+                           ? esc(avatar)
+                           : `<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+                                <path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/>
+                              </svg>`
+                       }</span>
                </div>`
         }
       </div>
       <div class="prof__who">
+        ${
+          edit
+            ? `<a class="btn btn--sm prof__edit" href="#/account?edit=1">Edit profile</a>`
+            : ''
+        }
         <h1 class="acct-name" id="acctName">${esc(name)}</h1>
         ${handle ? `<p class="acct-handle">@${esc(handle)}</p>` : ''}
         <p class="acct-sub">${esc(sub)}</p>
@@ -106,6 +118,86 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable }) {
           .join('')}
       </div>
     </div>`;
+}
+
+
+/** The edit screen: everything about you that you can change, and nothing else. */
+function editHtml(user) {
+  return `
+    <section class="band band--cream">
+      <div class="wrap wrap--narrow">
+        <a class="set-back" href="#/account">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"
+                  stroke-linejoin="round" d="m14.5 5.5-6.5 6.5 6.5 6.5"/>
+          </svg>
+          Profile
+        </a>
+        <h1 class="display display--sm">Edit profile</h1>
+        <p class="subtitle subtitle--tight">Your photo and what the app calls you</p>
+
+        <form id="profileForm">
+          <!-- The photo first and centred, because it is the thing people came
+               here to change and the biggest target on the screen. -->
+          <div class="edit-photo">
+            <button type="button" class="acct-photo" id="avatarBtn"
+                    aria-label="Change your profile photo">
+              <span class="acct-photo__fill" id="avatarFill">${esc(initials(user.username))}</span>
+              <span class="acct-photo__edit" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="15" height="15">
+                  <path fill="currentColor" d="M9 3h6l1.5 2H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.5Zm3 5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Zm0 2.2a3.3 3.3 0 1 1 0 6.6 3.3 3.3 0 0 1 0-6.6Z"/>
+                </svg>
+              </span>
+            </button>
+            <input type="file" id="avatarInput" accept="image/*" hidden>
+            <div class="edit-photo__acts">
+              <button type="button" class="btn btn--sm" id="pickAvatar">Change photo</button>
+              <button type="button" class="btn btn--sm btn--danger" id="removeAvatar" hidden>Remove</button>
+            </div>
+          </div>
+
+          <div class="card acct-rows">
+            <div class="field">
+              <label for="displayName">Display name</label>
+              <div class="field__count-wrap">
+                <input type="text" id="displayName" name="displayName"
+                       maxlength="${DISPLAY_NAME_MAX}" autocomplete="nickname"
+                       placeholder="${esc(user.username)}">
+                <!-- Live, because a limit you only meet by hitting it is a
+                     limit that reads as the field being broken. -->
+                <span class="field__count" id="nameCount" aria-hidden="true">0/${DISPLAY_NAME_MAX}</span>
+              </div>
+              <p class="field__hint">
+                What the app calls you. Leave it empty to go by your handle.
+              </p>
+            </div>
+
+            <div class="acct-row">
+              <div>
+                <p class="acct-row__k">Handle</p>
+                <p class="acct-row__v">@${esc(user.username)}</p>
+              </div>
+              <span class="chip chip--family">Sign-in name</span>
+            </div>
+            <p class="field__hint">
+              Your handle is the name you sign in with, so it stays put. A display
+              name is the part you can change.
+            </p>
+          </div>
+
+          ${
+            cloudConfigured() && user.syncs
+              ? `<p class="field__hint">Your photo and display name stay on this device
+                   for now &mdash; only catches sync.</p>`
+              : ''
+          }
+
+          <div class="edit-save">
+            <button type="submit" class="btn btn--primary btn--block" id="saveProfile">Save</button>
+          </div>
+        </form>
+      </div>
+    </section>`;
 }
 
 export function render(ctx) {
@@ -138,60 +230,24 @@ export function render(ctx) {
       </section>`;
   }
 
+  // THE EDITOR IS ITS OWN SCREEN, reached by the Edit button, not a form
+  // sitting under the profile. A profile page is for reading; putting the
+  // fields on it means every visit shows you a half-filled form you did not
+  // ask for. Same `?param` shape Settings uses for its panels.
+  if (ctx?.params?.get('edit')) return editHtml(user);
+
   const providers = linkedProviders();
   return `
     <section class="band band--cream">
       <div class="wrap">
         ${profileHeaderHtml({
-          name: user.username,
+          name: shownName(user) || user.username,
           handle: user.username,
           sub: user.syncs ? 'Synced to the cloud' : 'On this device only',
           avatar: initials(user.username),
-          editable: true,
+          editable: false,
+          edit: true,
         })}
-
-      </div>
-    </section>
-
-    <section class="band band--cream">
-      <div class="wrap">
-        <div class="section-head"><h2>Profile</h2><p>How you appear in the app</p></div>
-
-        <form class="card acct-rows" id="profileForm">
-          <div class="field">
-            <label for="displayName">Display name</label>
-            <input type="text" id="displayName" name="displayName"
-                   maxlength="${DISPLAY_NAME_MAX}" autocomplete="nickname"
-                   placeholder="${esc(user.username)}">
-            <p class="field__hint">
-              What the app calls you. Leave it empty to go by your handle.
-            </p>
-          </div>
-
-          <div class="acct-row">
-            <div>
-              <p class="acct-row__k">Handle</p>
-              <p class="acct-row__v">@${esc(user.username)}</p>
-            </div>
-            <span class="chip chip--family">Sign-in name</span>
-          </div>
-          <p class="field__hint">
-            Your handle is the name you sign in with, so it stays put. A display
-            name is the part you can change.
-          </p>
-
-          <div class="acct-actions">
-            <button type="submit" class="btn btn--primary" id="saveProfile">Save</button>
-            <button type="button" class="btn btn--sm" id="removeAvatar" hidden>Remove photo</button>
-          </div>
-        </form>
-
-        ${
-          cloudConfigured() && user.syncs
-            ? `<p class="field__hint">Your photo and display name stay on this device for
-                 now &mdash; only catches sync.</p>`
-            : ''
-        }
       </div>
     </section>
 
@@ -324,6 +380,7 @@ export async function mount(root, ctx) {
     return;
   }
   paint(profile);
+  // Only the profile carries the strip; on the editor this is a no-op.
   await paintStats(root, user.id, ctx.regionId);
   if (!root.isConnected) {
     releaseAvatar();
@@ -333,6 +390,7 @@ export async function mount(root, ctx) {
   // --- the photo ---
   const picker = root.querySelector('#avatarInput');
   root.querySelector('#avatarBtn')?.addEventListener('click', () => picker?.click());
+  root.querySelector('#pickAvatar')?.addEventListener('click', () => picker?.click());
 
   picker?.addEventListener('change', async () => {
     const file = picker.files?.[0];
@@ -355,10 +413,21 @@ export async function mount(root, ctx) {
   });
 
   // --- the name ---
+  const count = root.querySelector('#nameCount');
+  const tally = () => {
+    if (count && input) count.textContent = `${input.value.length}/${DISPLAY_NAME_MAX}`;
+  };
+  input?.addEventListener('input', tally);
+  tally();
+
   root.querySelector('#profileForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const value = (input?.value || '').trim().slice(0, DISPLAY_NAME_MAX);
     paint(await profiles.save(user.id, { displayName: value }));
     toast(value ? 'Display name saved' : 'Going by your handle');
+    // The editor is a detour. Finishing it puts you back on the profile you
+    // pressed Edit from, showing the change — staying put makes you wonder
+    // whether the Save did anything.
+    if (ctx?.params?.get('edit')) ctx.navigate('/account');
   });
 }

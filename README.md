@@ -627,6 +627,27 @@ The overhang belongs to **the avatar, not the row**. Pulling the row up ate 42px
 of the cover it was meant to hang over, and pulling the name block up to
 compensate ate the rest — a 104px cover rendered at about 60.
 
+### Editing is a screen, not a form on the profile
+
+The profile is for reading. The **Edit profile** button opens `#/account?edit=1`
+— the same `?param` shape Settings uses for its panels — and the fields live
+there: the photo, the display name with a live counter, and the handle as a
+read-only row explaining why it cannot change. Saving returns you to the
+profile showing the change, because the editor is a detour and staying put
+makes you wonder whether Save did anything.
+
+`editable` on the header decides whether the picture is a **control**, not
+whether there **is** a picture. Conflating the two left the profile showing a
+stranger's silhouette while the editor two taps away showed the real photo.
+
+> **A bug this uncovered.** `profiles.get()` called `txIn` without `wrap()`, so
+> it resolved with the raw `IDBRequest` instead of its `.result`. An
+> `IDBRequest` is truthy and has no `displayName`, so `|| null` never fired and
+> nothing ever threw — display names and avatars were being written correctly
+> and silently never read back. Every other read in `js/store.js` wraps; this
+> one had been missed. There is now a round-trip test through the store itself
+> rather than through the screen.
+
 ### Two names, and a face
 
 The **handle** is what you signed up as: unique, validated, and what the account

@@ -3078,6 +3078,32 @@ body.is-sheet-open {
 
 /* --- account ------------------------------------------------------------- */
 
+/* The Edit button sits on the name row, top-right, the way it does on every
+   profile screen people already use. Floated rather than a flex sibling so the
+   name keeps the full width when it wraps. */
+.prof__edit { float: right; margin: 2px 0 0 10px; }
+
+/* --- the edit screen ---------------------------------------------------- */
+.edit-photo {
+  display: grid; place-items: center; gap: 12px;
+  margin: 4px 0 20px;
+}
+.edit-photo .acct-photo { width: 104px; height: 104px; }
+.edit-photo .acct-photo__fill { font-size: 40px; }
+.edit-photo__acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* The counter sits INSIDE the field. Beside it, a limit only announces itself
+   when you hit it, which reads as the field silently breaking. */
+.field__count-wrap { position: relative; display: block; }
+.field__count-wrap input { padding-right: 58px; }
+.field__count {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; font-weight: 800; color: var(--ink-60);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.edit-save { margin-top: 18px; }
+
 /* --- the profile header ----------------------------------------------------
    A cover, an avatar hung over its edge, the name, then the numbers. Same
    shape signed in or out — signed out is this screen with an empty seat, not a

@@ -1036,6 +1036,122 @@ async def main():
                   str(profile["cells"]))
             # Three catches on two dates: the numbers must be the real log, and
             # Days must count trips rather than records.
+            # EDITING IS A SEPARATE SCREEN behind the Edit button, not a form
+            # under the profile. A profile page is for reading; putting the
+            # fields on it shows you a half-filled form on every visit.
+            editing = await page.eval("""
+                const a = await import('./js/auth.js');
+                const p = await import('./js/store.js');
+                let why = null;
+                try { await a.signUp('editor', 'abcd'); }
+                catch (e) {
+                    why = 'signUp: ' + e.message;
+                    try { await a.signIn('editor', 'abcd'); }
+                    catch (e2) { why += ' | signIn: ' + e2.message; }
+                }
+                if (!a.currentUser()) return { fatal: 'not signed in', why };
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 500));
+                location.hash = '#/account';
+                await new Promise(r => setTimeout(r, 1400));
+                const profile = {
+                    hasEdit: !!document.querySelector('.prof__edit'),
+                    editGoes: document.querySelector('.prof__edit')?.getAttribute('href'),
+                    // The form must NOT be sitting on the profile.
+                    noFormHere: !document.getElementById('profileForm'),
+                    // Not a button here, but still your face rather than a
+                    // stranger's silhouette.
+                    showsYou: (document.getElementById('avatarFill')?.textContent || '').trim(),
+                };
+                if (!document.querySelector('.prof__edit'))
+                    return { fatal: 'no Edit button', why, profile,
+                             body: document.body.innerText.slice(0, 200) };
+                document.querySelector('.prof__edit').click();
+                await new Promise(r => setTimeout(r, 1200));
+                const editor = {
+                    hash: location.hash,
+                    hasForm: !!document.getElementById('profileForm'),
+                    hasPhoto: !!document.getElementById('avatarBtn'),
+                    hasSave: !!document.getElementById('saveProfile'),
+                    // A way back that names where it goes.
+                    back: document.querySelector('.set-back')?.getAttribute('href'),
+                    count: document.getElementById('nameCount')?.textContent,
+                    // No profile header on the editor: it is a form, not a
+                    // second copy of the page you came from.
+                    noHeader: !document.querySelector('.prof__cover'),
+                };
+                const input = document.getElementById('displayName');
+                input.value = 'Wake';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 200));
+                const counted = document.getElementById('nameCount').textContent;
+                document.getElementById('profileForm')
+                    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                await new Promise(r => setTimeout(r, 1500));
+                const after = {
+                    // Saving returns you to the profile, showing the change.
+                    hash: location.hash,
+                    name: document.getElementById('acctName')?.textContent.trim(),
+                };
+                await a.signOut();
+                return { profile, editor, counted, after };
+            """)
+            # The store bug this caught: profiles.get() returned the raw
+            # IDBRequest rather than its .result, so a display name saved fine
+            # and never came back. An IDBRequest is truthy and has no
+            # displayName, so nothing threw — the name just silently stayed the
+            # handle. Round-trip it through the store directly, not the screen.
+            roundtrip = await page.eval("""
+                const st = await import('./js/store.js');
+                const a = await import('./js/auth.js');
+                // Self-contained: the block before this one signs out when it
+                // finishes, so this cannot lean on a session it did not make.
+                try { await a.signUp('rtuser', 'abcd'); }
+                catch (e) { await a.signIn('rtuser', 'abcd'); }
+                const u = a.currentUser();
+                const saved = await st.profiles.save(u.id, { displayName: 'Roundtrip' });
+                const got = await st.profiles.get(u.id);
+                const out = { savedName: saved?.displayName,
+                              gotName: got?.displayName,
+                              gotKeys: Object.keys(got || {}).length,
+                              shown: st.shownName(u, got) };
+                await st.profiles.save(u.id, { displayName: '' });
+                await a.signOut();
+                // Put the screen back where these blocks found it. The checks
+                // that follow read the sign-in gate on /log, and leaving the
+                // app parked on /account made them query a form that was no
+                // longer rendered.
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 900));
+                out.restored = !!document.querySelector('.auth-field');
+                return out;
+            """)
+            check("the sign-in gate is back on screen", roundtrip["restored"],
+                  str(roundtrip))
+            check("a saved display name reads back out of the store",
+                  roundtrip["gotName"] == "Roundtrip" and roundtrip["gotKeys"] > 0
+                  and roundtrip["shown"] == "Roundtrip", str(roundtrip))
+
+            check("the profile carries an Edit button, not the form",
+                  editing["profile"]["hasEdit"] and editing["profile"]["noFormHere"]
+                  and editing["profile"]["editGoes"] == "#/account?edit=1",
+                  str(editing["profile"]))
+            check("the profile shows your own avatar",
+                  editing["profile"]["showsYou"] == "E", str(editing["profile"]))
+            check("Edit opens a screen of its own",
+                  "edit=1" in editing["editor"]["hash"] and editing["editor"]["hasForm"]
+                  and editing["editor"]["hasSave"] and editing["editor"]["noHeader"],
+                  str(editing["editor"]))
+            check("the editor has the photo control and a way back",
+                  editing["editor"]["hasPhoto"] and editing["editor"]["back"] == "#/account",
+                  str(editing["editor"]))
+            check("the name field counts as you type",
+                  editing["editor"]["count"] == "0/30" and editing["counted"] == "4/30",
+                  f'{editing["editor"]["count"]} then {editing["counted"]}')
+            check("saving returns you to the profile with the new name",
+                  "edit=1" not in editing["after"]["hash"]
+                  and editing["after"]["name"] == "Wake", str(editing["after"]))
+
             check("signed out, the strip still shows your own log",
                   profile["cells"][0]["v"] == "3" and profile["cells"][3]["v"] == "2",
                   str(profile["cells"]))

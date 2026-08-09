@@ -308,7 +308,12 @@ const PREFS_KEY = 'angler.prefs';
 export const profiles = {
   async get(userId) {
     if (!userId) return null;
-    return (await txIn(PROFILES, 'readonly', (s) => s.get(userId))) || null;
+    // wrap(), like every other read in this file. Without it txIn resolves
+    // with the IDBRequest itself rather than its .result — and an IDBRequest
+    // is truthy and has no displayName, so `|| null` never fired and every
+    // caller silently saw a profile with no fields in it. Display names and
+    // avatars were being written correctly and never read back.
+    return (await txIn(PROFILES, 'readonly', (s) => wrap(s.get(userId)))) || null;
   },
 
   async save(userId, patch) {
