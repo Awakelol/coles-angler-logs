@@ -546,6 +546,103 @@ async def main():
                 "const t = await import('./js/theme.js'); return !t.THEME_LOCKED;")
             check("the theme picker is unlocked", unlocked, str(unlocked))
 
+            # ONE LIGHT PER PAGE. The hue is the page's subject, the burn is the
+            # theme's, and the two must not know about each other — that
+            # orthogonality is the whole reason this is seven hue triples and
+            # two alpha sets rather than fourteen hand-tuned palettes.
+            glow = await page.eval("""
+                const root = document.documentElement;
+                const read = () => {
+                    const cs = getComputedStyle(root);
+                    return { page: root.dataset.page,
+                             hue: cs.getPropertyValue('--glow-1').trim(),
+                             hue2: cs.getPropertyValue('--glow-2').trim(),
+                             burn: cs.getPropertyValue('--glow-o1').trim(),
+                             bloom: cs.getPropertyValue('--bloom-a').trim() };
+                };
+                const seen = {};
+                for (const [hash, name] of [['#/', 'home'], ['#/map', 'map'],
+                                            ['#/info', 'info'], ['#/log', 'log'],
+                                            ['#/conditions', 'conditions'],
+                                            ['#/account', 'account'],
+                                            ['#/settings', 'settings']]) {
+                    location.hash = hash;
+                    await new Promise(r => setTimeout(r, 550));
+                    seen[name] = read();
+                }
+                // Same page, other theme: the hue must not move, the burn must.
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 550));
+                document.documentElement.setAttribute('data-theme', 'light');
+                await new Promise(r => setTimeout(r, 350));
+                const logLight = read();
+                document.documentElement.setAttribute('data-theme', 'dark');
+                await new Promise(r => setTimeout(r, 350));
+                const logDark = read();
+                document.documentElement.setAttribute('data-theme', 'light');
+                await new Promise(r => setTimeout(r, 350));
+                return { seen, logLight, logDark,
+                         layers: getComputedStyle(root).backgroundImage };
+            """)
+            named = all(glow["seen"][k]["page"] == k for k in glow["seen"])
+            check("every page names its own light", named, str(list(glow["seen"])))
+            hues = [glow["seen"][k]["hue"] for k in glow["seen"]]
+            check("no two pages share a light", len(set(hues)) == len(hues), str(hues))
+            check("the theme changes the burn, not the hue",
+                  glow["logLight"]["hue"] == glow["logDark"]["hue"]
+                  and glow["logLight"]["burn"] != glow["logDark"]["burn"],
+                  f'{glow["logLight"]} vs {glow["logDark"]}')
+            check("the page's hue reaches the painted layer",
+                  glow["seen"]["log"]["hue"].split()[0] in glow["seen"]["log"]["bloom"],
+                  str(glow["seen"]["log"]))
+            # The ramp is what makes this atmosphere rather than a stripe along
+            # the bottom: a radius that dies at 68% of the screen cannot be
+            # rescued by opacity. Pin the reach, not the look.
+            import_ok = glow["layers"].count("radial-gradient")
+            check("the light is built from stacked radial sources",
+                  import_ok >= 5, f"{import_ok} radial layers")
+            # The bug this pins: card-deck.js writes folders a z-index of up
+            # to 1000 to stack the pile, which in the root stacking context
+            # also beat the nav (50) and the quick actions (51) — so the open
+            # + menu rendered UNDER the folders. The deck must be its own
+            # stacking context, or those numbers leak into the whole app.
+            stack = await page.eval("""
+                location.hash = '#/info';
+                await new Promise(r => setTimeout(r, 900));
+                const deck = document.querySelector('.deck');
+                const cs = deck ? getComputedStyle(deck) : null;
+                const card = document.querySelector('.dcard');
+                document.getElementById('quickBtn').click();
+                await new Promise(r => setTimeout(r, 600));
+                const menu = document.getElementById('quickMenu');
+                const mb = menu.getBoundingClientRect();
+                // Hit-test the middle of the menu: whatever is painted on top
+                // there is what the user's finger would actually land on.
+                const hit = document.elementFromPoint(mb.left + mb.width / 2,
+                                                      mb.top + mb.height / 2);
+                const out = {
+                    isolated: cs ? cs.isolation : null,
+                    deckZ: cs ? cs.zIndex : null,
+                    cardZ: card ? getComputedStyle(card).zIndex : null,
+                    menuOnTop: !!hit && (menu === hit || menu.contains(hit)),
+                    hitWas: hit ? (hit.className || hit.tagName) : null,
+                };
+                document.getElementById('quickVeil').click();
+                await new Promise(r => setTimeout(r, 400));
+                return out;
+            """)
+            check("the folder deck is its own stacking context",
+                  stack["isolated"] == "isolate" and stack["deckZ"] == "0", str(stack))
+            check("the + menu opens above the folders, not under them",
+                  stack["menuOnTop"], str(stack))
+
+            check("settings keeps the dullest light in the set",
+                  max(int(x) for x in glow["seen"]["settings"]["hue"].split())
+                  - min(int(x) for x in glow["seen"]["settings"]["hue"].split())
+                  < max(int(x) for x in glow["seen"]["info"]["hue"].split())
+                  - min(int(x) for x in glow["seen"]["info"]["hue"].split()),
+                  f'settings {glow["seen"]["settings"]["hue"]} vs info {glow["seen"]["info"]["hue"]}')
+
             # The accent has to change DIRECTION between themes. #2B4593 is a
             # strong colour on cream and nearly invisible on #0B0E17, so dark
             # uses a light blue with dark text — the same relationship inverted.

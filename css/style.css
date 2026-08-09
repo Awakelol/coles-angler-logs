@@ -19,8 +19,13 @@
   --cream:   #F6F4EA;   /* page canvas — sand, lifted so cards can sit on it */
   --paper:   #FFFFFF;
   --ink:     #16181D;
-  --ink-60:  #5A6070;
-  --ink-30:  #9AA0AF;
+  /* THESE CARRY HEADROOM FOR THE BLOOM, and the old --ink-30 did not carry
+     any: #9AA0AF was 2.37:1 on plain cream, failing WCAG AA before a gradient
+     was anywhere near it. Muted is a rank in the hierarchy, not permission to
+     be unreadable — and every one of these sits on a ground that the page's
+     light shifts underneath it. */
+  --ink-60:  #3A3F50;   /* 9.5:1 on cream, so it survives the brightest bloom */
+  --ink-30:  #646A7A;   /* was #9AA0AF, which failed on the bare background */
 
   /* Kept as names the rest of the sheet already uses, remapped onto the new
      palette rather than renamed — 1,900 lines reference these, and a rename
@@ -89,11 +94,38 @@
      at a tenth opacity and it read as a smudge on the cream rather than as
      colour — on a light ground a gradient has to commit or it may as well not
      be there. */
-  --bloom-a: rgb(99 118 255 / .30);
-  --bloom-b: rgb(255 176 66 / .30);
-  --bloom-c: rgb(255 106 136 / .20);
-  --bloom-d: rgb(64 196 180 / .20);
-  --bloom-e: rgb(168 120 255 / .18);
+  /*
+     THE BLOOM IS BUILT FROM TWO THINGS THAT DO NOT KNOW ABOUT EACH OTHER:
+     the PAGE picks three hues, the THEME picks how strongly they burn. Keeping
+     them orthogonal is what stops this being a combinatorial mess — seven
+     pages times two themes is fourteen palettes to hand-tune and keep in sync,
+     against seven hue triples and two sets of alphas here.
+
+     Raw channel triples, not colours: an alpha has to be composed in per
+     layer, and `rgb(var(--glow-1) / .3)` only works if the hue carries no
+     alpha of its own. --glow-o* is re-read at use time, so a theme changing
+     one number restyles every layer.
+  */
+  --glow-1: 88 84 255;      /* home, the default: dawn over the island */
+  --glow-2: 255 176 66;
+  --glow-3: 255 106 136;
+
+  /* Light: strong enough to be colour rather than a smudge on the cream, shy
+     of the point where body text starts fighting the ground it sits on. */
+  --glow-o1: .44;
+  --glow-o2: .40;
+  --glow-o3: .30;
+  --glow-o4: .24;
+  --glow-o5: .22;
+
+  --bloom-a: rgb(var(--glow-1) / var(--glow-o1));
+  --bloom-b: rgb(var(--glow-2) / var(--glow-o2));
+  --bloom-c: rgb(var(--glow-3) / var(--glow-o3));
+  /* d and e re-use hues 2 and 1 rather than adding a fourth and fifth colour.
+     Five unrelated hues in one frame is a smear; the same light seen twice
+     from different angles is a composition. */
+  --bloom-d: rgb(var(--glow-2) / var(--glow-o4));
+  --bloom-e: rgb(var(--glow-1) / var(--glow-o5));
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
 
   /* The rail is the app's one dark surface and stays dark in BOTH themes.
@@ -160,8 +192,8 @@
   --cream:   #080B14;   /* canvas: blue-black, not neutral black */
   --paper:   #161C2C;   /* raised surface */
   --ink:     #EEF0F6;
-  --ink-60:  #A2AAC0;   /* was #98A0B4 — muted text needs to clear 4.5:1 */
-  --ink-30:  #737B92;
+  --ink-60:  #C6CCDC;   /* headroom for the bloom, which lifts the ground */
+  --ink-30:  #8D95AC;   /* was #737B92 — 4.66:1 bare, nothing left for a glow */
 
   --yellow:  #E8C55C;
   --sky:     var(--blue-lt);
@@ -211,11 +243,14 @@
   /* THE BLOOM. Three soft lights low on the screen. This is the whole look of
      the references: not a linear gradient across a panel, but coloured light
      rising from below the fold and falling off before it reaches the top. */
-  --bloom-a: rgb(88 84 255 / .58);
-  --bloom-b: rgb(196 74 226 / .40);
-  --bloom-c: rgb(38 176 255 / .32);
-  --bloom-d: rgb(255 122 92 / .20);
-  --bloom-e: rgb(120 92 255 / .28);
+  /* Dark is where these references live: the light is the subject, not a tint
+     on a surface, so every layer roughly doubles. The hues come from the page
+     — only the burn changes here. */
+  --glow-o1: .40;
+  --glow-o2: .32;
+  --glow-o3: .26;
+  --glow-o4: .19;
+  --glow-o5: .21;
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
 
   /*
@@ -271,6 +306,63 @@
   filter: brightness(.82) saturate(.85);
 }
 
+/* --- one light per page ----------------------------------------------------
+   Every screen gets its own colour, and NOT as branding: the hue is the
+   subject of the page. This app is about water and weather at a place through
+   the day, so the light behind each screen is the light that screen is about.
+   That is the difference between a palette and a decoration — you can tell
+   which page you are on with the text blurred out.
+
+     home        first light over the island — indigo lifting into amber
+     map         the water itself — cyan and deep blue, the only cool page
+     info        the reef, and the most colourful thing in this app by far
+     conditions  weather: cold front blue, with a warm edge where the sun is
+     log         the catch landed — amber and gold, the one warm page
+     account     quiet and personal, violet held well back
+     settings    machinery. Deliberately the dullest light in the set: a
+                 preferences screen that glows like the reef is a preferences
+                 screen shouting for attention it has not earned.
+
+   The attribute is on <html> because the bloom is painted on <html> — custom
+   properties inherit downwards, so setting this on <body> would leave the
+   canvas reading the default set forever.
+--------------------------------------------------------------------------- */
+:root[data-page="home"] {
+  --glow-1: 88 84 255;
+  --glow-2: 255 176 66;
+  --glow-3: 255 106 136;
+}
+:root[data-page="map"] {
+  --glow-1: 34 196 238;
+  --glow-2: 56 118 255;
+  --glow-3: 46 212 190;
+}
+:root[data-page="info"] {
+  --glow-1: 168 85 247;
+  --glow-2: 236 72 153;
+  --glow-3: 255 122 92;
+}
+:root[data-page="conditions"] {
+  --glow-1: 76 130 255;
+  --glow-2: 56 189 248;
+  --glow-3: 168 130 255;
+}
+:root[data-page="log"] {
+  --glow-1: 255 152 40;
+  --glow-2: 255 206 84;
+  --glow-3: 255 108 72;
+}
+:root[data-page="account"] {
+  --glow-1: 139 120 255;
+  --glow-2: 190 130 220;
+  --glow-3: 96 140 255;
+}
+:root[data-page="settings"] {
+  --glow-1: 116 132 178;
+  --glow-2: 96 156 182;
+  --glow-3: 138 124 178;
+}
+
 /* --- the bloom -------------------------------------------------------------
    Coloured light rising from below the fold — the shape every one of the
    references uses. Radial rather than linear because they glow from a source
@@ -292,6 +384,23 @@
    in rather than a picture printed on the page: scrolling moves the content
    over the light instead of dragging the light along with it.
 
+   THE SOURCES ARE FANNED OUT, NOT STACKED. Piled on the same spot the five
+   layers summed into a hot mid-tone core, and a mid-tone is the one ground
+   where BOTH light and dark text lose contrast — in dark mode the pile got
+   bright enough that no text colour, white included, could clear 4.5:1 on it.
+   Spread across the bottom edge each source keeps its own colour at full
+   strength and the composite peak drops. Saturation was never the problem;
+   overlap was.
+
+   THE RAMP IS LONG ON PURPOSE, and getting this wrong is what made the first
+   two attempts read as a stripe along the bottom no matter how far the alpha
+   was pushed. A radial centred at 118% with a 72% radius that goes transparent
+   at 70% of that radius has died by 68% down the screen — no amount of opacity
+   turns a band into atmosphere, because the geometry had already decided where
+   the colour ends. These reach ~110% of the viewport height and ramp to
+   transparent at 100% of the radius, so the light climbs into the top third
+   the way it does in every one of the references.
+
    The grain is the topmost layer and its alpha is baked into the SVG, because
    a background layer cannot carry its own opacity. Without it the wide colour
    ramps band visibly on an OLED phone — 300 bytes of feTurbulence breaks the
@@ -301,11 +410,11 @@ html {
   background-color: var(--cream);
   background-image:
     var(--grain),
-    radial-gradient(115% 58% at 50% 116%, var(--bloom-a), transparent 66%),
-    radial-gradient(78% 46% at  8% 104%, var(--bloom-b), transparent 64%),
-    radial-gradient(82% 48% at 96%  99%, var(--bloom-c), transparent 64%),
-    radial-gradient(64% 40% at 76% 118%, var(--bloom-d), transparent 62%),
-    radial-gradient(60% 38% at 26% 122%, var(--bloom-e), transparent 62%);
+    radial-gradient(120% 104% at 50% 126%, var(--bloom-a) 0%, transparent 100%),
+    radial-gradient( 96%  88% at -8% 104%, var(--bloom-b) 0%, transparent 100%),
+    radial-gradient(100%  90% at 108% 100%, var(--bloom-c) 0%, transparent 100%),
+    radial-gradient( 78%  62% at 86% 132%, var(--bloom-d) 0%, transparent 100%),
+    radial-gradient( 74%  60% at 14% 136%, var(--bloom-e) 0%, transparent 100%);
   background-attachment: fixed;
   background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
@@ -2559,7 +2668,19 @@ body.is-sheet-open {
 
   /* --- the deck ----------------------------------------------------------- */
 
-  .deck { position: relative; flex: 1; min-height: 230px; width: 100%; }
+  /* ISOLATION IS load-bearing HERE, not decoration. card-deck.js writes each
+     folder a z-index of up to 1000 so the pile stacks in depth order — but
+     those numbers were only ever meant to order the cards AGAINST EACH OTHER.
+     In the root stacking context they also outranked the nav (50), the quick
+     actions (51) and their veil (49), so an open + menu appeared UNDER the
+     folders. `isolation: isolate` makes the deck its own context: the 1000s
+     stay meaningful inside it and the whole pile competes with the rest of the
+     app as one layer. Same trick as #mapWrap uses to pen in Leaflet's panes. */
+  .deck {
+    position: relative; flex: 1; min-height: 230px; width: 100%;
+    isolation: isolate;
+    z-index: 0;
+  }
   .deck__cards { position: absolute; inset: 0 0 22px; }
 
   /* Transparent, on top, and the only thing that scrolls. */
@@ -2838,7 +2959,10 @@ body.is-sheet-open {
 .set-group {
   margin: 22px 0 8px; padding: 0 4px;
   font-size: 11px; font-weight: 800; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--ink-30);
+  /* --ink-60, not --ink-30: these name the sections of the page and they sit
+     on bare ground, which is exactly where the bloom is strongest. A label you
+     cannot read is not a quiet label, it is a missing one. */
+  text-transform: uppercase; color: var(--ink-60);
 }
 .set-group:first-of-type { margin-top: 6px; }
 

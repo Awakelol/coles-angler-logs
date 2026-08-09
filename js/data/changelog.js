@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.16.0';
+export const APP_VERSION = '3.17.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.17.0',
+    date: '2026-08-10',
+    title: 'Every screen has its own colour',
+    changes: [
+      'Each page now glows in a colour that suits it — water, weather, the reef.',
+      'Faint labels are readable again, including in bright sun.',
+      'Fixed the + menu opening underneath the folders.',
+    ],
+  },
   {
     version: '3.16.0',
     date: '2026-08-09',
