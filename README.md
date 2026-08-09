@@ -868,6 +868,11 @@ rather than a picture printed on the page. The grain is the topmost layer with
 its alpha **baked into the SVG**, because a background layer cannot carry its
 own opacity — without it the wide colour ramps band visibly on an OLED phone.
 
+A **band** is a stripe of page and may be transparent so the bloom shows
+through. A **surface** sits over something and has to hide it. The weather
+drawer was borrowing `--band-sky`, so the moment the bands went transparent the
+map showed straight through the drawer — it has `--drawer-bg` now.
+
 ### Dark mode
 
 Unlocked, and **not an inversion**. Light is cream paper with one strong blue on
@@ -1005,6 +1010,11 @@ Pressing it rotates two bars into an ×. Both bars are the same shape rotating,
 not one glyph swapped for another — a swap reads as a flicker at this size.
 The three quick actions rise in sequence behind a veil, and close on the ×, the
 veil, Escape, or any navigation.
+
+A **band** is a stripe of page and may be transparent so the bloom shows
+through. A **surface** sits over something and has to hide it. The weather
+drawer was borrowing `--band-sky`, so the moment the bands went transparent the
+map showed straight through the drawer — it has `--drawer-bg` now.
 
 ### Dark mode is off
 

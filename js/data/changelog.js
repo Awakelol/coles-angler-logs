@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.15.0';
+export const APP_VERSION = '3.15.1';
 
 export const CHANGELOG = [
+  {
+    version: '3.15.1',
+    date: '2026-08-07',
+    title: 'More colour, and the map is whole again',
+    changes: [
+      'Fixed the map: the weather panel had gone see-through.',
+      'The glow is warmer and far more visible in light mode.',
+      'Deeper, clearer folder colours and surfaces in dark mode.',
+    ],
+  },
   {
     version: '3.15.0',
     date: '2026-08-07',

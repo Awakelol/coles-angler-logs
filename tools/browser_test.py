@@ -540,7 +540,7 @@ async def main():
             # its own palette, so this checks the values it actually has.
             check("dark theme applies",
                   theme["dark"]["attr"] == "dark"
-                  and theme["dark"]["bg"].upper() == "#0B0E17"
+                  and theme["dark"]["bg"].upper() == "#080B14"
                   and theme["dark"]["scheme"] == "dark", str(theme["dark"]))
             unlocked = await page.eval(
                 "const t = await import('./js/theme.js'); return !t.THEME_LOCKED;")
@@ -571,7 +571,7 @@ async def main():
             # The rail is the app's one dark surface. Bound to --ink it flipped
             # with the text and turned white on a black page.
             check("the rail stays dark in both themes",
-                  accent["d"]["rail"].upper() == "#141926", str(accent["d"]))
+                  accent["d"]["rail"].upper() == "#121724", str(accent["d"]))
 
             # The phone's chrome tints to the page canvas, whatever it is.
             check("theme-color follows the canvas",

@@ -24,7 +24,7 @@ export const THEME_LOCKED = false;
 // bar and PWA chrome tint to match instead of staying stuck on yellow.
 // Must match --cream / the page canvas for each theme, or the phone's status
 // bar sits a shade off the top of the page. Dark is GitHub's canvas colour.
-const THEME_COLOR = { light: '#F6F4EA', dark: '#0B0E17' };
+const THEME_COLOR = { light: '#F6F4EA', dark: '#080B14' };
 
 export function getTheme() {
   if (THEME_LOCKED) return 'light';

@@ -85,15 +85,22 @@
      before it reaches the top — the shape every one of the references uses.
      Light mode keeps it faint: on cream it is a warmth in the corner of the
      eye, not a light show. Dark mode is where it does the work. */
-  --bloom-a: rgb(43 69 147 / .17);
-  --bloom-b: rgb(224 168 66 / .15);
-  --bloom-c: rgb(76 154 106 / .10);
+  /* Five lights rather than three, and warmer. The first pass was two washes
+     at a tenth opacity and it read as a smudge on the cream rather than as
+     colour — on a light ground a gradient has to commit or it may as well not
+     be there. */
+  --bloom-a: rgb(99 118 255 / .30);
+  --bloom-b: rgb(255 176 66 / .30);
+  --bloom-c: rgb(255 106 136 / .20);
+  --bloom-d: rgb(64 196 180 / .20);
+  --bloom-e: rgb(168 120 255 / .18);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
 
   /* The rail is the app's one dark surface and stays dark in BOTH themes.
      Bound to --ink it inverted with the text and turned white on a black
      page, which is the one thing a rail must never do. */
   --rail-bg: var(--ink);
+  --drawer-bg: #EDEFF7;
   --now-bg: var(--invert-bg);
   --now-fg: var(--invert-fg);
 
@@ -139,17 +146,22 @@
    — the same relationship, upside down.
 --------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  --blue:    #93AEFF;   /* the one strong colour, now the light one */
-  --blue-dk: #B9C9FF;   /* "stronger" means lighter here — hover, pressed */
-  --blue-lt: #1C2440;   /* tinted fills, a wash of the accent over canvas */
-  --sand:    #2A2A22;
-  --sand-lt: #1A1B16;
+  --blue:    #8FB0FF;   /* the one strong colour, now the light one */
+  --blue-dk: #B7CBFF;   /* "stronger" means lighter here — hover, pressed */
+  --blue-lt: #1E2748;   /* tinted fills, a wash of the accent over canvas */
+  --sand:    #2C2B21;
+  --sand-lt: #1C1D17;
 
-  --cream:   #0B0E17;   /* canvas: blue-black, not neutral black */
-  --paper:   #141926;   /* raised surface */
-  --ink:     #EAECF2;
-  --ink-60:  #98A0B4;
-  --ink-30:  #6B7286;
+  /* THREE STEPS, CLEARLY APART. The first pass had canvas #0B0E17 and paper
+     #141926 — nine points of lightness between the page and a card, which is
+     nothing once the bloom is behind them. Surfaces are the only depth cue a
+     flat dark theme has, so they have to be legible steps rather than shades
+     of the same idea. */
+  --cream:   #080B14;   /* canvas: blue-black, not neutral black */
+  --paper:   #161C2C;   /* raised surface */
+  --ink:     #EEF0F6;
+  --ink-60:  #A2AAC0;   /* was #98A0B4 — muted text needs to clear 4.5:1 */
+  --ink-30:  #737B92;
 
   --yellow:  #E8C55C;
   --sky:     var(--blue-lt);
@@ -182,7 +194,7 @@
   /* The accent is light now, so what sits on it is dark. */
   --on-accent: #0B0E17;
 
-  --line:        #262E44;
+  --line:        #29314A;
   --border-w:    1px;
   --border-w-sm: 1px;
   /* Shadows do nothing on near-black. Depth comes from surface lightness and
@@ -191,28 +203,38 @@
   --shadow-lg:   0 10px 30px rgb(0 0 0 / .45);
 
   /* The rail stays dark in both themes — see the token's note in :root. */
-  --rail-bg: #141926;
-  --now-bg: #172033;
+  --rail-bg: #121724;
+  --drawer-bg: #141A29;
+  --now-bg: #1A2338;
   --now-fg: var(--ink);
 
   /* THE BLOOM. Three soft lights low on the screen. This is the whole look of
      the references: not a linear gradient across a panel, but coloured light
      rising from below the fold and falling off before it reaches the top. */
-  --bloom-a: rgb(99 91 255 / .55);
-  --bloom-b: rgb(168 85 247 / .34);
-  --bloom-c: rgb(56 189 248 / .26);
-  --bloom-veil: rgb(11 14 23 / 0);
+  --bloom-a: rgb(88 84 255 / .58);
+  --bloom-b: rgb(196 74 226 / .40);
+  --bloom-c: rgb(38 176 255 / .32);
+  --bloom-d: rgb(255 122 92 / .20);
+  --bloom-e: rgb(120 92 255 / .28);
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
 
-  /* Folder tints: deep and luminous rather than pastel, with light text. */
-  --tint-0: #26365F;
-  --tint-1: #3A3418;
-  --tint-2: #1B3B2C;
-  --tint-3: #43221F;
-  --tint-4: #322246;
-  --tint-5: #14333F;
-  --tint-fg: #EAECF2;
-  --tint-plain: #1C2334;
+  /*
+     FOLDER TINTS. The first set were the light pastels darkened, and darkening
+     a pastel does not give you a dark colour — it gives you mud. Six of them
+     side by side read as six greys with a hint of something.
+
+     These are chosen as dark colours: more saturated than their light
+     counterparts, not less, because saturation is the only thing carrying the
+     hue once the lightness is gone.
+  */
+  --tint-0: #21386E;   /* blue */
+  --tint-1: #4A3D12;   /* amber */
+  --tint-2: #14432F;   /* green */
+  --tint-3: #55231C;   /* coral */
+  --tint-4: #3A2261;   /* violet */
+  --tint-5: #0F3A4A;   /* cyan */
+  --tint-fg: #EEF0F6;
+  --tint-plain: #1E2537;
 }
 
 /* Flatten the light theme's tactile flourishes: pressing a card shifted it
@@ -279,11 +301,13 @@ html {
   background-color: var(--cream);
   background-image:
     var(--grain),
-    radial-gradient(115% 58% at 50% 114%, var(--bloom-a), transparent 66%),
-    radial-gradient(78% 46% at 10% 104%, var(--bloom-b), transparent 64%),
-    radial-gradient(82% 48% at 94% 98%, var(--bloom-c), transparent 64%);
+    radial-gradient(115% 58% at 50% 116%, var(--bloom-a), transparent 66%),
+    radial-gradient(78% 46% at  8% 104%, var(--bloom-b), transparent 64%),
+    radial-gradient(82% 48% at 96%  99%, var(--bloom-c), transparent 64%),
+    radial-gradient(64% 40% at 76% 118%, var(--bloom-d), transparent 62%),
+    radial-gradient(60% 38% at 26% 122%, var(--bloom-e), transparent 62%);
   background-attachment: fixed;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 /* Body must stay clear, or it paints the canvas out again. */
 body { background-color: transparent; background-image: none; }
@@ -1122,7 +1146,11 @@ body:has(.map-screen) { padding-bottom: 0; }
   z-index: 5;              /* over #mapWrap, which sets z-index 0 */
   max-height: 66%;
   padding: 0 12px 8px;
-  background: var(--band-sky);
+  /* Its own token, not --band-sky. A band is a stripe of page that may be
+     transparent so the bloom shows; this is a panel that sits OVER the map and
+     has to hide it. Sharing one token made the drawer see-through the moment
+     the bands did. */
+  background: var(--drawer-bg);
   border-top: var(--border-w) solid var(--line);
   border-radius: var(--radius) var(--radius) 0 0;
   overflow-y: auto;
@@ -1153,7 +1181,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   margin: 0 -12px;
   padding: 0 12px;
   width: calc(100% + 24px);
-  border: 0; background: var(--band-sky);
+  border: 0; background: var(--drawer-bg);
   cursor: grab;
   touch-action: none;      /* the drag is ours, not the browser's scroll */
 }
