@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.18.0';
+export const APP_VERSION = '3.19.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.19.0',
+    date: '2026-08-10',
+    title: '39 more fish',
+    changes: [
+      'The guide now holds 107 species, up from 68.',
+      'Sweetlips, tripletail, halfbeak, sailfish, flathead and 14 other new families.',
+      'Each one is on record for a named water around Leyte, with local names.',
+    ],
+  },
   {
     version: '3.18.0',
     date: '2026-08-10',

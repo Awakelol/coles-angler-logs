@@ -268,3 +268,68 @@ Panaon Island's coastline falls under FMA 8. ✅
 9. **The local names on the 28 new species.** Every one is FishBase's, none
    checked against Leyte usage — the least trustworthy data in the app. A
    correction means putting the local name **first**, not appending it.
+
+---
+
+## 5. The FishBase ecosystem expansion (68 → 107 species)
+
+**✅ Sourced.** FishBase keeps an `ecosystem` table mapping species to *named
+bodies of water*, and it happens to carry a row for every water this app cares
+about:
+
+| E_CODE | water |
+| --- | --- |
+| 288 | Leyte Gulf |
+| 289 | Sogod Bay |
+| 316 | Ormoc Bay |
+| 337 | San Pedro Bay |
+| 338 | Carigara Bay |
+| 765 | Camotes Sea |
+
+572 distinct species are listed across the six. That is a checklist, not a
+guide, so it was cut down: **recorded as highly commercial, commercial, minor
+commercial or subsistence-fished, and reaching at least 15 cm** — a fish
+someone means to catch rather than one that turns up in a net. 39 were added,
+19 of them from families the catalogue had never carried at all (sweetlips,
+flathead, tripletail, moonfish, bigeye, sicklefish, tonguesole, wolf-herring,
+lizardfish, croaker, halfbeak, conger, sea chub, triggerfish, filefish,
+stingray, requiem shark, billfish, spiny turbot).
+
+Query it with the same `duckdb` + Parquet route `tools/fetch_fishbase.py` uses:
+`ecosystem.parquet` joined to `species.parquet` on `SpecCode`, filtered on
+`E_CODE`.
+
+### How they were placed in zones
+
+Not by guesswork. FishBase says which of the six waters a species is recorded
+in; that maps onto the app's zones, and the zone's **bottom type** then filters
+it, so an oceanic billfish never lands in a mangrove creek and a mud-bottom
+tonguesole never lands on a reef edge.
+
+Two limits were needed on top of that, both learned by getting it wrong:
+
+- **At most 2–3 zones per species.** The first pass put 34 of the 39 into the
+  western gulf shelf, because most are recorded in "Leyte Gulf" and the gulf
+  covers ten zones.
+- **A ceiling per zone.** Carigara and Sogod have three zones each, so
+  everything recorded in those waters piled into the same short lists — 28
+  species in a bay that held 10. A zone list is *what is worth trying here*,
+  not everything the water contains.
+- The cap is scored by **how many of the six waters record the fish**, so a
+  five-water species wins a contested slot. Without that the cap threw out the
+  most widespread species first, which is exactly backwards. Nothing is left
+  unplaced.
+
+### ⚠️ What is NOT verified
+
+- **No BFAR Region VIII names exist for any of these 39.** Every local name on
+  them is FishBase's national COMNAMES list. It does not know that a fish is
+  called something particular around Tacloban. Correcting one means putting the
+  local name **first** — see the ordering rule at the head of the catalogue.
+- **The notes are general biology**, not local practice. "Takes a trolled lure"
+  is true of the species; it is not a report of how it is fished off Tolosa.
+- **Presence is not abundance.** An ecosystem record says a species has been
+  recorded in that water, not that you will meet it, nor when.
+- **All 39 carry `art: 'placeholder'`** — a borrowed silhouette from the
+  nearest of the existing archetypes. Nineteen of these families have no drawn
+  art at all.

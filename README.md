@@ -1428,6 +1428,27 @@ Species data was assembled from:
   Leiognathidae, 8.05% Lutjanidae, 7.07% Gerreidae**, with *Photopectoralis
   bindus* alone making up 25.49%. This is the basis for how the catalogue is
   weighted.
+- **[FishBase ecosystem checklists](https://www.fishbase.se/)** for the six
+  named waters around Leyte — **Leyte Gulf** (E_CODE 288), **Sogod Bay** (289),
+  **Ormoc Bay** (316), **San Pedro Bay** (337), **Carigara Bay** (338) and the
+  **Camotes Sea** (765). These are records against a *named body of water*
+  rather than "occurs in the Philippines", which is what makes them usable
+  here: 572 species are listed across the six, and the 39 added in the
+  FishBase expansion are the ones that are also recorded as commercially or
+  subsistence fished and reach at least 15 cm. Pulled from the versioned
+  Parquet snapshots (`v23.01`) that `tools/fetch_fishbase.py` already reads.
+- **[Stock assessment of small pelagics in the Camotes Sea](https://nsap.nfrdi.da.gov.ph/publications)**
+  (NFRDI / *The Philippine Journal of Fisheries*, ring-net fishery 2003–2012) —
+  names *Decapterus macrosoma*, *Selar crumenophthalmus* and *Decapterus
+  kurroides* as the dominant species, all with exploitation rates above the 0.5
+  threshold. *D. kurroides* is in the catalogue on the strength of this.
+  **The NFRDI host serves a broken TLS chain and refuses HTTPS**, so the PDFs
+  are browser-only.
+- **[Participatory resource and socio-economic assessment](https://www.bfar.da.gov.ph/wp-content/uploads/2022/05/UPVTC-PRSA-Terminal-Report-Vol-2-Oct-2019.pdf)**
+  (BFAR / UPV Tacloban, 2019) — reef-fish community structure for Leyte Gulf
+  and Maqueda Bay. **Family-level, not species-level**, so it corroborates
+  which families are present rather than naming fish; that is why nothing is
+  cited to it directly.
 - **[BFAR Region VIII](https://region8.bfar.da.gov.ph/)** — the
   [regional fisheries profile](https://region8.bfar.da.gov.ph/fisheries-profile/)
   and [Provincial Fishery Office – Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-leyte/)
@@ -1435,8 +1456,8 @@ Species data was assembled from:
   lists, and the site currently serves an **incomplete TLS certificate chain**,
   so automated tools may refuse it — open it in a browser.
 - **[FishBase](https://www.fishbase.se/)** — scientific names, families,
-  habitat and size ranges, and the local-name lists for the species added with
-  the island expansion. Every species card links to its FishBase page.
+  habitat and size ranges, and the local-name lists for every species added
+  after the original 68. Every species card links to its FishBase page.
   FishBase data is **CC BY-NC 4.0** — fine for personal use, not for commercial
   use without the FishBase team's agreement.
 - **[`docs/leyte-waters-research.md`](docs/leyte-waters-research.md)** — the
