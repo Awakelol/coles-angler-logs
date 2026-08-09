@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.20.0';
+export const APP_VERSION = '3.21.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.21.0',
+    date: '2026-08-10',
+    title: 'Whale sharks, prawns and cuttlefish',
+    changes: [
+      'The whale shark of Sogod Bay is in the guide, and marked as protected.',
+      'Added tiger prawn, greasyback shrimp and pharaoh cuttlefish.',
+      '111 species in all.',
+    ],
+  },
   {
     version: '3.20.0',
     date: '2026-08-10',

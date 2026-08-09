@@ -1684,4 +1684,80 @@ export const INDO_PACIFIC_SPECIES = [
     art: 'placeholder',
     notes: 'A cylinder of muscle with a mouth full of needles, propped on the bottom waiting. Abundant in trawl catches over soft ground, and one of the species that increases as the bigger predators are fished out.',
   },
+
+  // =========================================================================
+  // SOUTHERN LEYTE PROVINCIAL RECORD
+  //
+  // From the Province of Southern Leyte's own Marine and Coastal Resources
+  // page, which names what is caught in Sogod, Cabalian and Hinunangan bays.
+  // It gives no scientific names, so each of these is the provincial claim
+  // matched to a SeaLifeBase or FishBase record for the same water — two
+  // sources agreeing, rather than one source guessed at.
+  //
+  // Lobsters and mussels are on that provincial list too and are NOT here:
+  // neither has a species-level record for any of these six waters, and
+  // "lobsters are caught in limited quantities" does not name a lobster.
+  // =========================================================================
+  {
+    id: 'rhincodon-typus',
+    common: 'Whale shark',
+    scientific: 'Rhincodon typus',
+    family: 'Rhincodontidae',
+    familyCommon: 'Whale shark',
+    local: { tl: ['tuko', 'isdang tuku'] },
+    habitat: 'Open water, coming to the surface where plankton is thick; recorded in Sogod Bay.',
+    size: { typicalCm: 1000, maxCm: 1700 },
+    // NOT a catch, and the flag is the app saying so. It is here because it is
+    // in this water and you need to know what it is, not because you fish it.
+    target: false,
+    sprite: 'torpedo',
+    palette: 'ocean',
+    art: 'placeholder',
+    notes: 'The biggest fish in the world, and a filter-feeder that eats plankton — harmless. Sogod Bay is one of its known gathering places, which the province calls the haven of the whale shark. PROTECTED under Philippine law: it may not be caught, harmed or sold, and there are rules on approaching one. If it takes your bait it has done so by accident — cut the line.',
+  },
+  {
+    id: 'penaeus-monodon',
+    common: 'Giant tiger prawn',
+    scientific: 'Penaeus monodon',
+    family: 'Penaeidae',
+    familyCommon: 'Prawns & shrimp',
+    local: { ceb: ['pansat', 'pantat'], tl: ['sugpo'] },
+    habitat: 'Muddy bottoms in shallow coastal water and estuaries; juveniles in brackish creeks.',
+    size: { typicalCm: 25, maxCm: 33 },
+    target: true,
+    sprite: 'crab',
+    palette: 'sunset',
+    art: 'placeholder',
+    notes: 'The largest prawn caught here and the one behind most Philippine pond culture. Wild ones come from muddy inshore ground, taken at night in fine nets and traps. Banded dark and pale across the tail.',
+  },
+  {
+    id: 'metapenaeus-ensis',
+    common: 'Greasyback shrimp',
+    scientific: 'Metapenaeus ensis',
+    family: 'Penaeidae',
+    familyCommon: 'Prawns & shrimp',
+    local: { ceb: ['mestisa', 'hipon suaje'], tl: ['suahe', 'suaje', 'hipon suage', 'hipon suahe'] },
+    habitat: 'Soft muddy bottoms in shallow coastal water, and into brackish water and river mouths.',
+    size: { typicalCm: 12, maxCm: 15 },
+    target: true,
+    sprite: 'crab',
+    palette: 'sunset',
+    art: 'placeholder',
+    notes: 'Small, abundant and the shrimp most often on a local table. Comes in on fine-mesh nets over mud, thickest after dark and after rain pushes food out of the rivers.',
+  },
+  {
+    id: 'sepia-pharaonis',
+    common: 'Pharaoh cuttlefish',
+    scientific: 'Sepia pharaonis',
+    family: 'Sepiidae',
+    familyCommon: 'Cuttlefish',
+    local: {},
+    habitat: 'Sand and mud near reef and seagrass; usually 10–110 m.',
+    size: { typicalCm: 25, maxCm: 43 },
+    target: true,
+    sprite: 'squid',
+    palette: 'violet',
+    art: 'placeholder',
+    notes: 'Heavier and broader than the squid already in this guide, with a thick internal cuttlebone. Comes to the same jigs worked under a light, and changes colour in bands when it is deciding whether to strike.',
+  },
 ];

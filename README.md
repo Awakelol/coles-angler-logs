@@ -1470,6 +1470,13 @@ Species data was assembled from:
   and Maqueda Bay. **Family-level, not species-level**, so it corroborates
   which families are present rather than naming fish; that is why nothing is
   cited to it directly.
+- **[Province of Southern Leyte — Marine and Coastal Resources](https://southernleyte.gov.ph/marine-resources)**
+  — the provincial record of what is caught in Sogod, Cabalian and Hinunangan
+  bays, and the source for Sogod Bay being a whale-shark gathering place. It
+  names no scientific names, so nothing is taken from it alone: each addition
+  is its claim matched to a SeaLifeBase or FishBase record for the same water.
+- **[SeaLifeBase](https://www.sealifebase.se/)** — the same ecosystem tables for
+  invertebrates: the prawns, shrimp and cuttlefish. Also `CC BY-NC 4.0`.
 - **[BFAR Region VIII](https://region8.bfar.da.gov.ph/)** — the
   [regional fisheries profile](https://region8.bfar.da.gov.ph/fisheries-profile/)
   and [Provincial Fishery Office – Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-leyte/)

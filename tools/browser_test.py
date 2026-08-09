@@ -39,20 +39,26 @@ CHROME = next(
 # purpose.
 #
 #   28  the Leyte island expansion
-#   42  the FishBase ecosystem expansion  <- RAISED, deliberately, see below
+#   39  the FishBase ecosystem expansion   <- RAISED, deliberately
+#    4  the Southern Leyte provincial record
+#   --
+#   71
 #
-# THE CEILING WENT UP ONCE. The rule above says the backlog may be paid off and
-# never grown, and the FishBase expansion broke it: 39 species added at Gabriel's
-# request, of which 42 entries now sit on borrowed silhouettes (three earlier
-# species were re-pointed at closer archetypes in the same pass). That was a
-# considered trade, not an accident — the catalogue going from 68 species to 107
-# is worth more to someone holding a fish they cannot name than bespoke art for
-# the 68 they could already look up. It is recorded here rather than hidden in a
-# diff so the debt stays visible and countable.
+# THE CEILING WENT UP. The rule above says the backlog may be paid off and never
+# grown, and expanding the catalogue from 68 species to 111 at Gabriel's request
+# broke it. That was a considered trade, not an accident: a guide that names the
+# fish someone is holding is worth more than bespoke art for the ones they could
+# already look up. It is recorded here rather than hidden in a diff so the debt
+# stays visible and countable.
 #
-# It goes DOWN from here. Nineteen of these families are new to the app and none
-# has drawn art; tools/author_sprites.py is where that work happens.
-ART_DEBT_MAX = 70
+# COUNT BY OBJECT, NOT BY GREP. `grep -c "art: 'placeholder'"` over the data
+# reports 74, because the string also appears in three section comments that
+# explain the flag. The first raise was set from that grep and was three too
+# high — a ceiling with slack in it is not a ceiling.
+#
+# It goes DOWN from here. Twenty families are new to the app and none has drawn
+# art; tools/author_sprites.py is where that work happens.
+ART_DEBT_MAX = 71
 
 BASE = os.environ.get("APP_BASE", "http://127.0.0.1:8777")
 PORT = 9333

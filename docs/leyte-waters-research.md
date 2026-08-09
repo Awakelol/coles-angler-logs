@@ -12,11 +12,9 @@ Three confidence levels are used throughout:
 - **❌ Gap** — I could not find it at all. Needs local knowledge or a document
   I don't have access to.
 
-> **Two sites blocked automated access (HTTP 403):**
-> `southernleyte.gov.ph/marine-resources` and `sharkrayareas.org`. Both are
-> readable in a browser and both are directly relevant — the provincial page
-> in particular carries an official Southern Leyte species list. Worth a look
-> when you fact-check.
+> **`southernleyte.gov.ph/marine-resources` is readable now** — it answers to a
+> normal browser user-agent, and §6 below is what it gave. `sharkrayareas.org`
+> still does not resolve to a Philippines page; that one is outstanding.
 
 ---
 
@@ -333,3 +331,44 @@ Two limits were needed on top of that, both learned by getting it wrong:
 - **All 39 carry `art: 'placeholder'`** — a borrowed silhouette from the
   nearest of the existing archetypes. Nineteen of these families have no drawn
   art at all.
+
+---
+
+## 6. The Southern Leyte provincial record (§5 + 4 = 111 species)
+
+**✅ Sourced.** The Province of Southern Leyte's own *Marine and Coastal
+Resources* page names what is caught in its fishing grounds — Sogod Bay,
+Cabalian Bay and Hinunangan Bay:
+
+> skip jack tuna, striped mackerel, Spanish mackerel, round scads, anchovies,
+> sardines, and flying fish. Lobsters, shrimps, prawns, crabs, shellfish, and
+> mussels are also caught in limited quantities.
+
+Every fish on that list was already in the catalogue. The gaps were the
+invertebrates and one very large omission.
+
+**The page gives no scientific names**, so nothing was taken from it alone.
+Each addition is the provincial claim matched to a **SeaLifeBase or FishBase
+ecosystem record for the same water** — two sources agreeing rather than one
+source guessed at:
+
+| added | why |
+| --- | --- |
+| *Rhincodon typus* — whale shark | The province calls Sogod Bay "the haven of the world's biggest fish"; FishBase records it in Sogod Bay (E_CODE 289). |
+| *Penaeus monodon* — giant tiger prawn | SeaLifeBase, commercial, these waters |
+| *Metapenaeus ensis* — greasyback shrimp | SeaLifeBase, highly commercial, these waters |
+| *Sepia pharaonis* — pharaoh cuttlefish | SeaLifeBase, commercial, these waters |
+
+The whale shark is the reason this pass was worth doing. It is `target: false`
+— the only sensible value — and its note says plainly that it is **protected
+under Philippine law**, that it is a harmless filter-feeder, and that a hooked
+one means cutting the line. A guide to these waters that does not name the
+animal Sogod Bay is famous for is a guide with a hole in it.
+
+### ❌ Deliberately NOT added
+
+**Lobsters and mussels**, both on the provincial list. Neither has a
+species-level record for any of the six waters in SeaLifeBase, and *"lobsters
+are caught in limited quantities"* does not name a lobster. Someone with local
+knowledge could close this in a sentence: the likely candidates are *Panulirus
+ornatus* / *P. versicolor* and *Perna viridis*, but likely is not sourced.

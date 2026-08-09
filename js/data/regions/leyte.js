@@ -109,6 +109,10 @@ export default {
         'tylosurus-crocodilus', 'sillago-sihama', 'gerres-oyena', 'photopectoralis-bindus',
         'siganus-guttatus', 'upeneus-tragula', 'plotosus-lineatus', 'uroteuthis-duvaucelii',
         'portunus-pelagicus',
+      
+        'metapenaeus-ensis',
+      
+        'sepia-pharaonis',
       ],
       best: 'Run-out tide, early morning; barracuda and tarpon at dusk',
     },
@@ -134,6 +138,8 @@ export default {
         'pomadasys-argenteus',
         'sardinella-gibbosa',
         'scolopsis-taenioptera',
+      
+        'metapenaeus-ensis',
       ],
       best: 'Any moving tide; best a day or two after rain',
     },
@@ -157,6 +163,10 @@ export default {
         'pomadasys-argenteus',
         'psettodes-erumei',
         'scolopsis-taenioptera',
+      
+        'penaeus-monodon',
+      
+        'metapenaeus-ensis',
       ],
       best: 'First two hours of the flood',
     },
@@ -173,6 +183,8 @@ export default {
         'lutjanus-argentimaculatus', 'lutjanus-russellii', 'lutjanus-johnii', 'lates-calcarifer',
         'siganus-guttatus', 'epinephelus-coioides', 'scatophagus-argus', 'megalops-cyprinoides',
         'eleutheronema-tetradactylum', 'terapon-jarbua',
+      
+        'penaeus-monodon',
       ],
       best: 'Last of the run-out, into dusk',
     },
@@ -315,7 +327,9 @@ export default {
       minZoom: 11,
       depth: 'Shallow — 1–4 m',
       blurb: 'The mangrove belt along the southern shore of the bay. Twenty-two mangrove species have been recorded here across twelve families, which is a lot of root structure and a lot of places for a snapper to sit.',
-      species: ['lutjanus-argentimaculatus', 'lutjanus-russellii', 'scylla-serrata', 'lates-calcarifer', 'terapon-jarbua', 'planiliza-subviridis', 'megalops-cyprinoides', 'scatophagus-argus'],
+      species: ['lutjanus-argentimaculatus', 'lutjanus-russellii', 'scylla-serrata', 'lates-calcarifer', 'terapon-jarbua', 'planiliza-subviridis', 'megalops-cyprinoides', 'scatophagus-argus',
+        'penaeus-monodon',
+      ],
       best: 'Last two hours of the run-out, tight to the roots',
     },
     {
@@ -389,7 +403,9 @@ export default {
       minZoom: 11,
       depth: 'Shallow reef into deeper water',
       blurb: 'The reef edge along Leyte\'s west coast. Surgeonfish and pufferfish are recorded among the reef families of this sea, alongside the trevally and emperor that make it worth fishing. Keep lures above the coral.',
-      species: ['caranx-melampygus', 'caesio-cuning', 'naso-unicornis', 'lethrinus-harak', 'lethrinus-lentjan', 'arothron-hispidus', 'scarus-ghobban', 'siganus-canaliculatus', 'epinephelus-coioides', 'lutjanus-fulviflamma'],
+      species: ['caranx-melampygus', 'caesio-cuning', 'naso-unicornis', 'lethrinus-harak', 'lethrinus-lentjan', 'arothron-hispidus', 'scarus-ghobban', 'siganus-canaliculatus', 'epinephelus-coioides', 'lutjanus-fulviflamma',
+        'sepia-pharaonis',
+      ],
       best: 'Run-in tide over the reef edge, early or late',
     },
     {
@@ -401,7 +417,9 @@ export default {
       minZoom: 10,
       depth: 'Reef into channel depth',
       blurb: 'The channel between Leyte and Bohol, carrying water between the Camotes and Bohol seas. Four named reefs — Adam, Abel, Cain and Eve — plus Canigao Island and the Tood Islets. Reef fishing here is current-driven; check which way it is running before you set up.',
-      species: ['caranx-melampygus', 'epinephelus-malabaricus', 'epinephelus-coioides', 'caesio-cuning', 'lethrinus-harak', 'lutjanus-malabaricus', 'naso-unicornis', 'scarus-ghobban', 'elagatis-bipinnulata', 'sepioteuthis-lessoniana'],
+      species: ['caranx-melampygus', 'epinephelus-malabaricus', 'epinephelus-coioides', 'caesio-cuning', 'lethrinus-harak', 'lutjanus-malabaricus', 'naso-unicornis', 'scarus-ghobban', 'elagatis-bipinnulata', 'sepioteuthis-lessoniana',
+        'sepia-pharaonis',
+      ],
       best: 'Either side of the tide change, up-current of the reef',
     },
 
@@ -420,6 +438,8 @@ export default {
       blurb: 'Forty-five kilometres long and ten wide, reaching south into Southern Leyte as an arm of the Bohol Sea. Kawakawa — mangko — is the major fishery here, with a seasonal influx that whole municipalities fish. Seasonal upwelling drives plankton productivity from November through April, and everything else follows it.',
       species: ['euthynnus-affinis', 'katsuwonus-pelamis', 'auxis-thazard', 'rastrelliger-kanagurta', 'sardinella-lemuru', 'amblygaster-sirm', 'stolephorus-indicus', 'cheilopogon-cyanopterus', 'scomberomorus-commerson', 'selar-crumenophthalmus',
         'lethrinus-nebulosus',
+      
+        'rhincodon-typus',
       ],
       best: 'November to April, when the upwelling brings the bait in',
     },
@@ -434,6 +454,8 @@ export default {
       blurb: 'Where the bay floor falls away toward the Bohol Sea. Deep water within reach of a small boat, which is unusual and is why this coast has the reputation it does. Whale sharks feed here — a protected species, not a catch; give them room and keep your gear clear of them.',
       species: ['thunnus-albacares', 'thunnus-obesus', 'thunnus-tonggol', 'pristipomoides-multidens', 'epinephelus-malabaricus', 'coryphaena-hippurus', 'elagatis-bipinnulata', 'euthynnus-affinis',
         'istiophorus-platypterus',
+      
+        'rhincodon-typus',
       ],
       best: 'First light, dropped deep or trolled along the edge',
     },
@@ -530,6 +552,10 @@ export default {
     'selar-boops',
     'siganus-argenteus',
     'sphyraena-jello',
+    'rhincodon-typus',
+    'penaeus-monodon',
+    'metapenaeus-ensis',
+    'sepia-pharaonis',
   ],
 
   tips: [
