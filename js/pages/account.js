@@ -18,9 +18,10 @@
 // the same account id — but publishing that rule is a console action.
 // ---------------------------------------------------------------------------
 
-import { currentUser, signOut, linkedProviders, cloudConfigured } from '../auth.js';
+import { currentUser, signOut, linkedProviders, cloudConfigured,
+         renameHandle, handleAvailableAt, USERNAME_RULES } from '../auth.js';
 import { store, computeStats, profiles, shownName } from '../store.js';
-import { prepareAvatar } from '../media.js';
+import { cropAvatar } from '../avatar-crop.js';
 import { esc, toast } from '../ui.js';
 import { authCardHtml, mountAuthCard, authHeading } from '../auth-ui.js';
 
@@ -121,6 +122,77 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
 }
 
 
+/**
+ * The handle row. Editable once every 30 days, locked the rest of the time,
+ * and never on a synced account — see renameHandle() in js/auth.js for why.
+ *
+ * When it is locked the field is still SHOWN, disabled, with the date it frees
+ * up. Hiding it would leave someone hunting for a control that exists, and
+ * "not yet" is a more useful answer than nothing at all.
+ */
+function handleFieldHtml(user) {
+  if (user.syncs) {
+    return `
+      <div class="acct-row">
+        <div>
+          <p class="acct-row__k">Handle</p>
+          <p class="acct-row__v">@${esc(user.username)}</p>
+        </div>
+        <span class="chip chip--family">Sign-in name</span>
+      </div>
+      <p class="field__hint">
+        This account signs in to the cloud, so its handle is fixed here for now.
+      </p>`;
+  }
+
+  const until = handleAvailableAt(user.id);
+  const when = until
+    ? until.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+  const past = (user.handleHistory || []).slice().reverse();
+
+  return `
+    <div class="field">
+      <label for="handle">Handle</label>
+      <div class="field__count-wrap">
+        <input type="text" id="handle" name="handle" value="${esc(user.username)}"
+               maxlength="${USERNAME_RULES.max}" autocapitalize="off" autocorrect="off"
+               spellcheck="false" autocomplete="username"
+               ${until ? 'disabled' : ''}>
+        <span class="field__count" id="handleCount" aria-hidden="true">
+          ${esc(String(user.username.length))}/${USERNAME_RULES.max}</span>
+      </div>
+      <p class="field__hint">
+        ${
+          when
+            ? `This is the name you sign in with. You can change it again on
+               <strong>${esc(when)}</strong>.`
+            : `This is the name you sign in with. ${esc(USERNAME_RULES.describe)}
+               You can change it once every 30 days.`
+        }
+      </p>
+      ${
+        past.length
+          ? `<details class="acct-past">
+               <summary>Previously known as</summary>
+               <ul class="acct-past__list">
+                 ${past
+                   .map(
+                     (h) => `<li><span>@${esc(h.username)}</span>
+                       <span class="acct-past__when">until ${esc(
+                         new Date(h.until).toLocaleDateString(undefined, {
+                           day: 'numeric', month: 'short', year: 'numeric',
+                         })
+                       )}</span></li>`
+                   )
+                   .join('')}
+               </ul>
+             </details>`
+          : ''
+      }
+    </div>`;
+}
+
 /** The edit screen: everything about you that you can change, and nothing else. */
 function editHtml(user) {
   return `
@@ -172,17 +244,7 @@ function editHtml(user) {
               </p>
             </div>
 
-            <div class="acct-row">
-              <div>
-                <p class="acct-row__k">Handle</p>
-                <p class="acct-row__v">@${esc(user.username)}</p>
-              </div>
-              <span class="chip chip--family">Sign-in name</span>
-            </div>
-            <p class="field__hint">
-              Your handle is the name you sign in with, so it stays put. A display
-              name is the part you can change.
-            </p>
+            ${handleFieldHtml(user)}
           </div>
 
           ${
@@ -396,9 +458,13 @@ export async function mount(root, ctx) {
     const file = picker.files?.[0];
     if (!file) return;
     try {
-      const blob = await prepareAvatar(file);
-      paint(await profiles.save(user.id, { avatar: blob }));
-      toast('Photo updated');
+      // The cropper resolves null when it is cancelled — a normal outcome, not
+      // an error, so it must not toast or clear anything.
+      const blob = await cropAvatar(file);
+      if (blob) {
+        paint(await profiles.save(user.id, { avatar: blob }));
+        toast('Photo updated');
+      }
     } catch (err) {
       toast(err.message || 'Could not use that photo');
     } finally {
@@ -420,11 +486,37 @@ export async function mount(root, ctx) {
   input?.addEventListener('input', tally);
   tally();
 
+  const handleEl = root.querySelector('#handle');
+  const handleCount = root.querySelector('#handleCount');
+  handleEl?.addEventListener('input', () => {
+    if (handleCount) handleCount.textContent = `${handleEl.value.length}/${USERNAME_RULES.max}`;
+  });
+
   root.querySelector('#profileForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // THE HANDLE GOES FIRST, and if it is refused nothing else is saved. Half
+    // a save is worse than none: the toast would say the display name was
+    // stored while the rename you actually came for was silently dropped.
+    if (handleEl && !handleEl.disabled) {
+      const wanted = handleEl.value.trim();
+      if (wanted && wanted !== user.username) {
+        try {
+          await renameHandle(wanted);
+          toast(`You are @${wanted} now`);
+        } catch (err) {
+          toast(err.message || 'Could not change your handle');
+          handleEl.focus();
+          return;
+        }
+      }
+    }
+
     const value = (input?.value || '').trim().slice(0, DISPLAY_NAME_MAX);
     paint(await profiles.save(user.id, { displayName: value }));
-    toast(value ? 'Display name saved' : 'Going by your handle');
+    if (!handleEl || handleEl.disabled || handleEl.value.trim() === user.username) {
+      toast(value ? 'Display name saved' : 'Going by your handle');
+    }
     // The editor is a detour. Finishing it puts you back on the profile you
     // pressed Edit from, showing the change — staying put makes you wonder
     // whether the Save did anything.

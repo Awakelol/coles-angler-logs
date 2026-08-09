@@ -1022,15 +1022,30 @@ def cmd_score(args):
         print(key_help("GEMINI_API_KEY"))
         return 1
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
-    model = read_key("GEMINI_MODEL") or "gemini-2.5-flash"
+    # gemini-2.5-flash was retired for new keys — the API answers 404 with
+    # "no longer available to new users", which reads like a bad URL and is
+    # not. Override with GEMINI_MODEL in .dev.vars if this one goes the same
+    # way; `models?key=...` lists what the key can actually call.
+    model = read_key("GEMINI_MODEL") or "gemini-flash-latest"
     if args.unsure:
         flagged = {sid for sid, v in load_picks().items() if v.get("verdict") == "unsure"}
         todo = [(k, v) for k, v in data.items() if k in flagged and v["candidates"]]
         print(f"{len(todo)} species you marked unsure\n")
     else:
+        # A SPECIES THAT IS ALREADY DECIDED IS LEFT ALONE, and this is not an
+        # optimisation. Scoring RE-SORTS a species' candidate list, and
+        # picks.json stores an INDEX into that list — so re-scoring something
+        # already picked silently repoints it at a different photo while the
+        # credit line in the manifest still belongs to the old one. It moved
+        # five of the sixty-eight before it was caught.
+        settled = {sid for sid, v in load_picks().items()
+                   if v.get("verdict") in ("pick", "none")}
         todo = [(k, v) for k, v in data.items()
-                if v["candidates"] and (v["confidence"] < args.below or args.all)]
-        print(f"{len(todo)} species below confidence {args.below}\n")
+                if v["candidates"] and k not in settled
+                and (v["confidence"] < args.below or args.all)]
+        held = len(settled & set(data))
+        print(f"{len(todo)} species below confidence {args.below}"
+              f"{f' ({held} already decided, left alone)' if held else ''}\n")
 
     for sid, rec in todo:
         for c in rec["candidates"][:args.per]:
@@ -1058,11 +1073,27 @@ def cmd_score(args):
                 "generationConfig": {"responseMimeType": "application/json"},
             }).encode()
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            # 429 IS THE NORMAL CASE ON THE FREE TIER, not an error worth
+            # abandoning a species over. Without a backoff a burst of them
+            # burned through all 43 species in under a minute and scored
+            # nothing at all, which looks like the model rejecting the photos.
+            out = None
+            for attempt in range(4):
+                try:
+                    rq = urllib.request.Request(url, data=body, headers={
+                        "Content-Type": "application/json", "x-goog-api-key": key})
+                    with urllib.request.urlopen(rq, timeout=60) as r:
+                        out = json.load(r)
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 429 or attempt == 3:
+                        raise
+                    wait = 5 * (2 ** attempt)
+                    print(f"  {sid}: rate limited, waiting {wait}s")
+                    time.sleep(wait)
             try:
-                rq = urllib.request.Request(url, data=body, headers={
-                    "Content-Type": "application/json", "x-goog-api-key": key})
-                with urllib.request.urlopen(rq, timeout=60) as r:
-                    out = json.load(r)
+                if out is None:
+                    raise RuntimeError("no response")
                 txt = out["candidates"][0]["content"]["parts"][0]["text"]
                 got = json.loads(txt)
                 c["gemini"] = {"score": float(got.get("score", 0)),

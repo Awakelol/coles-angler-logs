@@ -1132,6 +1132,121 @@ async def main():
                 out.restored = !!document.querySelector('.auth-field');
                 return out;
             """)
+            # THE AVATAR CROPPER. The bug worth pinning: the object URL used to
+            # be revoked as soon as the image decoded, which left the canvas
+            # able to crop from the in-memory image while the stage showed an
+            # empty circle. Everything downstream looked right, so only the
+            # picture told you.
+            cropper = await page.eval("""
+                const a = await import('./js/auth.js');
+                const loc = await import('./js/auth/local.js');
+                const u = await loc.signUp('cropper1', 'abcd', '');
+                localStorage.setItem('angler.session',
+                    JSON.stringify({ kind: 'local', id: u.id }));
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 500));
+                location.hash = '#/account?edit=1';
+                await new Promise(r => setTimeout(r, 1500));
+
+                const c = document.createElement('canvas');
+                c.width = 900; c.height = 500;
+                const g = c.getContext('2d');
+                g.fillStyle = '#1b6f8c'; g.fillRect(0, 0, 900, 500);
+                g.fillStyle = '#fff'; g.fillRect(0, 0, 450, 500);
+                const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+                const dt = new DataTransfer();
+                dt.items.add(new File([blob], 'f.png', { type: 'image/png' }));
+                const input = document.getElementById('avatarInput');
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 1400));
+
+                const el = document.querySelector('.crop__img');
+                const mask = document.querySelector('.crop__mask');
+                const open = {
+                    stage: !!document.querySelector('.crop__stage'),
+                    // The image must actually be RENDERABLE, not merely present.
+                    shows: !!el && el.complete && el.naturalWidth > 0,
+                    round: mask ? getComputedStyle(mask).borderRadius : null,
+                    zoomable: !!document.querySelector('[data-zoom]'),
+                };
+                const z = document.querySelector('[data-zoom]');
+                const wBefore = parseFloat(el.style.width);
+                z.value = '2'; z.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 300));
+                open.grew = parseFloat(el.style.width) > wBefore * 1.8;
+
+                document.querySelector('[data-use]').click();
+                await new Promise(r => setTimeout(r, 1600));
+                const fill = document.getElementById('avatarFill');
+                open.saved = !!fill && !!fill.querySelector('img');
+                open.closed = !document.querySelector('.crop__stage');
+                await a.signOut();
+                return open;
+            """)
+            check("choosing a photo opens the cropper",
+                  cropper["stage"] and cropper["zoomable"], str(cropper))
+            check("the photo is visible in the cropper", cropper["shows"], str(cropper))
+            check("the crop guide is a circle", cropper["round"] == "50%", str(cropper))
+            check("zooming enlarges the photo", cropper["grew"], str(cropper))
+            check("using the crop saves it and closes",
+                  cropper["saved"] and cropper["closed"], str(cropper))
+
+            # THE HANDLE, its cooldown, and the trail it leaves.
+            handle = await page.eval("""
+                const a = await import('./js/auth.js');
+                const loc = await import('./js/auth/local.js');
+                const u = await loc.signUp('firstname', 'abcd', '');
+                localStorage.setItem('angler.session',
+                    JSON.stringify({ kind: 'local', id: u.id }));
+                const out = { free: a.handleAvailableAt(u.id) === null };
+
+                const renamed = await a.renameHandle('secondname');
+                out.now = renamed.username;
+                out.history = renamed.handleHistory.map(h => h.username);
+                out.locked = a.handleAvailableAt(u.id) !== null;
+                // 30 days, not some other number.
+                out.days = Math.round(
+                    (a.handleAvailableAt(u.id).getTime() - Date.now()) / 86400000);
+
+                try { await a.renameHandle('thirdname'); out.second = 'allowed'; }
+                catch (e) { out.second = e.message; }
+
+                // An old handle stays yours — releasing it would let someone
+                // else be mistaken for who you were.
+                out.oldReserved = a.usernameTaken('firstname');
+
+                // Changing only the CASE is not a change and must not be
+                // refused by a cooldown it did not start.
+                let caseChange = null;
+                try { caseChange = (await a.renameHandle('SecondName')).username; }
+                catch (e) { caseChange = 'refused: ' + e.message; }
+                out.caseChange = caseChange;
+
+                await a.signOut();
+                // Back to where these blocks found the app. The checks after
+                // them read the sign-in gate on /log.
+                location.hash = '#/log';
+                await new Promise(r => setTimeout(r, 900));
+                out.restored = !!document.querySelector('.auth-field');
+                return out;
+            """)
+            check("a new account may change its handle at once",
+                  handle["free"], str(handle))
+            check("renaming works and keeps the old handle",
+                  handle["now"] == "secondname" and handle["history"] == ["firstname"],
+                  str(handle))
+            check("the cooldown is 30 days",
+                  handle["locked"] and handle["days"] == 30, str(handle))
+            check("a second change inside the window is refused",
+                  "30 day" in str(handle["second"]), str(handle["second"]))
+            check("an old handle stays reserved to you",
+                  handle["oldReserved"], str(handle))
+            check("re-spelling your own handle is not a change",
+                  handle["caseChange"] == "SecondName", str(handle["caseChange"]))
+            check("the sign-in gate survives the handle checks",
+                  handle["restored"], str(handle["restored"]))
+
             check("the sign-in gate is back on screen", roundtrip["restored"],
                   str(roundtrip))
             check("a saved display name reads back out of the store",

@@ -44,7 +44,27 @@ export const {
   usernameTaken,
   listUsers,
   changePassword,
+  handleAvailableAt,
+  HANDLE_COOLDOWN_MS,
 } = local;
+
+/**
+ * Rename the signed-in account's handle.
+ *
+ * LOCAL ONLY, and that is a real limit rather than an oversight. A cloud
+ * account's handle is its Firebase Email/Password identity, and changing that
+ * means an updateEmail() call plus a re-auth — neither of which can be done
+ * from here without the current password. A synced account is told so instead
+ * of being offered a control that would half-work.
+ */
+export async function renameHandle(next) {
+  const session = currentUser();
+  if (!session) throw new Error('Sign in first.');
+  if (session.syncs) {
+    throw new Error('Handles on synced accounts cannot be changed here yet.');
+  }
+  return local.renameHandle(session.id, next);
+}
 
 export const cloudConfigured = cloud.cloudConfigured;
 export const CLOUD_SETUP_STEPS = cloud.SETUP_STEPS;

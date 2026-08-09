@@ -648,6 +648,54 @@ stranger's silhouette while the editor two taps away showed the real photo.
 > one had been missed. There is now a round-trip test through the store itself
 > rather than through the screen.
 
+### Positioning the photo
+
+Choosing a photo opens a cropper before it is saved. The old flow centre-cropped
+a square and that was the whole story — hold the camera slightly off and your
+face ended up against the edge with a shoulder in the middle.
+
+**The mask is a circle, not a square**, because the avatar is round everywhere
+it appears. A square guide asks you to imagine the corners being cut off, and
+people frame for the square they can see rather than the circle they get, so
+hair and chins end up clipped. What falls outside the ring is dimmed rather than
+hidden — you still need to see what you are dragging.
+
+It produces exactly what `prepareAvatar()` produced, a square JPEG no larger
+than 256px, so nothing downstream knows it exists. The maths is kept in *stage*
+pixels rather than image pixels: `scale` is screen pixels per image pixel,
+`ox/oy` are the image's top-left in stage space, and the visible square is
+always `[0,D]`. The clamp is then two lines and the source rect falls out by
+dividing by scale.
+
+> **A bug worth remembering.** The object URL was revoked as soon as the image
+> decoded. The canvas still cropped correctly from the in-memory `Image`, so the
+> saved avatar was right and every assertion passed — while the stage showed an
+> empty circle. Only a screenshot caught it, which is why the test now checks
+> `naturalWidth > 0` rather than that the element exists.
+
+### Changing your handle
+
+The handle is what you sign in with, so renaming it is not the same kind of edit
+as a display name. Three rules:
+
+- **One change per 30 days.** A name other people know you by is not worth much
+  if it can change hourly; the cooldown is what makes it worth something. It is
+  checked against a stored timestamp, not a counter, so clearing app data does
+  not hand out a free change.
+- **Old handles are kept**, oldest first, with the date each stopped being
+  current. Anything that ever refers to an angler by name — a shared catch, a
+  leaderboard, a report — needs the trail back. Keeping it costs a few bytes;
+  reconstructing it later is impossible.
+- **An old handle stays yours.** `usernameTaken()` checks history as well as
+  current names, so renaming does not release your old handle for someone else
+  to claim and then be mistaken for you.
+
+Re-spelling your own handle (`wake_` → `Wake_`) is not a change and does not
+spend the 30 days. **Synced accounts cannot rename here yet**: a cloud handle is
+its Firebase Email/Password identity, and changing it needs `updateEmail()` plus
+a re-auth with the current password. The screen says so rather than offering a
+control that would half-work.
+
 ### Two names, and a face
 
 The **handle** is what you signed up as: unique, validated, and what the account

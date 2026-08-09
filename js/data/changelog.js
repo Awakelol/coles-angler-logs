@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.21.0';
+export const APP_VERSION = '3.22.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.22.0',
+    date: '2026-08-10',
+    title: 'Position your photo, and change your handle',
+    changes: [
+      'Drag and zoom your profile photo inside a circle before saving it.',
+      'You can change your handle once every 30 days.',
+      'Old handles are kept, and stay reserved to you.',
+    ],
+  },
   {
     version: '3.21.0',
     date: '2026-08-10',

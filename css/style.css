@@ -3083,6 +3083,78 @@ body.is-sheet-open {
    name keeps the full width when it wraps. */
 .prof__edit { float: right; margin: 2px 0 0 10px; }
 
+/* Previous handles. A <details> because it is a trail, not a headline — it
+   matters when you go looking and never before. */
+.acct-past { margin-top: 10px; }
+.acct-past summary {
+  font-size: 12px; font-weight: 800; color: var(--ink-60);
+  cursor: pointer; list-style: none;
+}
+.acct-past summary::-webkit-details-marker { display: none; }
+.acct-past summary::before {
+  content: '›';
+  display: inline-block; margin-right: 5px;
+  transition: transform .15s ease;
+}
+.acct-past[open] summary::before { transform: rotate(90deg); }
+.acct-past__list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.acct-past__list li {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 13px; font-weight: 700;
+}
+.acct-past__when { color: var(--ink-60); font-weight: 700; }
+
+/* --- the avatar cropper ------------------------------------------------- */
+
+.crop { display: grid; gap: 12px; }
+
+.crop__stage {
+  position: relative;
+  width: 100%; max-width: 320px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: #0B0E17;
+  touch-action: none;      /* the pan and pinch are ours, not the browser's */
+  cursor: grab;
+  user-select: none;
+}
+.crop__stage:active { cursor: grabbing; }
+.crop__img {
+  position: absolute; top: 0; left: 0;
+  transform-origin: 0 0;
+  max-width: none;         /* the base img rule would cap this at 100% */
+  will-change: transform;
+  -webkit-user-drag: none;
+}
+
+/* The promise: what is inside the ring is what you get. Everything outside is
+   dimmed rather than hidden — you still have to see what you are dragging.
+   One element, because a huge box-shadow spread is cheaper than an SVG mask
+   and does not need a second paint layer. */
+.crop__mask {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgb(8 11 20 / .62);
+  outline: 2px solid rgb(255 255 255 / .9);
+  outline-offset: -1px;
+}
+
+.crop__zoom { display: flex; align-items: center; gap: 10px; }
+.crop__zoom-k {
+  font-size: 10px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-60);
+}
+.crop__zoom input { flex: 1; accent-color: var(--blue); }
+.crop__hint { margin: 0; text-align: center; }
+.crop__acts { display: flex; flex-direction: column; gap: 8px; }
+
+@media (min-width: 560px) {
+  .crop__acts { flex-direction: row-reverse; justify-content: flex-start; }
+}
+
 /* --- the edit screen ---------------------------------------------------- */
 .edit-photo {
   display: grid; place-items: center; gap: 12px;

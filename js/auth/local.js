@@ -91,7 +91,13 @@ export function validatePassword(pw) {
 }
 
 export function usernameTaken(name) {
-  return readUsers().some((u) => u.key === key(name));
+  const k = key(name);
+  // History counts. A released handle could be claimed by someone else and
+  // then be mistaken for the person who used to hold it, which is the one
+  // outcome keeping a rename trail is supposed to prevent.
+  return readUsers().some(
+    (u) => u.key === k || (u.handleHistory || []).some((h) => key(h.username) === k)
+  );
 }
 
 export function listUsers() {
@@ -189,7 +195,87 @@ export function getById(id) {
     username: user.username,
     provider: user.provider || 'local',
     createdAt: user.createdAt,
+    handleChangedAt: user.handleChangedAt || null,
+    // Oldest first. Read-only to callers — renameHandle owns the writing.
+    handleHistory: [...(user.handleHistory || [])],
   };
+}
+
+// --- changing the handle -----------------------------------------------------
+//
+// The handle is what you sign in with, so renaming it is not the same kind of
+// edit as a display name. Three rules, and each one exists for a reason:
+//
+//   ONE CHANGE PER 30 DAYS. A handle other people use to know you is not worth
+//   much if it can change hourly, and the cooldown is what makes it worth
+//   something. It is checked against the stored timestamp rather than a
+//   counter, so clearing app data does not hand out a free change.
+//
+//   OLD HANDLES ARE KEPT, not discarded. Someone who renames still has a trail
+//   back to who they were — which matters for anything that ever refers to an
+//   angler by name (shared catches, a leaderboard, a report someone filed).
+//   Keeping the trail costs a few bytes; reconstructing it later is impossible.
+//
+//   AN OLD HANDLE STAYS YOURS. usernameTaken() looks at history as well as
+//   current names, so renaming does not release your old handle for someone
+//   else to claim and then be mistaken for you.
+
+/** 30 days, in ms. */
+export const HANDLE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * When this account may next change its handle, or null if it may now.
+ * A never-renamed account may rename immediately — the clock starts at the
+ * first change, not at sign-up.
+ */
+export function handleAvailableAt(userId) {
+  const user = readUsers().find((u) => u.id === userId);
+  if (!user?.handleChangedAt) return null;
+  const next = new Date(user.handleChangedAt).getTime() + HANDLE_COOLDOWN_MS;
+  return next > Date.now() ? new Date(next) : null;
+}
+
+/**
+ * Rename an account. Returns the updated public record.
+ *
+ * Throws with a sentence fit to show the user — every failure here is
+ * something they can act on.
+ */
+export async function renameHandle(userId, next) {
+  const users = readUsers();
+  const target = users.find((u) => u.id === userId);
+  if (!target) throw new Error('That account is not on this device.');
+
+  const name = String(next || '').trim();
+  const nameError = validateUsername(name);
+  if (nameError) throw new Error(nameError);
+
+  // Changing case or nothing at all is not a change, and must not spend the
+  // 30 days. Storing the new spelling is still worth doing.
+  if (key(name) === target.key) {
+    if (name !== target.username) {
+      target.username = name;
+      writeUsers(users);
+    }
+    return getById(userId);
+  }
+
+  const waitUntil = handleAvailableAt(userId);
+  if (waitUntil) {
+    const days = Math.ceil((waitUntil.getTime() - Date.now()) / 86400000);
+    throw new Error(`You can change your handle again in ${days} day${days === 1 ? '' : 's'}.`);
+  }
+  if (usernameTaken(name)) throw new Error('That handle is already taken.');
+
+  target.handleHistory = [
+    ...(target.handleHistory || []),
+    { username: target.username, until: new Date().toISOString() },
+  ];
+  target.username = name;
+  target.key = key(name);
+  target.handleChangedAt = new Date().toISOString();
+  writeUsers(users);
+  return getById(userId);
 }
 
 export async function changePassword(name, oldPw, newPw) {
