@@ -603,6 +603,30 @@ a ring on the button instead, it travels with the button and is still there
 when the bar goes, which reads as the + growing a collar rather than the nav
 leaving.
 
+### The profile header
+
+A cover, an avatar hung over its edge, the name, then the numbers — the same
+shape signed in or out. **Signed out is this screen with an empty seat, not a
+different screen with a form on it.** The old version opened with "Not signed
+in" and a login card, which described the app's state rather than yours.
+
+**The stat strip is filled signed out**, from `store.allCatches(null)` — the
+device's own log, which exists whether or not anyone has made an account. That
+is the honest argument for making one: the thing you would lose, not a
+paragraph about sync. **Days** counts distinct dates in the log, not account
+age: it counts trips you took, not time you were registered.
+
+The cover is **the page's own light** (see "one light per page"), not a
+photograph and not an upload. The account page already has a hue, so a banner
+showing anything else would be a second identity arguing with the first — and
+there is no image to host, crop, or let someone break. It runs at nearly full
+opacity because it is a 104px band with no body text on it; the restraint the
+page needs is a legibility constraint, not a taste one.
+
+The overhang belongs to **the avatar, not the row**. Pulling the row up ate 42px
+of the cover it was meant to hang over, and pulling the name block up to
+compensate ate the rest — a 104px cover rendered at about 60.
+
 ### Two names, and a face
 
 The **handle** is what you signed up as: unique, validated, and what the account
@@ -913,6 +937,56 @@ A **band** is a stripe of page and may be transparent so the bloom shows
 through. A **surface** sits over something and has to hide it. The weather
 drawer was borrowing `--band-sky`, so the moment the bands went transparent the
 map showed straight through the drawer — it has `--drawer-bg` now.
+
+### One light per page
+
+Every screen has its own colour, and it is **not branding** — the hue is the
+subject of the page. This app is about water and weather at a place through the
+day, so the light behind each screen is the light that screen is about. You can
+tell which page you are on with the text blurred out.
+
+| page | its light |
+| --- | --- |
+| home | first light over the island — indigo lifting into amber |
+| map | the water itself; the only cool page |
+| info | the reef, and the most colourful thing here by far |
+| conditions | weather: cold-front blue with a warm edge |
+| log | the catch landed — amber and gold |
+| account | quiet and personal, violet held back |
+| settings | machinery. Deliberately the dullest light in the set |
+
+**The page picks the hue, the theme picks the burn, and the two don't know
+about each other.** Seven hue triples plus two sets of alphas, rather than
+fourteen palettes to hand-tune and keep in sync. `--glow-*` are raw channel
+triples because an alpha is composed in per layer; `--glow-o*` are re-read at
+use time, so a theme changing one number restyles every layer. The attribute
+goes on `<html>` because the bloom is painted there.
+
+#### Why it read as a stripe
+
+A radial centred at 118% with a 72% radius that goes transparent at 70% of that
+radius has died by 68% down the screen. **No amount of opacity turns a band into
+atmosphere** — the geometry had already decided where the colour ends. The
+sources now reach ~105% of the viewport and ramp out at 100% of the radius.
+
+They are also **fanned across the bottom edge rather than stacked**. Piled on
+one spot the five layers summed into a hot mid-tone core, and a mid-tone is the
+one ground where *both* light and dark text lose contrast — in dark mode it got
+bright enough that no text colour, white included, could clear 4.5:1 on it.
+Spread out, each source keeps its colour at full strength and the composite peak
+drops. Saturation was never the problem; overlap was.
+
+#### The contrast work underneath it
+
+Pushing the bloom put 18 text elements under 4.5:1 — but *halving* the bloom
+only got that to 16, because most were already failing on the bare background:
+`--ink-30` was `#9AA0AF`, or **2.37:1 on cream**. That is a pre-existing bug the
+gradient only exposed. Muted is a rank in the hierarchy, not permission to be
+unreadable.
+
+`tools/browser_test.py` pins the system; contrast itself is verified by
+sampling rendered pixels behind every text node that sits on bare ground, across
+seven pages in both themes.
 
 ### Dark mode
 

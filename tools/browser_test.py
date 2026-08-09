@@ -970,6 +970,63 @@ async def main():
                          hasEmail: !!document.getElementById('a-email') };
             """)
             check("log is gated when signed out", gated["form"], str(gated))
+
+            # THE PROFILE HEADER, and the decision worth pinning: the stat
+            # strip is filled SIGNED OUT, from the device's own log. The old
+            # screen opened with "Not signed in" and a form, describing the
+            # app's state rather than yours — and hiding the fact that you
+            # already have records worth protecting. If this ever silently
+            # falls back to em-dashes, the argument for making an account goes
+            # with it.
+            profile = await page.eval("""
+                const st = await import('./js/store.js');
+                const a = await import('./js/auth.js');
+                await st.store.clearCatches();
+                for (const d of ['2026-08-01', '2026-08-01', '2026-08-04']) {
+                    await st.store.saveCatch({ userId: null, regionId: 'leyte',
+                        speciesId: 'caranx-ignobilis', date: d, weightKg: 2, lengthCm: 40 });
+                }
+                location.hash = '#/';
+                await new Promise(r => setTimeout(r, 500));
+                location.hash = '#/account';
+                await new Promise(r => setTimeout(r, 1600));
+                const strip = document.getElementById('acctStats');
+                const cells = [...strip.querySelectorAll('.prof__stat')].map(c => ({
+                    v: c.querySelector('.prof__v').textContent.trim(),
+                    k: c.querySelector('.prof__k').textContent.trim(),
+                }));
+                const cover = document.querySelector('.prof__cover');
+                const cs = cover ? getComputedStyle(cover) : null;
+                const pic = document.querySelector('.prof__pic');
+                const out = {
+                    hasHeader: !!document.querySelector('.prof'),
+                    cells,
+                    // The cover is the page's own light, not a separate image.
+                    coverIsGradient: !!cs && cs.backgroundImage.includes('radial-gradient'),
+                    coverNoImage: !!cs && !cs.backgroundImage.includes('url("http'),
+                    // The avatar hangs over the cover rather than sitting under
+                    // it — the overhang is the whole shape of the header.
+                    overhangs: !!(pic && cover)
+                        && pic.getBoundingClientRect().top < cover.getBoundingClientRect().bottom,
+                    signedOut: !a.currentUser(),
+                };
+                await st.store.clearCatches();
+                return out;
+            """)
+            check("the account screen opens with a profile header",
+                  profile["hasHeader"] and profile["signedOut"], str(profile["hasHeader"]))
+            check("the avatar hangs over the cover", profile["overhangs"], str(profile))
+            check("the cover is the page's own light, not an image",
+                  profile["coverIsGradient"] and profile["coverNoImage"], str(profile))
+            check("the strip reads catches, species, spots and days",
+                  [c["k"] for c in profile["cells"]] == ["Catches", "Species", "Spots", "Days"],
+                  str(profile["cells"]))
+            # Three catches on two dates: the numbers must be the real log, and
+            # Days must count trips rather than records.
+            check("signed out, the strip still shows your own log",
+                  profile["cells"][0]["v"] == "3" and profile["cells"][3]["v"] == "2",
+                  str(profile["cells"]))
+
             check("no catch entry while signed out",
                   not gated["addBtn"] and not gated["stats"], str(gated))
             # Only providers CONFIG.auth marks live may appear. A button that
@@ -3077,7 +3134,7 @@ async def main():
                     // The log keeps its route even without a tab of its own.
                     logReachable: !!document.querySelector('#quickMenu [href*="/log"]'),
                     accountRoute: location.hash,
-                    accountRendered: !!document.querySelector('.acct-hero'),
+                    accountRendered: !!document.querySelector('.prof'),
                     // A floating island, not a bar welded to the edge.
                     floats: Math.round(window.innerWidth - bar.right) > 4
                             && Math.round(window.innerHeight - bar.bottom) > 4,

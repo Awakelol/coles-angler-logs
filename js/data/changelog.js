@@ -20,9 +20,18 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.17.0';
+export const APP_VERSION = '3.18.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.18.0',
+    date: '2026-08-10',
+    title: 'A proper profile',
+    changes: [
+      'Account is a profile now — a cover, your photo, and your numbers.',
+      'Catches, species, spots and days on the water, shown even before you sign up.',
+    ],
+  },
   {
     version: '3.17.0',
     date: '2026-08-10',

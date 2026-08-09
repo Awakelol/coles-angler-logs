@@ -3078,22 +3078,104 @@ body.is-sheet-open {
 
 /* --- account ------------------------------------------------------------- */
 
-.acct-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
-/* Pushed to the far end of the hero row rather than given a column of its own,
-   so it lands in the same corner whether or not there is an account. */
-.acct-cog { margin-left: auto; flex: none; }
-.acct-hero__who { min-width: 0; }
-.acct-avatar {
-  flex: none;
-  width: 62px; height: 62px;
-  border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--blue); color: var(--on-accent);
-  font-size: 26px; font-weight: 900;
-  box-shadow: 0 6px 18px rgb(43 69 147 / .3);
+/* --- the profile header ----------------------------------------------------
+   A cover, an avatar hung over its edge, the name, then the numbers. Same
+   shape signed in or out — signed out is this screen with an empty seat, not a
+   different screen with a form on it.
+
+   THE COVER IS THE PAGE'S OWN LIGHT, not a photograph and not an upload. The
+   account page already has a hue (see "one light per page"), so a banner
+   showing anything else would be a second identity arguing with the first —
+   and there is no image to host, crop, or let someone break.
+--------------------------------------------------------------------------- */
+.prof { margin-bottom: 20px; }
+
+.prof__cover {
+  position: relative;
+  height: 104px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: var(--border-w) solid var(--line);
+  border-bottom: 0;
+  overflow: hidden;
+  background-color: var(--paper);
+  background-image:
+    var(--grain),
+    radial-gradient(120% 150% at 12% 118%, rgb(var(--glow-1) / .95), transparent 72%),
+    radial-gradient(110% 140% at 88% 128%, rgb(var(--glow-2) / .85), transparent 70%),
+    radial-gradient(90% 130% at 52% 150%, rgb(var(--glow-3) / .70), transparent 68%);
 }
-.acct-avatar--empty { background: var(--blue-lt); color: var(--blue); box-shadow: none; }
-.acct-hero--empty { align-items: center; }
+/* Nearly opaque here, unlike the page bloom: this is a 104px band with no body
+   text on it, so it can be the full-strength version of the same colour. The
+   restraint the page needs is a legibility constraint, not a taste one. */
+.acct-cog { flex: none; }
+.prof__cover .acct-cog {
+  position: absolute; top: 10px; right: 10px; margin: 0;
+  background: rgb(255 255 255 / .92);
+  color: #16181D;
+}
+
+/* The avatar hangs over the cover's edge. Negative margin on a row of its own
+   rather than absolute positioning, so the name below it is pushed down by the
+   overhang instead of having to be nudged past it by hand. */
+/* THE OVERHANG BELONGS TO THE AVATAR, NOT THE ROW. Pulling the row up ate 42px
+   of the cover it was supposed to hang over, and then pulling the name block up
+   to compensate ate the rest — the 104px cover rendered at about 60. The row
+   sits flush under the cover and carries the card's background; only the
+   picture reaches up. */
+.prof__row {
+  display: flex; align-items: flex-start;
+  padding: 0 14px;
+  background: var(--paper);
+  border-left: var(--border-w) solid var(--line);
+  border-right: var(--border-w) solid var(--line);
+}
+.prof__pic {
+  margin-top: -42px;
+  border: 4px solid var(--paper);
+  border-radius: 50%;
+  background: var(--paper);
+}
+.acct-photo__fill--empty {
+  background: var(--blue-lt); color: var(--blue);
+  box-shadow: none;
+}
+
+.prof__who {
+  border: var(--border-w) solid var(--line);
+  border-top: 0; border-bottom: 0;
+  background: var(--paper);
+  padding: 8px 16px 0;
+}
+
+/* One card of four, split by hairlines, rather than four separate tiles. These
+   numbers are one statement about one log — boxing them separately made them
+   read as four unrelated facts. */
+.prof__stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 12px 4px 14px;
+  margin-top: 12px;
+}
+.prof__stat { text-align: center; padding: 0 4px; }
+.prof__stat + .prof__stat { border-left: var(--border-w-sm) solid var(--line); }
+.prof__v {
+  display: block;
+  font-size: 22px; font-weight: 900; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.prof__k {
+  display: block; margin-top: 1px;
+  font-size: 10px; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-60);
+}
+
+@media (min-width: 900px) {
+  .prof { max-width: 560px; }
+  .prof__cover { height: 132px; }
+}
+
 
 /* The photo is a button. On a phone it is the biggest thing on the screen and
    the obvious thing to press, so making it the control rather than putting a
@@ -3142,20 +3224,6 @@ body.is-sheet-open {
 }
 .acct-sub { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: var(--ink-60); }
 
-.acct-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.acct-stat {
-  background: var(--paper);
-  border: var(--border-w) solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 14px 10px;
-  text-align: center;
-}
-.acct-stat__v { display: block; font-size: 24px; font-weight: 900; letter-spacing: -.02em; }
-.acct-stat__k {
-  display: block; margin-top: 2px;
-  font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--ink-30);
-}
 
 .acct-rows { gap: 0; }
 .acct-row {
@@ -3175,14 +3243,14 @@ body.is-sheet-open {
 /* Everything that moves, moves at one speed. Without this the palette change
    lands but the app still feels like the old one — the references are calm
    largely because nothing in them snaps. */
-a.card, button.card, .btn, .chip, .icon-btn, .bookmark, .acct-stat,
+a.card, button.card, .btn, .chip, .icon-btn, .bookmark,
 .species-photo, .gallery__item, .search-row__cam, .map-filters__btn {
   transition: transform .2s cubic-bezier(.34,1.2,.5,1),
               box-shadow .2s ease, background-color .2s ease,
               border-color .2s ease, color .2s ease, opacity .2s ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  a.card, button.card, .btn, .chip, .icon-btn, .bookmark, .acct-stat,
+  a.card, button.card, .btn, .chip, .icon-btn, .bookmark,
   .species-photo, .gallery__item, .search-row__cam, .map-filters__btn {
     transition-duration: .01ms;
   }
