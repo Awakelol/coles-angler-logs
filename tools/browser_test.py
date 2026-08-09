@@ -1537,7 +1537,7 @@ async def main():
             # -------------------------------------------------- identify
             print("\nIdentify")
             await page.goto(f"{BASE}/index.html#/identify")
-            await page.wait_for("document.querySelector('#takePhoto')", label="identify screen")
+            await page.wait_for("document.querySelector('#uploadPhoto')", label="identify screen")
 
             cam = await page.eval("""
                 // The camera lives beside Info's search box now, not on Home:
@@ -1565,12 +1565,18 @@ async def main():
                     // The box stays: typing a name is how you leave photo
                     // mode, which only works if it's still there.
                     searchStays: box?.hidden === false,
-                    // capture="environment" is what opens the rear camera
-                    // directly instead of a file browser on a phone.
+                    // No capture="environment" any more: that handed framing
+                    // to the OS camera app. The viewfinder is in-page.
                     capture: input?.getAttribute('capture'),
+                    stage: document.getElementById('shot')?.dataset.mode,
+                    hasVideo: !!document.getElementById('camView'),
+                    videoInline: document.getElementById('camView')?.playsInline === true,
+                    videoMuted: document.getElementById('camView')?.muted === true,
+                    hasShutter: !!document.getElementById('camShoot'),
+                    uploadAlways: !!document.getElementById('uploadPhoto'),
                     accept: input?.getAttribute('accept'),
                     hiddenInput: input?.hidden === true,
-                    hasButton: !!document.getElementById('takePhoto'),
+                    hasButton: !!document.getElementById('camStart'),
                     // Nothing should claim to have identified anything yet.
                     noFakeResult: document.getElementById('identifyResult')
                         ?.textContent.trim() === '',
@@ -1600,7 +1606,7 @@ async def main():
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
                 const inPhoto = {
-                    camera: !!document.getElementById('takePhoto'),
+                    camera: !!document.getElementById('camStart'),
                     hash: location.hash,
                     // No reference category is selected while in photo mode —
                     // it isn't one of them.
@@ -1634,7 +1640,7 @@ async def main():
                 await new Promise(r => setTimeout(r, 600));
                 const shown = document.querySelectorAll('.zone-card').length;
                 const typedOut = {
-                    left: !document.getElementById('takePhoto'),
+                    left: !document.getElementById('camStart'),
                     searched: shown > 0 && shown < 21,   // filtered, not just back
                     shown,
                     pressed: cam.getAttribute('aria-pressed'),
@@ -1678,11 +1684,127 @@ async def main():
             check("the photo panel hands back a cleanup",
                   leak["returnsCleanup"] and leak["survivedNoPhoto"], str(leak))
 
+            # The live camera, on a fake stream. A real one needs a device and
+            # a permission prompt, but everything worth pinning is ours: does
+            # the shutter freeze a frame, and — the one that costs the user
+            # something if it breaks — does unmounting stop the tracks. A
+            # camera left running is a lit LED and a flat battery.
+            live = await page.eval("""
+                const m = await import('./js/pages/identify.js');
+                const host = document.createElement('div');
+                document.body.appendChild(host);
+                host.innerHTML = m.identifyPanelHtml();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 320; canvas.height = 240;
+                const g = canvas.getContext('2d');
+                g.fillStyle = '#3FA9C9'; g.fillRect(0, 0, 320, 240);
+                const fake = canvas.captureStream(12);
+                let asked = null;
+                const real = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices);
+                Object.defineProperty(navigator, 'mediaDevices', {
+                    configurable: true,
+                    value: { getUserMedia: async (c) => { asked = c; return fake; } },
+                });
+
+                const release = m.mountIdentifyPanel(host);
+                const stage = host.querySelector('#shot');
+                const video = host.querySelector('#camView');
+
+                host.querySelector('#camStart').click();
+                await new Promise(r => setTimeout(r, 900));
+                const started = {
+                    mode: stage.dataset.mode,
+                    bound: video.srcObject === fake,
+                    // The rear camera by preference, never by requirement:
+                    // `exact` throws outright on a front-camera-only laptop.
+                    wantsRear: asked?.video?.facingMode?.ideal === 'environment',
+                    notExact: !asked?.video?.facingMode?.exact,
+                    noAudio: asked?.audio === false,
+                    shutterUp: !host.querySelector('#camShoot').hidden,
+                    guideUp: getComputedStyle(host.querySelector('.identify__guide')).display
+                             !== 'none',
+                };
+
+                host.querySelector('#camShoot').click();
+                await new Promise(r => setTimeout(r, 1600));
+                const shot = {
+                    mode: stage.dataset.mode,
+                    still: !!host.querySelector('#camStill').getAttribute('src'),
+                    // Still running: a retake that cold-starts the camera is a
+                    // retake nobody bothers with.
+                    stillLive: fake.getTracks().every(t => t.readyState === 'live'),
+                    retakeUp: !host.querySelector('#clearPhoto').hidden,
+                };
+
+                host.querySelector('#clearPhoto').click();
+                await new Promise(r => setTimeout(r, 400));
+                const retaken = stage.dataset.mode;
+
+                release();
+                await new Promise(r => setTimeout(r, 200));
+                const stopped = fake.getTracks().every(t => t.readyState === 'ended');
+
+                if (real) Object.defineProperty(navigator, 'mediaDevices', {
+                    configurable: true, value: { getUserMedia: real } });
+                host.remove();
+                return { started, shot, retaken, stopped };
+            """)
+            check("starting the camera shows a live viewfinder",
+                  live["started"]["mode"] == "live" and live["started"]["bound"],
+                  str(live["started"]))
+            check("it asks for the rear lens without demanding one",
+                  live["started"]["wantsRear"] and live["started"]["notExact"]
+                  and live["started"]["noAudio"], str(live["started"]))
+            check("the shutter and framing guide appear with the preview",
+                  live["started"]["shutterUp"] and live["started"]["guideUp"],
+                  str(live["started"]))
+            check("the shutter freezes a still from the frame",
+                  live["shot"]["mode"] == "still" and live["shot"]["still"], str(live["shot"]))
+            check("the camera keeps running behind the still",
+                  live["shot"]["stillLive"] and live["shot"]["retakeUp"], str(live["shot"]))
+            check("retake goes straight back to the viewfinder",
+                  live["retaken"] == "live", str(live))
+            check("unmounting stops the camera tracks", live["stopped"], str(live))
+
+            # No camera at all is the laptop case and the http:// case. It must
+            # say so and leave the upload route working, not throw.
+            nocam = await page.eval("""
+                const m = await import('./js/pages/identify.js');
+                const host = document.createElement('div');
+                document.body.appendChild(host);
+                host.innerHTML = m.identifyPanelHtml();
+                const real = navigator.mediaDevices;
+                Object.defineProperty(navigator, 'mediaDevices',
+                    { configurable: true, value: undefined });
+                const release = m.mountIdentifyPanel(host);
+                host.querySelector('#camStart').click();
+                await new Promise(r => setTimeout(r, 500));
+                const out = {
+                    explains: /upload/i.test(host.querySelector('#camMsg').textContent),
+                    startGone: host.querySelector('#camStart').hidden,
+                    uploadStays: !!host.querySelector('#uploadPhoto'),
+                };
+                release();
+                Object.defineProperty(navigator, 'mediaDevices',
+                    { configurable: true, value: real });
+                host.remove();
+                return out;
+            """)
+            check("no camera points at the upload route instead of failing",
+                  nocam["explains"] and nocam["startGone"] and nocam["uploadStays"], str(nocam))
+
             # Back into photo mode — the checks below feed it a real image.
             await page.goto(f"{BASE}/index.html#/info?tab=photo")
             await page.wait_for("document.querySelector('#fishPhoto')", label="photo mode")
-            check("the camera opens straight to the rear lens",
-                  cam["capture"] == "environment", str(cam))
+            check("the viewfinder is in-page, not handed to the OS camera app",
+                  cam["capture"] is None and cam["hasVideo"], str(cam))
+            check("the preview plays inline and silent",
+                  cam["videoInline"] and cam["videoMuted"], str(cam))
+            check("it starts idle rather than grabbing the camera unasked",
+                  cam["stage"] == "idle", str(cam))
+            check("there is a shutter and a permanent upload route",
+                  cam["hasShutter"] and cam["uploadAlways"], str(cam))
             check("it accepts any image", cam["accept"] == "image/*", str(cam))
             check("the file input is hidden behind a real button",
                   cam["hiddenInput"] and cam["hasButton"], str(cam))
@@ -1707,8 +1829,8 @@ async def main():
 
                 const result = document.getElementById('identifyResult');
                 return {
-                    preview: !!document.querySelector('#shot img'),
-                    altText: document.querySelector('#shot img')?.alt || '',
+                    preview: !!document.querySelector('#camStill[src]'),
+                    altText: document.getElementById('camStill')?.alt || '',
                     clearShown: document.getElementById('clearPhoto')?.hidden === false,
                     // No Pages Function on the static test server, so the
                     // call fails. That is the path worth pinning: it must say
@@ -1716,8 +1838,11 @@ async def main():
                     saysFailed: /couldn.t identify|no connection|not set up/i
                         .test(result?.textContent || ''),
                     inventedNothing: !result?.querySelector('.verdict'),
-                    buttonRestored: document.getElementById('takePhoto').textContent
-                        .includes('Take a photo'),
+                    buttonRestored: document.getElementById('uploadPhoto').textContent
+                        .includes('Upload a photo'),
+                    // The still replaces the viewfinder rather than sitting
+                    // beside it, so what you are looking at is unambiguous.
+                    stillMode: document.getElementById('shot')?.dataset.mode === 'still',
                 };
             """)
             check("a photo shows a preview", shot["preview"], str(shot))
@@ -1731,6 +1856,7 @@ async def main():
             check("and invents no species when the call fails",
                   shot["inventedNothing"], str(shot))
             check("the button recovers after preparing", shot["buttonRestored"], str(shot))
+            check("the still replaces the viewfinder", shot["stillMode"], str(shot))
 
             verdict = await page.eval("""
                 const v = await import('./js/identify-verdict.js');
@@ -2224,7 +2350,7 @@ async def main():
             # -------------------------------------------------- routes
             routes = {
                 "home": ("#/", ".kpi__v, .empty"),
-                "identify": ("#/identify", "#takePhoto"),
+                "identify": ("#/identify", "#uploadPhoto"),
                 "info-fishes": ("#/info", ".dcard, .species-card"),
                 "info-gear": ("#/info?tab=gear", ".dcard, .gear-card"),
                 "info-zones": ("#/info?tab=zones", ".dcard, .zone-card"),
@@ -3390,6 +3516,14 @@ async def main():
                     overlays: ir.top > wr.top + 20 && ir.bottom <= wr.bottom + 2,
                     outOfFlow: getComputedStyle(info).position === 'absolute',
                     mapShare: wr.height / r.height,
+                    stripAbove: (() => {
+                      const t = screen.querySelector('.map-screen__top');
+                      return !!t && t.getBoundingClientRect().bottom <= wr.top + 2;
+                    })(),
+                    stripShort: (() => {
+                      const t = screen.querySelector('.map-screen__top');
+                      return !!t && t.getBoundingClientRect().height <= 56;
+                    })(),
                     // The whole thing must fit the viewport, not push a scroll.
                     fitsViewport: r.height <= window.innerHeight + 2,
                     topbarVar: getComputedStyle(document.documentElement)
@@ -3400,8 +3534,12 @@ async def main():
                   str(layout))
             check("the weather drawer sits over the foot of the map",
                   layout["overlays"] and layout["outOfFlow"], str(layout))
-            check("the map gets the whole screen on a phone",
-                  layout["mapShare"] >= 0.95, f"{layout['mapShare']:.2f}")
+            # A slim back-to-home strip sits above the map now that the nav
+            # bar is gone entirely, so the map owns everything except that.
+            check("the map gets nearly the whole screen on a phone",
+                  layout["mapShare"] >= 0.90, f"{layout['mapShare']:.2f}")
+            check("the way home is a real row above the map",
+                  layout["stripAbove"] and layout["stripShort"], str(layout))
             check("screen fits the viewport", layout["fitsViewport"], str(layout))
             check("topbar height is measured, not guessed",
                   layout["topbarVar"].endswith("px"), str(layout["topbarVar"]))
@@ -3519,21 +3657,21 @@ async def main():
 
             gap = await page.eval("""
                 const m = document.getElementById('mapWrap').getBoundingClientRect();
-                const bar = document.querySelector('.tabbar').getBoundingClientRect();
-                const fab = document.getElementById('quickBtn').getBoundingClientRect();
-                return { gap: Math.round(bar.top - m.bottom),
-                         // The + bulges above the bar, so IT is the nav's high
-                         // point and the thing the map has to stop short of.
-                         crownGap: Math.round(fab.top - m.bottom),
-                         barBottomGap: Math.round(window.innerHeight - bar.bottom) };
+                const bar = document.querySelector('.tabbar');
+                const drawer = document.getElementById('wxDrawer').getBoundingClientRect();
+                return { barGone: getComputedStyle(bar).display === 'none',
+                         barInert: bar.hasAttribute('inert'),
+                         // Nothing below the map now, so it must reach the
+                         // bottom of the window itself.
+                         bottomGap: Math.round(window.innerHeight - m.bottom),
+                         drawerGap: Math.round(window.innerHeight - drawer.bottom) };
             """)
-            # The bar floats now, so a gap above it is the design rather than
-            # dead space — but measured against the +, the map must still come
-            # right up to the nav instead of stopping short of it.
-            check("no dead space between map and tab bar",
-                  -4 <= gap["crownGap"] <= 18, str(gap))
-            check("the nav floats clear of the bottom edge",
-                  gap["barBottomGap"] >= 6, f"{gap['barBottomGap']}px")
+            check("the nav bar is gone on the map, not shrunk",
+                  gap["barGone"] and gap["barInert"], str(gap))
+            check("the map runs to the bottom of the window",
+                  -2 <= gap["bottomGap"] <= 4, str(gap))
+            check("the weather drawer sits on the bottom edge",
+                  -2 <= gap["drawerGap"] <= 4, str(gap))
 
             # The map is the only element that could run clean off the window,
             # and did — every other surface on this screen is inset. The bottom
@@ -4678,97 +4816,76 @@ async def main():
             check("the + has no ring around it",
                   "0px 0px 0px" not in home["fabShadow"], home["fabShadow"])
 
-            rolled = await page.eval("""
+            hidden = await page.eval("""
                 const mapHeight = () =>
                     Math.round(document.querySelector('.map-screen').getBoundingClientRect().height);
                 location.hash = '#/map';
                 await new Promise(r => setTimeout(r, 900));
                 const bar = document.querySelector('.tabbar');
-                const btn = document.getElementById('quickBtn');
-                const tall = mapHeight();
+                const back = document.querySelector('.map-screen__back');
                 return {
-                    rolled: bar.classList.contains('is-rolled')
-                            && document.body.classList.contains('is-nav-rolled'),
-                    width: Math.round(bar.getBoundingClientRect().width),
-                    // The + survives the retract — it is the way back.
-                    fabVisible: document.getElementById('quickBtn')
-                                    .getBoundingClientRect().width > 30,
-                    // Faded out is not gone: the tabs must leave the tab order.
-                    tabsUnfocusable: [...bar.querySelectorAll('a')]
-                        .every(a => a.getAttribute('tabindex') === '-1'),
-                    label: btn.getAttribute('aria-label'),
-                    // It rolls TO THE SIDE, not into its own middle. The + must
-                    // end up parked at the right edge where a thumb already is,
-                    // not floating in the centre of an invisible bar.
-                    gapRight: Math.round(window.innerWidth - bar.getBoundingClientRect().right),
-                    fabRight: Math.round(window.innerWidth
-                        - document.getElementById('quickBtn').getBoundingClientRect().right),
-                    fabPastCentre: document.getElementById('quickBtn')
-                        .getBoundingClientRect().left > window.innerWidth / 2,
-                    tall,
+                    hidden: document.body.classList.contains('is-nav-hidden'),
+                    gone: getComputedStyle(bar).display === 'none',
+                    // display:none is not enough on its own — focus already
+                    // inside the bar has to be dropped too, or the ring is left
+                    // on something that does not render.
+                    inert: bar.hasAttribute('inert'),
+                    // Nothing of the nav may be left on screen, + included.
+                    fabGone: document.getElementById('quickBtn')
+                                 .getBoundingClientRect().width === 0,
+                    // The way off the map: a labelled row, not a bare glyph.
+                    backThere: !!back && back.getBoundingClientRect().width > 40,
+                    backSays: back ? back.textContent.trim() : null,
+                    backGoes: back ? back.getAttribute('href') : null,
+                    backHigh: back ? Math.round(back.getBoundingClientRect().top) : null,
+                    stripH: Math.round(
+                        document.querySelector('.map-screen__top').getBoundingClientRect().height),
+                    tall: mapHeight(),
+                    // What the same screen measures with the bar put back —
+                    // the only honest baseline for "hiding it bought room".
+                    wasOpen: await (async () => {
+                        document.body.classList.remove('is-nav-hidden');
+                        bar.removeAttribute('inert');
+                        await new Promise(r => setTimeout(r, 550));
+                        const h = mapHeight();
+                        document.body.classList.add('is-nav-hidden');
+                        bar.setAttribute('inert', '');
+                        await new Promise(r => setTimeout(r, 550));
+                        return h;
+                    })(),
                 };
             """)
-            check("the map rolls the bar away",
-                  rolled["rolled"] and rolled["width"] < 90, str(rolled))
-            check("the + stays behind to bring it back",
-                  rolled["fabVisible"] and rolled["label"] == "Show navigation", str(rolled))
-            check("it rolls to the side rather than into its own middle",
-                  rolled["fabPastCentre"] and 8 <= rolled["fabRight"] <= 20
-                  and 8 <= rolled["gapRight"] <= 20, str(rolled))
-            check("the rolled tabs leave the tab order", rolled["tabsUnfocusable"], str(rolled))
-
-            back = await page.eval("""
-                const bar = document.querySelector('.tabbar');
-                const btn = document.getElementById('quickBtn');
-                const menu = document.getElementById('quickMenu');
-                btn.click();
-                await new Promise(r => setTimeout(r, 700));
-                const first = { rolled: bar.classList.contains('is-rolled'),
-                                width: Math.round(bar.getBoundingClientRect().width),
-                                // The first press must NOT also open the menu.
-                                menuUp: !menu.hidden,
-                                shorter: Math.round(
-                                    document.querySelector('.map-screen').getBoundingClientRect().height) };
-                btn.click();
-                await new Promise(r => setTimeout(r, 500));
-                const second = { menuUp: !menu.hidden };
-                document.getElementById('quickVeil').click();
-                await new Promise(r => setTimeout(r, 450));
-                return { first, second };
-            """)
-            check("pressing the + unrolls the bar",
-                  not back["first"]["rolled"] and back["first"]["width"] > 200, str(back["first"]))
-            check("unrolling does not also open the actions",
-                  back["first"]["menuUp"] is False, str(back["first"]))
-            check("pressing it again opens the actions", back["second"]["menuUp"], str(back))
-            # Rolling away has to actually BUY the map something, or it is just
-            # a disappearing act.
-            check("rolled, the map is taller",
-                  rolled["tall"] > back["first"]["shorter"] + 10,
-                  f'rolled {rolled["tall"]} vs open {back["first"]["shorter"]}')
+            check("the map hides the nav bar outright",
+                  hidden["hidden"] and hidden["gone"] and hidden["fabGone"], str(hidden))
+            check("the hidden bar is inert, not merely invisible",
+                  hidden["inert"], str(hidden))
+            check("a labelled way home replaces it",
+                  hidden["backThere"] and hidden["backSays"] == "Home"
+                  and hidden["backGoes"] == "#/", str(hidden))
+            check("the way home is at the top, in reach of the eye not the map",
+                  hidden["backHigh"] is not None and hidden["backHigh"] < 60, str(hidden))
+            # Hiding has to actually BUY the map something, or it is just a
+            # disappearing act — and the strip must cost less than the bar did.
+            check("hiding the nav makes the map screen taller",
+                  hidden["tall"] > hidden["wasOpen"] + 10,
+                  f'map {hidden["tall"]} vs elsewhere {hidden["wasOpen"]}')
+            check("the strip costs less than the bar it replaced",
+                  hidden["stripH"] <= 56, str(hidden))
 
             reroll = await page.eval("""
                 const bar = document.querySelector('.tabbar');
-                const wrap = document.getElementById('mapWrap');
-                const b = wrap.getBoundingClientRect();
-                wrap.dispatchEvent(new PointerEvent('pointerdown', {
-                    bubbles: true, clientX: b.left + b.width / 2, clientY: b.top + 40 }));
-                await new Promise(r => setTimeout(r, 700));
-                const rolled = bar.classList.contains('is-rolled');
-                location.hash = '#/info';
+                document.querySelector('.map-screen__back').click();
                 await new Promise(r => setTimeout(r, 800));
-                (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
-                await new Promise(r => setTimeout(r, 700));
-                await new Promise(r => setTimeout(r, 350));
-                return { rolled, offMap: bar.classList.contains('is-rolled'),
+                return { home: location.hash === '#/' || location.hash === '',
+                         backVisible: getComputedStyle(bar).display !== 'none',
+                         notInert: !bar.hasAttribute('inert'),
                          tabbable: [...bar.querySelectorAll('a')]
                              .every(a => !a.hasAttribute('tabindex')) };
             """)
-            check("touching the map puts the bar away again", reroll["rolled"], str(reroll))
-            check("leaving the map brings it back",
-                  not reroll["offMap"] and reroll["tabbable"], str(reroll))
+            check("the way home actually goes home", reroll["home"], str(reroll))
+            check("leaving the map brings the bar back",
+                  reroll["backVisible"] and reroll["notInert"] and reroll["tabbable"],
+                  str(reroll))
 
             # -------------------------------------------------- cleanup
             await page.goto(f"{BASE}/index.html#/log")

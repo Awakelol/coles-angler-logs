@@ -57,6 +57,19 @@ export function render(ctx) {
 
   return `
     <div class="map-screen">
+      <!-- The nav bar is gone on this screen (app.js), so this row is the only
+           way off the map. Phone only — the desktop rail is already visible. -->
+      <div class="map-screen__top">
+        <a class="map-screen__back" href="#/">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                  stroke-linejoin="round" d="M15 5l-7 7 7 7"/>
+          </svg>
+          Home
+        </a>
+        <p class="map-screen__where">${esc(ctx.region.name)}</p>
+      </div>
+
       <div class="map-screen__info" id="wxDrawer">
         <!-- Phone only. The weather sits over the foot of the map as a drawer
              you can pull down for a bigger map, leaving the grip and the place

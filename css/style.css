@@ -843,21 +843,108 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- identify ------------------------------------------------------------ */
 
-.identify__shot {
+/* One box, three states, switched by data-mode: the placeholder, the live
+   viewfinder, the frozen still. Stacking them in a grid cell rather than
+   swapping innerHTML is what keeps the box from collapsing to nothing and
+   snapping back between states. */
+.identify__stage {
+  position: relative;
   background: var(--art-bg);
   border: var(--border-w) solid var(--line);
   border-radius: var(--radius-sm);
   min-height: 220px;
-  display: grid; place-items: center; gap: 10px;
-  padding: 18px;
+  display: grid;
+  place-items: center;
   overflow: hidden;
 }
-.identify__shot svg { width: auto; height: 120px; }
-/* The photo replaces the placeholder entirely, so it owns the whole box. */
-.identify__shot img {
+.identify__stage > * { grid-area: 1 / 1; }
+
+.identify__idle {
+  display: grid; place-items: center; gap: 10px;
+  padding: 18px; text-align: center;
+}
+.identify__idle svg { width: auto; height: 108px; }
+
+#camView {
+  width: 100%; max-height: 420px;
+  /* COVER, not contain. A viewfinder with letterbox bars reads as a broken
+     video; the guide box below is what tells you where the crop is. */
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+#camStill {
   width: 100%; max-height: 420px;
   object-fit: contain;
   border-radius: calc(var(--radius-sm) - 4px);
+}
+
+/* The framing guide: fill this, side-on. Only up while the camera is live —
+   over a frozen still it would be telling you to fix a photo already taken. */
+.identify__guide {
+  place-self: stretch;
+  display: none;
+  pointer-events: none;
+  padding: 12px;
+}
+.identify__guide span {
+  display: block; height: 100%;
+  border: 2px dashed rgb(255 255 255 / .55);
+  border-radius: var(--radius-sm);
+}
+
+.identify__stage[data-mode="idle"]  #camView,
+.identify__stage[data-mode="still"] #camView { display: none; }
+.identify__stage[data-mode="live"]  .identify__idle,
+.identify__stage[data-mode="still"] .identify__idle { display: none; }
+.identify__stage[data-mode="live"]  .identify__guide { display: block; }
+
+.identify__controls {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin-top: 12px;
+}
+.identify__start { flex: 1; }
+
+/* A round shutter, because that is what a shutter looks like everywhere else a
+   camera appears. A rectangle saying "Take photo" under a live viewfinder
+   reads as a form control and gets hunted for. */
+.identify__shutter {
+  width: 64px; height: 64px; flex: none;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform .12s ease;
+}
+.identify__shutter span {
+  display: block; width: 46px; height: 46px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform .12s ease;
+}
+.identify__shutter:hover span { transform: scale(.92); }
+.identify__shutter:active { transform: scale(.94); }
+.identify__shutter:disabled { opacity: .5; cursor: default; }
+.identify__shutter:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+/* Quieter than the shutter and always present — a second way in, not a rival
+   to the primary one. */
+.identify__upload {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 10px; padding: 10px 14px;
+  border: var(--border-w-sm) dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: none; color: var(--ink-60);
+  font: 800 13px/1 var(--font);
+  cursor: pointer;
+}
+.identify__upload:hover { background: var(--blue-lt); color: var(--ink); }
+.identify__upload:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.identify__upload svg { width: 18px; height: 18px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .identify__shutter, .identify__shutter span { transition: none; }
 }
 
 /* The identified species, art beside the name. Stacks on a narrow phone so
@@ -1131,13 +1218,47 @@ body:has(.map-screen) { padding-bottom: 0; }
      row to size — which is also what stopped the old split from being a
      compromise: the panel needed room for a forecast, the map needed room to
      be a map, and on a short phone neither won. */
-  grid-template-rows: minmax(0, 1fr);
+  /* A slim row for the way home, then the map. The strip is a REAL row rather
+     than another floating pill: the map already carries four of those, and the
+     one control you must always be able to find is the one that should not be
+     hunted for among them. It costs ~40px and it replaces a 58px puck. */
+  grid-template-rows: auto minmax(0, 1fr);
   height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-space) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
   margin-bottom: calc(var(--tab-space) + env(safe-area-inset-bottom, 0px));
   transition: height .38s cubic-bezier(.32,.72,.3,1),
               margin-bottom .38s cubic-bezier(.32,.72,.3,1);
 }
+
+.map-screen__top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px calc(6px + env(safe-area-inset-top, 0px));
+  background: var(--cream);
+  border-bottom: var(--border-w) solid var(--line);
+}
+.map-screen__back {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 5px 12px 5px 9px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  background: var(--paper); color: var(--ink);
+  font: 800 13px/1 var(--font);
+  text-decoration: none;
+  cursor: pointer;
+}
+.map-screen__back:hover { background: var(--blue-lt); }
+.map-screen__back:active { transform: scale(.96); }
+.map-screen__back:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.map-screen__back svg { flex: none; }
+/* The place name, so the strip is not one lonely button in a bar of nothing. */
+.map-screen__where {
+  margin: 0 0 0 auto; padding-right: 4px;
+  font-size: 10px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-60);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Desktop keeps the side rail, so the way home is already on screen. */
+@media (min-width: 900px) { .map-screen__top { display: none; } }
 
 .map-screen__info {
   /* Out of the grid flow entirely, so #mapWrap fills the single row. */
@@ -1703,36 +1824,13 @@ body:has(.map-screen) { padding-bottom: 0; }
   transition: color .2s ease, transform .2s ease, opacity .18s ease;
 }
 
-/* Phone only. Above 900px the map is already a two-column layout with room to
-   spare, and hiding the primary navigation behind a button to buy space that
-   is not scarce is a trade in the wrong direction. The class still goes on —
-   it just does nothing here. */
+/* Phone only. Above 900px the bar is a side rail on a window with room to
+   spare, and hiding the primary navigation to buy space that is not scarce is
+   a trade in the wrong direction. */
 @media (max-width: 899px) {
-  .tabbar.is-rolled {
-    width: var(--fab-d);
-    background: transparent;
-    border-color: transparent;
-    box-shadow: none;
-    /* ONE cell, with everything stacked in it. Left as five columns, each
-       column still claims its min-content — the tabs' labels — so the track
-       total stayed near 260px inside a 58px box and the grid overflowed,
-       carrying the + clean off the right edge of the screen. Fading a thing
-       does not stop it taking up room. */
-    grid-template-columns: 1fr;
-  }
-  .tabbar.is-rolled > * { grid-column: 1; grid-row: 1; }
-  /* The tabs go first and come back last, so the pill is never caught
-     mid-width with legible labels squashed into it. */
-  .tabbar.is-rolled a {
-    opacity: 0; pointer-events: none; transform: scale(.7);
-    transition-duration: .14s;
-  }
-  /* Rolled, the bump would read as the white collar this was meant to lose. */
-  .tabbar.is-rolled::before { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
-  /* Nothing left to bulge out of, so the + settles into the middle. */
-  .tabbar.is-rolled .fab { transform: none; }
-  .tabbar.is-rolled .fab:active { transform: scale(.92); }
+  body.is-nav-hidden .tabbar { display: none; }
 }
+
 .fab[aria-expanded="true"] { background: var(--ink); }
 
 /* Two bars that rotate into an x. Rotating the SAME shape is what sells it —
@@ -1748,12 +1846,12 @@ body:has(.map-screen) { padding-bottom: 0; }
 .fab[aria-expanded="true"] .fab__x i:first-child { transform: translate(-50%, -50%) rotate(135deg); }
 .fab[aria-expanded="true"] .fab__x i:last-child  { transform: translate(-50%, -50%) rotate(45deg); }
 
-/* The room the retracted bar gives back. Scoped to the body so .map-screen's
-   height and margin — both derived from --tab-space — grow together. */
+/* The room the hidden bar gives back — all of it. Scoped to the body so
+   .map-screen's height and margin, both derived from --tab-space, grow
+   together. Zero, not a smaller number: retracting to a puck used to leave
+   58px plus its clear space parked over the map in exchange for nothing. */
 @media (max-width: 899px) {
-  body.is-nav-rolled {
-    --tab-space: calc(12px + var(--fab-d) + 12px);
-  }
+  body.is-nav-hidden { --tab-space: 0px; }
 }
 
 /* --- the quick-action stack --------------------------------------------- */

@@ -243,71 +243,64 @@ function buildBrandMark() {
 // Lives here rather than in a page module: the nav is outside the router's
 // view, so a page that owned this would take it down on every navigation.
 // ---------------------------------------------------------------------------
-// THE ROLLED NAV
+// THE HIDDEN NAV
 //
-// On the map the bar retracts into the + and hands its space to the map; the +
-// brings it back. Only on the map: it is the one screen where the content is
-// the whole viewport and every pixel of chrome is taken from it.
+// On the map the bar goes away completely and the map takes the whole screen.
+// Only on the map: it is the one screen where the content IS the viewport and
+// every pixel of chrome is taken from it.
+//
+// It used to retract into the +, which kept a 58px puck and its clear space
+// parked over the map for no return — a bar shrunk to a button is still a bar
+// in the way. Going means going. What replaces it is the map's own top strip
+// (see map.js), a back-to-home row that is smaller than the puck was and, un-
+// like it, tells you where the button leads.
 //
 // The state is a class on <body>, not a style on the bar, because --tab-space
 // is what every screen leaves clear for the nav — the map's height and margin
-// both derive from it, so shrinking that one token is what actually gives the
+// both derive from it, so zeroing that one token is what actually gives the
 // room away. Leaflet notices via the ResizeObserver map.js already has.
 // ---------------------------------------------------------------------------
 
-const ROLLS_AWAY = new Set(['/map']);
+const NAV_HIDES = new Set(['/map']);
 
-/** Whether the bar is currently retracted. */
-export function navRolled() {
-  return document.body.classList.contains('is-nav-rolled');
+/** Whether the bar is currently hidden. */
+export function navHidden() {
+  return document.body.classList.contains('is-nav-hidden');
 }
 
 const PHONE = () => matchMedia('(max-width: 899px)').matches;
 
-function setNavRolled(rolled) {
+function setNavHidden(hide) {
   const bar = document.querySelector('.tabbar');
   if (!bar) return;
-  // The rolled RULES are phone-only, but tabindex is not a rule — applied at
-  // desktop width it left every link in a fully visible rail unreachable by
-  // keyboard on the map. The behaviour has to agree with the media query, not
-  // just sit behind it.
-  rolled = rolled && PHONE();
-  bar.classList.toggle('is-rolled', rolled);
-  document.body.classList.toggle('is-nav-rolled', rolled);
-  // Faded out is not the same as gone. Without this the five tabs stay in the
-  // tab order behind a transparent bar, and keyboard focus disappears into a
-  // strip of nothing.
-  for (const a of bar.querySelectorAll('a')) {
-    if (rolled) a.setAttribute('tabindex', '-1');
-    else a.removeAttribute('tabindex');
-  }
+  // The hiding is phone-only. Above 899px the bar is a side rail on a window
+  // with room to spare, and taking the primary navigation away to buy space
+  // that is not scarce is a trade in the wrong direction.
+  hide = hide && PHONE();
+  document.body.classList.toggle('is-nav-hidden', hide);
+  // display:none already takes it out of the tab order, but `inert` also drops
+  // any focus that is currently INSIDE it — without that, hiding the bar while
+  // a tab is focused leaves the focus ring on an element that no longer
+  // renders, and the next Tab starts from nowhere.
+  bar.toggleAttribute('inert', hide);
+  if (hide && bar.contains(document.activeElement)) document.activeElement.blur();
+  // The + lives in the bar, so hiding it hides the quick actions with it. An
+  // open menu would otherwise be left floating over the map with no button.
   const btn = document.getElementById('quickBtn');
-  if (btn && btn.getAttribute('aria-expanded') !== 'true') {
-    btn.setAttribute('aria-label', rolled ? 'Show navigation' : 'Add');
-  }
+  if (hide && btn?.getAttribute('aria-expanded') === 'true') btn.click();
 }
 
-/** Called on every render: the map rolls the bar away, everything else opens it. */
+/** Called on every render: the map hides the bar, everything else restores it. */
 function syncNavRoll(path) {
-  setNavRolled(ROLLS_AWAY.has(path));
+  setNavHidden(NAV_HIDES.has(path));
 }
 
-// Dragging a window across the breakpoint has to re-decide, or a bar rolled on
-// a narrow window stays rolled — and unfocusable — once it is a rail.
+// Dragging a window across the breakpoint has to re-decide, or a bar hidden on
+// a narrow window stays hidden — and unreachable — once it is a rail.
 matchMedia('(max-width: 899px)').addEventListener?.('change', () => {
   syncNavRoll(parseHash().path);
 });
 
-// Touching the map puts the bar away again. Delegated on the document rather
-// than bound in map.js, because the map is re-created on every visit and this
-// outlives it.
-document.addEventListener('pointerdown', (e) => {
-  if (!ROLLS_AWAY.has(parseHash().path)) return;
-  if (navRolled()) return;
-  if (document.getElementById('quickBtn')?.getAttribute('aria-expanded') === 'true') return;
-  if (!e.target.closest?.('#mapWrap')) return;
-  setNavRolled(true);
-}, true);
 
 // ---------------------------------------------------------------------------
 // THE COLLAPSED RAIL
@@ -411,13 +404,6 @@ function wireQuickActions() {
   });
 
   btn.addEventListener('click', () => {
-    // Rolled, the + is the way back to the nav and nothing else. Opening the
-    // actions in the same press would put a menu over a bar that was still
-    // unrolling behind it, and you would not see what you had just done.
-    if (navRolled()) {
-      setNavRolled(false);
-      return;
-    }
     setOpen(btn.getAttribute('aria-expanded') !== 'true');
   });
   veil.addEventListener('click', () => setOpen(false));

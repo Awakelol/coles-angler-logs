@@ -20,9 +20,19 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.15.1';
+export const APP_VERSION = '3.16.0';
 
 export const CHANGELOG = [
+  {
+    version: '3.16.0',
+    date: '2026-08-09',
+    title: 'A live camera, and a full-screen map',
+    changes: [
+      'The camera is now a live viewfinder — frame the fish and shoot.',
+      'Upload an existing photo any time, from the button below it.',
+      'The map takes the whole screen; a Home button sits above it.',
+    ],
+  },
   {
     version: '3.15.1',
     date: '2026-08-07',

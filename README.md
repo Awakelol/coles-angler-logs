@@ -110,6 +110,47 @@ search box does — *which fish is this* — from a picture instead of a name. I
 mode that takes a photo isn't one of them. The old `#/identify` link still
 resolves, redirecting to `#/info?tab=photo`.
 
+### A live viewfinder, but a still to identify
+
+Those are two questions and only the first one changed.
+
+**Live preview: yes.** `capture="environment"` used to hand the whole job to
+the OS camera app — you left the page, shot, and came back, and the app had no
+say in framing. In-page you see the framing guide, hold the fish where it
+belongs, and shoot when it looks right. The guide matters more than it looks:
+a fish filling the frame side-on is the single biggest difference between a
+photo that identifies and one that doesn't, so the app says so where you are
+looking rather than in help text under the button.
+
+**Live detection, a model per frame: still no.** A fish in a bucket or on the
+line isn't moving, so per-frame inference buys nothing. The general-purpose
+browser models classify ImageNet categories — "coho salmon", "tench" — useless
+for Indo-Pacific reef fish, and one that isn't useless is too large to ship to
+a phone on a boat. It would eat the battery on the one device that has to last
+the trip. Above all, **a still can be taken now and identified later**, which
+matters most here: this app is used where there is no signal, and a photo waits
+for one. The shutter draws the current frame to a canvas at the camera's real
+resolution, and that still goes down the same pipeline the file picker uses.
+
+The camera is asked for with `facingMode: { ideal: 'environment' }` — the rear
+lens by preference, never by requirement. `exact` throws outright on a laptop
+with only a front camera, and a webcam pointed at a fish on the desk is a
+perfectly good photo.
+
+**The camera can always fail, and it isn't an edge case**: no HTTPS, no camera,
+permission denied, another app holding the device. All of them land on the file
+picker, which is why **the picker is a permanent control at the bottom** rather
+than a fallback that appears in trouble. A photo already in the roll is a
+first-class way in — the good shot of the fish is often the one taken an hour
+ago on the boat.
+
+**Unmounting stops the tracks.** A camera left running is a lit LED and a flat
+battery, and Info switches modes with `replaceState`, so no `hashchange` fires
+to clean up behind it. The panel hands back a cleanup and Info has to call it.
+The still leaves the camera *running* on purpose: a retake that cold-starts the
+device is a retake nobody bothers with, and releasing the track can bring the
+permission prompt back a second time.
+
 ### How it works, and why it's free
 
 **Fishial.AI does the looking** — a model trained specifically on fish, free on
@@ -559,8 +600,8 @@ The swell around it belongs to **the bar**, not the button — it is
 `.tabbar::before`, a disc in the bar's colour that paints over the bar's own
 hairline where they overlap, so the silhouette comes out as one shape. Built as
 a ring on the button instead, it travels with the button and is still there
-when the bar rolls away, which reads as the + growing a collar rather than the
-nav retracting.
+when the bar goes, which reads as the + growing a collar rather than the nav
+leaving.
 
 ### Two names, and a face
 
@@ -960,44 +1001,41 @@ There is **no right-hand rail**, unlike the reference. The map already puts its
 weather panel beside the map on desktop; a second permanent column on every
 other screen would be furniture looking for content.
 
-### The nav rolls away on the map
+### The nav disappears on the map
 
-On **/map** the bar retracts **to the bottom-right** and hands its space back;
-pressing the + brings it out again. The pill is anchored on its right edge
-rather than centred — the same position either way, but it decides which way it
-goes when it shrinks. Centred it collapsed about its own middle and left the +
-floating in the void; pinned right it rolls to the edge and parks where a thumb
-already is. Only the map: it is the one screen where the content is
-the whole viewport and every pixel of chrome is taken from it. Phone only, too
-— above 900px the map is already a two-column layout with room to spare, and
-hiding the primary navigation to buy space that isn't scarce is a trade in the
-wrong direction.
+On **/map** the bar is **gone** — `display: none`, not shrunk — and the map and
+weather drawer take the whole screen. It used to retract into the +, which kept
+a 58px puck and its clear space parked over the map in exchange for nothing: a
+bar shrunk to a button is still a bar in the way. Going means going.
+
+Only the map: it is the one screen where the content *is* the viewport and
+every pixel of chrome is taken from it. Phone only, too — above 900px the map
+is already a two-column layout with room to spare, and hiding the primary
+navigation to buy space that isn't scarce is a trade in the wrong direction.
+
+What replaces it is **the map's own top strip**: a back-to-home row above the
+map, ~40px, smaller than the puck it replaced. It is a real row rather than
+another floating pill because the map already carries four of those, and the
+one control you must always be able to find is the one that shouldn't be hunted
+for among them. It is also labelled — "Home", not a bare chevron — so it says
+where it goes. Desktop hides it: the side rail is already on screen.
 
 The state is a class on `<body>`, not a style on the bar, because
 `--tab-space` is what every screen leaves clear for the nav. The map's height
-and margin both derive from it, so shrinking that one token is what actually
+and margin both derive from it, so zeroing that one token is what actually
 gives the room away — and Leaflet notices through the `ResizeObserver` in
 `js/pages/map.js`.
 
-While rolled, the **+ does one job only: bring the bar back.** Opening the
-quick actions on the same press would put a menu over a bar still unrolling
-behind it. Press it again once you can see the bar and it opens the actions as
-usual. Touching the map puts it away again, and leaving the map restores it.
+The hidden bar gets **`inert`**, not just `display: none`. Display alone takes
+it out of the tab order, but focus already *inside* it stays put — the ring
+left on an element that no longer renders, and the next Tab starting from
+nowhere. Hiding also closes the quick-action menu, which lives in the + and
+would otherwise be left floating over the map with no button under it.
 
-**The roll is phone-only in behaviour, not just in CSS.** Its rules are behind
-a media query, but `tabindex` is not a rule — applied at desktop width it left
-every link in a fully visible rail unreachable by keyboard on the map. The
-toggle re-checks the media query, and re-runs when the window crosses it.
-
-Rolled, the bar becomes **one grid cell with everything stacked in it**. Left
-as five columns, each column still claims its min-content — the tabs' labels —
-so the track total stayed near 260px inside a 58px box, the grid overflowed, and
-the + went clean off the right edge of the screen. Fading a thing does not stop
-it taking up room.
-
-The tabs get `tabindex="-1"` while rolled. Faded out is not gone: without it,
-five links stay in the tab order behind a transparent bar and keyboard focus
-disappears into a strip of nothing.
+**The hiding is phone-only in behaviour, not just in CSS.** The rule is behind
+a media query, but `inert` is not a rule — applied at desktop width it would
+make a fully visible rail unusable. The toggle re-checks the media query, and
+re-runs when the window crosses it.
 
 `--fab-crown` is the nav's true high point, the top of the + with its ring.
 Everything that has to clear the bar clears the bulge too because it is derived

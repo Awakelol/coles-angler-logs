@@ -231,14 +231,21 @@ async def main():
             onmap = await ev("""
                 const bar = document.querySelector(".tabbar");
                 const links = [...bar.querySelectorAll("a[data-tab]")];
-                return { rolled: bar.classList.contains("is-rolled"),
-                         body: document.body.classList.contains("is-nav-rolled"),
+                const strip = document.querySelector(".map-screen__top");
+                return { hidden: document.body.classList.contains("is-nav-hidden"),
+                         shown: getComputedStyle(bar).display !== "none",
+                         inert: bar.hasAttribute("inert"),
                          width: Math.round(bar.getBoundingClientRect().width),
+                         // The phone's back-to-home strip would be redundant
+                         // chrome here: the rail is already on screen.
+                         stripHidden: !!strip && getComputedStyle(strip).display === "none",
                          focusable: links.every(a => a.getAttribute("tabindex") !== "-1") };
             """)
-            check("the map does not roll the rail away",
-                  not onmap["rolled"] and not onmap["body"] and onmap["width"] > 200,
-                  str(onmap))
+            check("the map does not hide the rail",
+                  not onmap["hidden"] and onmap["shown"] and not onmap["inert"]
+                  and onmap["width"] > 200, str(onmap))
+            check("no back-to-home strip where the rail is already visible",
+                  onmap["stripHidden"], str(onmap))
             check("the rail stays keyboard-reachable on the map",
                   onmap["focusable"], str(onmap))
 
