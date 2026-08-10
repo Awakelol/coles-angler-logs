@@ -20,9 +20,18 @@
 // changes itself tells you nothing about whether anyone meant it to.
 // ---------------------------------------------------------------------------
 
-export const APP_VERSION = '3.23.1';
+export const APP_VERSION = '3.23.2';
 
 export const CHANGELOG = [
+  {
+    version: '3.23.2',
+    date: '2026-08-10',
+    title: 'The hairtail is a hairtail again',
+    changes: [
+      'Fixed the hairtail card, which was showing a cornetfish.',
+      'Sharper photos for the conger eel and the dory snapper.',
+    ],
+  },
   {
     version: '3.23.1',
     date: '2026-08-10',
