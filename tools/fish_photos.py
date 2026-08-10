@@ -1170,7 +1170,14 @@ def cmd_verify(args):
         if not rec or v["index"] >= len(rec["candidates"]):
             bad(sid, f"pick #{v['index']} no longer exists - re-run review")
             continue
-        url = rec["candidates"][v["index"]]["url"].split("?")[0]
+        # KEY ON THE RECORD, NOT THE FILE URL. Stripping the query to
+        # normalise iNat's size parameters also collapsed SAIAB's specimen
+        # images, which carry the filename IN the query — so two different
+        # museum photos looked like one and a good pick was reported as a
+        # duplicate. The observation or occurrence page is the real identity
+        # of a photo; the URL is only where the bytes happen to live.
+        cnd = rec["candidates"][v["index"]]
+        url = cnd.get("page") or cnd["url"]
         if url in seen:
             bad(sid, f"same photo as {seen[url]} - one of them is the wrong fish")
         seen[url] = sid

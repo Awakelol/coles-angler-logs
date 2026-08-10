@@ -1758,6 +1758,6 @@ export const INDO_PACIFIC_SPECIES = [
     sprite: 'squid',
     palette: 'violet',
     art: 'placeholder',
-    notes: 'Heavier and broader than the squid already in this guide, with a thick internal cuttlebone. Comes to the same jigs worked under a light, and changes colour in bands when it is deciding whether to strike.',
+    notes: 'Recent taxonomy moves this to Acanthosepion pharaonis; the name here is the one FishBase and SeaLifeBase still use, so the links keep working. Heavier and broader than the squid already in this guide, with a thick internal cuttlebone. Comes to the same jigs worked under a light, and changes colour in bands when it is deciding whether to strike.',
   },
 ];
