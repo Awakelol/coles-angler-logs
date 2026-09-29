@@ -24,6 +24,7 @@ import websockets
 
 CHROME = next(
     (p for p in [
+        os.environ.get("CHROME", ""),
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -32,32 +33,14 @@ CHROME = next(
     None,
 )
 
-# Species drawing a silhouette borrowed from another fish, declared in the
-# data as `art: 'placeholder'`. This number may only ever go DOWN in the normal
-# course of work: drawing real art and clearing the flag is the only way to
-# lower it, and adding a placeholder beyond the ceiling fails the suite on
-# purpose.
+# Max number of species using a borrowed sprite (`art: 'placeholder'` in the
+# data). Should only go down as real art gets drawn in tools/author_sprites.py.
 #
-#   28  the Leyte island expansion
-#   39  the FishBase ecosystem expansion   <- RAISED, deliberately
-#    4  the Southern Leyte provincial record
-#   --
-#   71
+#   28  Leyte island expansion
+#   39  FishBase ecosystem expansion
+#    4  Southern Leyte provincial record
 #
-# THE CEILING WENT UP. The rule above says the backlog may be paid off and never
-# grown, and expanding the catalogue from 68 species to 111 at Gabriel's request
-# broke it. That was a considered trade, not an accident: a guide that names the
-# fish someone is holding is worth more than bespoke art for the ones they could
-# already look up. It is recorded here rather than hidden in a diff so the debt
-# stays visible and countable.
-#
-# COUNT BY OBJECT, NOT BY GREP. `grep -c "art: 'placeholder'"` over the data
-# reports 74, because the string also appears in three section comments that
-# explain the flag. The first raise was set from that grep and was three too
-# high — a ceiling with slack in it is not a ceiling.
-#
-# It goes DOWN from here. Twenty families are new to the app and none has drawn
-# art; tools/author_sprites.py is where that work happens.
+# Counted by object, not by grepping the source (comments mention the flag).
 ART_DEBT_MAX = 71
 
 BASE = os.environ.get("APP_BASE", "http://127.0.0.1:8777")
@@ -160,15 +143,13 @@ def static_checks():
     upd = open(os.path.join(root, "js", "updates.js"), encoding="utf-8").read()
     check("app watches for new versions", "controllerchange" in upd and "reg.update()" in upd)
     check("update reload waits for open forms", "sheetOpen" in upd)
-    # A first visit has no controller; clients.claim() fires controllerchange
-    # anyway. Reloading on that made every fresh load reload itself, and it
-    # ate the Google sign-in redirect result mid-flight.
+    # A first visit has no controller, and clients.claim() still fires
+    # controllerchange; reloading then broke the Google sign-in redirect.
     check("first install does not trigger a reload",
           "hadController" in upd and "if (!hadController) return" in upd,
           "controllerchange on first install must not reload")
 
-    # The store test wipes the catch log and is deployed with the app, so it
-    # must refuse to run on anything but a local host.
+    # The store test page must refuse to run off localhost.
     tst = open(os.path.join(root, "tools", "test-store.html"), encoding="utf-8").read()
     check("destructive test page is localhost-only",
           "location.hostname" in tst and "REFUSED" in tst,
@@ -186,15 +167,13 @@ def static_checks():
     for sub in ("js", "css"):
         for dirpath, _, files in os.walk(os.path.join(root, sub)):
             for f in files:
-                # config.local.js holds secrets and config.local.example.js is a
-                # template — neither is imported, so neither should be precached.
+                # Don't precache config.local*.js.
                 if f.endswith((".js", ".css")) and ".local" not in f:
                     rel = os.path.relpath(os.path.join(dirpath, f), root)
                     on_disk.add(rel.replace(os.sep, "/"))
     missing = sorted(on_disk - listed)
     check("every module is precached for offline", not missing, ", ".join(missing))
-    # The other direction: a precached path that no longer exists is a silent
-    # 404 on every install. cache.add() swallows it, so nothing ever complains.
+    # Every precached path must exist.
     stale = sorted(listed - on_disk)
     check("no precached module has been deleted", not stale, ", ".join(stale))
 
@@ -206,8 +185,7 @@ async def ev_pile(page):
         const fs = [...document.querySelectorAll('.dcard')].filter(c => !c.hidden);
         const boxes = fs.map(f => f.getBoundingClientRect());
         const bills = fs.map(f => f.querySelector('.dcard__bill').getBoundingClientRect());
-        // The bill carries the fill now, not the wrapper — the folder is two
-        // rounded boxes sharing a background, so the wrapper is transparent.
+        // The fill is on the tab/body, not the wrapper.
         const bgs = new Set(fs.map(f => getComputedStyle(f.querySelector('.dcard__bill')).backgroundColor));
         return {
             folders: document.querySelectorAll('.dcard').length,
@@ -230,20 +208,16 @@ async def ev_pile(page):
             floatingOne: fs.filter(f =>
                 getComputedStyle(f.querySelector('.dcard__float')).animationName !== 'none'
             ).length === 1,
-            // One place: the cards behind are scaled horizontally, so only the
-            // centre line is shared — comparing left edges would be wrong.
+            // Cards behind are scaled horizontally, so compare centre lines.
             centred: boxes.every(b =>
                 Math.abs((b.left + b.right) / 2 - (boxes[0].left + boxes[0].right) / 2) < 2),
-            // UPWARD: the folder you are reading is the lowest, and the ones
-            // still to come stack above it.
+            // Upcoming cards stack upward.
             ascending: bills.every((b, i) => i === 0 || b.top < bills[i - 1].top),
-            // ...and each upcoming bill is COMPLETELY clear of the one in front,
-            // because a name you can only see a slice of is worse than none.
+            // Each upcoming tab is fully visible.
             billsClear: bills.every((b, i) => i === 0 || b.bottom <= bills[i - 1].top + 2),
             // The folder shape: a bill narrower than the body under it.
             billNarrower: bills.every((b, i) => b.width < boxes[i].width - 20),
-            // The idle float, running and staggered so the fan breathes rather
-            // than pulsing in unison.
+            // Idle float is running, with staggered delays.
             floating: (() => {
                 const live = document.querySelector('.dcard.is-live .dcard__float');
                 if (!live) return false;
@@ -329,9 +303,7 @@ async def main():
             check("hero art present for every archetype", hero["count"] >= 13, str(hero["count"]))
             check("no hero has ragged rows", not hero["ragged"], ", ".join(hero["ragged"]))
             check("every species renders a hero", not hero["missing"], ", ".join(hero["missing"][:5]))
-            # NOT hasHero() — a species given sprite:'perch' because a perch
-            # is roughly the right shape reports hasHero() true, so inference
-            # would hide the backlog exactly as it grew. The flag is declared.
+            # Use the explicit flag; hasHero() is true for borrowed sprites too.
             debt = await page.eval("""
                 const p = await import('./js/pixel.js');
                 const d = await import('./js/data/index.js');
@@ -354,10 +326,8 @@ async def main():
             check("all palettes are 9 valid hex slots", not art["bad"], "; ".join(art["bad"]))
             check("no sprite has ragged rows", not art["ragged"], ", ".join(art["ragged"]))
 
-            # renderSprite merges runs of one colour along a row into a single
-            # wide rect. That is supposed to be INVISIBLE — same picture, fewer
-            # nodes. These pin both halves of that claim, so a future change to
-            # the emitter can't quietly drop or shift a pixel to look faster.
+            # renderSprite merges same-colour runs into one rect. Check the
+            # output is pixel-identical and actually smaller.
             runs = await page.eval("""
                 const p = await import('./js/pixel.js');
                 const parse = (svg) => [...svg.matchAll(
@@ -424,8 +394,7 @@ async def main():
             check("no rect paints over another", not runs["overlap"], ", ".join(runs["overlap"]))
             check("touching same-colour rects really are merged",
                   not runs["fat"], "; ".join(runs["fat"]))
-            # 432 before the merge. The Info tab draws sixty-odd at once, so
-            # this is the number that decides whether searching feels instant.
+            # Was 432 before merging runs.
             check("a species hero stays under 250 rects",
                   runs["nodesPerHero"] < 250, f"{runs['nodesPerHero']} rects per hero")
 
@@ -462,10 +431,7 @@ async def main():
             trans = await page.eval("""
                 const supported = typeof document.startViewTransition === 'function';
 
-                // Poll rather than sleep a fixed amount. A cold start can stall
-                // the first render past any constant you pick — the Firebase
-                // SDK fetch alone is ~200KB — and this test failed roughly one
-                // run in two purely on that timing.
+                // Poll instead of a fixed sleep; a cold start can be slow.
                 const until = async (sel, ms = 4000) => {
                     const end = Date.now() + ms;
                     while (Date.now() < end) {
@@ -475,11 +441,8 @@ async def main():
                     return false;
                 };
 
-                // Start from a KNOWN different route. Setting the hash to its
-                // current value fires no hashchange, so if an earlier block
-                // left us on this exact tab nothing re-renders and the wait
-                // below times out against a stale page — which is what made
-                // this test fail intermittently rather than honestly.
+                // Go to a different route first: setting the hash to its current value
+                // doesn't fire hashchange.
                 location.hash = '#/';
                 await until('.kpi__v, .empty');
 
@@ -537,15 +500,13 @@ async def main():
                                scheme: document.documentElement.style.colorScheme,
                                shadow: read('--shadow'), bw: read('--border-w') };
 
-                // Every custom property must be a real value; a typo like
-                // "#46real" silently falls back and is easy to miss.
+                // Every custom property must resolve to a valid value.
                 const names = ['--cream','--paper','--ink','--ink-60','--ink-30','--line',
                                '--band-cream','--band-sky','--band-yellow','--band-green',
                                '--band-coral','--band-violet','--art-bg','--art-bg-2',
                                '--invert-bg','--invert-fg','--notice-warn','--notice-error',
                                '--skeleton-a','--skeleton-b'];
-                // `transparent` is a real answer for the bands in dark mode —
-                // they get out of the bloom's way rather than painting over it.
+                // Bands are transparent in dark mode.
                 const bad = names.filter(n =>
                     !/^(#[0-9a-f]{3,8}|rgba?\\(|transparent$)/i.test(read(n)));
 
@@ -555,8 +516,7 @@ async def main():
             """)
             check("light theme applies", theme["light"]["attr"] == "light" and
                   theme["light"]["bg"].upper() == "#F6F4EA", str(theme["light"]))
-            # Dark mode is back on, and it is not an inversion of light — it is
-            # its own palette, so this checks the values it actually has.
+            # Dark palette values.
             check("dark theme applies",
                   theme["dark"]["attr"] == "dark"
                   and theme["dark"]["bg"].upper() == "#080B14"
@@ -565,10 +525,7 @@ async def main():
                 "const t = await import('./js/theme.js'); return !t.THEME_LOCKED;")
             check("the theme picker is unlocked", unlocked, str(unlocked))
 
-            # ONE LIGHT PER PAGE. The hue is the page's subject, the burn is the
-            # theme's, and the two must not know about each other — that
-            # orthogonality is the whole reason this is seven hue triples and
-            # two alpha sets rather than fourteen hand-tuned palettes.
+            # Per-page glow: hues come from the page, strengths from the theme.
             glow = await page.eval("""
                 const root = document.documentElement;
                 const read = () => {
@@ -614,17 +571,13 @@ async def main():
             check("the page's hue reaches the painted layer",
                   glow["seen"]["log"]["hue"].split()[0] in glow["seen"]["log"]["bloom"],
                   str(glow["seen"]["log"]))
-            # The ramp is what makes this atmosphere rather than a stripe along
-            # the bottom: a radius that dies at 68% of the screen cannot be
-            # rescued by opacity. Pin the reach, not the look.
+            # The gradients need to reach up the screen, not stop in a band at
+            # the bottom.
             import_ok = glow["layers"].count("radial-gradient")
             check("the light is built from stacked radial sources",
                   import_ok >= 5, f"{import_ok} radial layers")
-            # The bug this pins: card-deck.js writes folders a z-index of up
-            # to 1000 to stack the pile, which in the root stacking context
-            # also beat the nav (50) and the quick actions (51) — so the open
-            # + menu rendered UNDER the folders. The deck must be its own
-            # stacking context, or those numbers leak into the whole app.
+            # card-deck.js sets z-indexes up to 1000; the deck must be its own
+            # stacking context or it covers the nav and the + menu.
             stack = await page.eval("""
                 location.hash = '#/info';
                 await new Promise(r => setTimeout(r, 900));
@@ -635,8 +588,7 @@ async def main():
                 await new Promise(r => setTimeout(r, 600));
                 const menu = document.getElementById('quickMenu');
                 const mb = menu.getBoundingClientRect();
-                // Hit-test the middle of the menu: whatever is painted on top
-                // there is what the user's finger would actually land on.
+                // Hit-test the middle of the menu.
                 const hit = document.elementFromPoint(mb.left + mb.width / 2,
                                                       mb.top + mb.height / 2);
                 const out = {
@@ -662,9 +614,7 @@ async def main():
                   - min(int(x) for x in glow["seen"]["info"]["hue"].split()),
                   f'settings {glow["seen"]["settings"]["hue"]} vs info {glow["seen"]["info"]["hue"]}')
 
-            # The accent has to change DIRECTION between themes. #2B4593 is a
-            # strong colour on cream and nearly invisible on #0B0E17, so dark
-            # uses a light blue with dark text — the same relationship inverted.
+            # Dark mode uses a light accent with dark text on it.
             accent = await page.eval("""
                 const t = await import('./js/theme.js');
                 const read = (n) => getComputedStyle(document.documentElement)
@@ -684,8 +634,7 @@ async def main():
             """)
             check("the accent inverts with the theme",
                   accent["dBlue"] > accent["lBlue"] + 0.25, str(accent))
-            # The rail is the app's one dark surface. Bound to --ink it flipped
-            # with the text and turned white on a black page.
+            # The rail stays dark in both themes.
             check("the rail stays dark in both themes",
                   accent["d"]["rail"].upper() == "#121724", str(accent["d"]))
 
@@ -695,9 +644,8 @@ async def main():
                   f"meta {theme['light']['meta']} vs canvas {theme['light']['bg']}")
             check("no malformed CSS variables", not theme["bad"], ", ".join(theme["bad"]))
 
-            # Real contrast maths on rendered elements. Bright accent fills
-            # (yellow buttons, green chips) don't invert in dark mode, so
-            # anything inheriting --ink ends up near-white on yellow.
+            # Contrast of rendered elements. Accent fills don't invert in dark
+            # mode, so --ink text on them would be unreadable.
             contrast = await page.eval("""
                 const t = await import('./js/theme.js');
                 const lum = (c) => {
@@ -768,8 +716,7 @@ async def main():
                         if (!known.has(id)) dangling.push(`${z.id}:${id}`);
                     }
                 }
-                // A species in a zone but missing from the region list would be
-                // invisible in the guide.
+                // Zone species must be in the region list.
                 const inRegion = new Set(region.species || []);
                 const orphans = [];
                 for (const z of region.zones || []) {
@@ -805,8 +752,7 @@ async def main():
             check("Cancabato Bay has a full species list", data["cancabatoCount"] >= 15,
                   str(data["cancabatoCount"]))
 
-            # One deliberate assertion instead of eleven scattered literals, so
-            # renaming the region is a one-line test edit.
+            # Region name checked in one place.
             ident = await page.eval("""
                 const d = await import('./js/data/index.js');
                 const r = d.getRegion(d.DEFAULT_REGION_ID);
@@ -818,10 +764,8 @@ async def main():
             # The picker is hidden below 2 — worth knowing when that changes.
             check("there is still exactly one region", ident["count"] == 1, str(ident))
 
-            # Catches logged before the rename carry regionId 'leyte-gulf'.
-            # getRegion() falls back to REGIONS[0] for anything unknown, so a
-            # legacy id LOOKS right today and silently attaches to the wrong
-            # region the moment a second one exists.
+            # Old catches have regionId 'leyte-gulf'; it must map to 'leyte'
+            # rather than falling back to REGIONS[0].
             legacy = await page.eval("""
                 const d = await import('./js/data/index.js');
                 return {
@@ -866,8 +810,7 @@ async def main():
                 }
 
                 return {
-                    // These two tables must move together or a zone silently
-                    // loses its tactics block and falls back to the ocean colour.
+                    // Every zone type needs both tactics and a palette.
                     tacticsKeys: tactics, paletteKeys: palettes,
                     keysMatch: JSON.stringify(tactics) === JSON.stringify(palettes),
                     badType, outOfBounds, stub, badZoom,
@@ -875,15 +818,13 @@ async def main():
                     count: ids.length,
                 };
             """)
-            # js/data/tactics.js and js/zone-ui.js are edited independently; an
-            # unknown type drops the "Fishing this water" block with no error.
+            # Every zone type must exist in HABITAT_TACTICS and ZONE_PALETTE.
             check("habitat tactics and zone palettes cover the same types",
                   zones["keysMatch"],
                   f"tactics={zones['tacticsKeys']} palettes={zones['paletteKeys']}")
             check("every zone has a known habitat type",
                   not zones["badType"], ", ".join(zones["badType"]))
-            # A transposed lat/lon puts a pin in the Celebes Sea and nothing
-            # else in the app would notice.
+            # Catch swapped lat/lon.
             check("every zone sits inside the region's map bounds",
                   not zones["outOfBounds"], ", ".join(zones["outOfBounds"]))
             check("no zone is a stub", not zones["stub"], ", ".join(zones["stub"]))
@@ -897,8 +838,7 @@ async def main():
                 const groups = d.zonesByWater(d.DEFAULT_REGION_ID);
                 const zones = d.zonesFor(d.DEFAULT_REGION_ID);
                 return {
-                    // A zone without `water` lands in 'Other' rather than
-                    // vanishing — but it should never come to that.
+                    // Every zone should have `water`.
                     missing: zones.filter(z => !z.water).map(z => z.id),
                     other: groups.some(g => g.water === 'Other'),
                     // Grouping must not lose or duplicate a zone.
@@ -907,8 +847,7 @@ async def main():
                     // Both new types must carry real advice, not a fallback.
                     hasStrait: Boolean(HABITAT_TACTICS.strait?.advice),
                     hasDeep: Boolean(HABITAT_TACTICS.deep?.advice),
-                    // The two straits are the reason `strait` exists: its
-                    // advice must lead on current, not on structure.
+                    // Strait advice should be about current.
                     straitMentionsCurrent: /tide|flow|slack/i
                         .test(HABITAT_TACTICS.strait?.advice || ''),
                     deepMentionsVertical: /vertical|jig|bottom/i
@@ -920,8 +859,7 @@ async def main():
             check("grouping by water loses no zones", water["regrouped"], str(water["waters"]))
             check("the new habitat types exist",
                   water["hasStrait"] and water["hasDeep"], str(water))
-            # Reusing 'channel' and 'offshore' would have given advice that is
-            # actively wrong for an 8-knot strait and a drop-off.
+            # Straits and drop-offs get their own habitat types.
             check("strait advice is about current, not structure",
                   water["straitMentionsCurrent"], str(water))
             check("deep advice is about fishing vertically",
@@ -931,16 +869,13 @@ async def main():
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
-                // Phone width opens Info as a pile of folders. "Everything" is
-                // the one at the bottom of it, and it carries the ALL sentinel
-                // rather than an empty string — empty means "nothing open".
+                // Phone width shows the folder pile. "Everything" uses the ALL key ('' means
+                // nothing open).
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 500));
                 const heads = [...document.querySelectorAll('.section-head h2')]
@@ -973,10 +908,7 @@ async def main():
                          google: !!document.querySelector('[data-provider=google]'),
                          facebook: !!document.querySelector('[data-provider=facebook]'),
                          signupBtn: !!document.querySelector('[data-goto=signup]'),
-                         // Credentials first, then "or", then the providers —
-                         // the shape of the reference Gabriel picked, and the
-                         // order most people expect on a screen they have seen
-                         // a thousand times. Providers used to sit on top.
+                         // Credentials, then "or", then the providers.
                          order: (() => {
                              const g = document.querySelector('[data-provider=google]');
                              const u = document.getElementById('a-user');
@@ -990,13 +922,8 @@ async def main():
             """)
             check("log is gated when signed out", gated["form"], str(gated))
 
-            # THE PROFILE HEADER, and the decision worth pinning: the stat
-            # strip is filled SIGNED OUT, from the device's own log. The old
-            # screen opened with "Not signed in" and a form, describing the
-            # app's state rather than yours — and hiding the fact that you
-            # already have records worth protecting. If this ever silently
-            # falls back to em-dashes, the argument for making an account goes
-            # with it.
+            # Profile header: the stats strip is filled from the local log even
+            # when signed out.
             profile = await page.eval("""
                 const st = await import('./js/store.js');
                 const a = await import('./js/auth.js');
@@ -1023,8 +950,7 @@ async def main():
                     // The cover is the page's own light, not a separate image.
                     coverIsGradient: !!cs && cs.backgroundImage.includes('radial-gradient'),
                     coverNoImage: !!cs && !cs.backgroundImage.includes('url("http'),
-                    // The avatar hangs over the cover rather than sitting under
-                    // it — the overhang is the whole shape of the header.
+                    // The avatar overlaps the cover.
                     overhangs: !!(pic && cover)
                         && pic.getBoundingClientRect().top < cover.getBoundingClientRect().bottom,
                     signedOut: !a.currentUser(),
@@ -1040,11 +966,8 @@ async def main():
             check("the strip reads catches, species, spots and days",
                   [c["k"] for c in profile["cells"]] == ["Catches", "Species", "Spots", "Days"],
                   str(profile["cells"]))
-            # Three catches on two dates: the numbers must be the real log, and
-            # Days must count trips rather than records.
-            # EDITING IS A SEPARATE SCREEN behind the Edit button, not a form
-            # under the profile. A profile page is for reading; putting the
-            # fields on it shows you a half-filled form on every visit.
+            # Three catches on two dates: Days counts dates, not records.
+            # Editing is a separate screen behind the Edit button.
             editing = await page.eval("""
                 const a = await import('./js/auth.js');
                 const p = await import('./js/store.js');
@@ -1065,8 +988,7 @@ async def main():
                     editGoes: document.querySelector('.prof__edit')?.getAttribute('href'),
                     // The form must NOT be sitting on the profile.
                     noFormHere: !document.getElementById('profileForm'),
-                    // Not a button here, but still your face rather than a
-                    // stranger's silhouette.
+                    // Not editable here, but the avatar is still shown.
                     showsYou: (document.getElementById('avatarFill')?.textContent || '').trim(),
                 };
                 if (!document.querySelector('.prof__edit'))
@@ -1082,8 +1004,7 @@ async def main():
                     // A way back that names where it goes.
                     back: document.querySelector('.set-back')?.getAttribute('href'),
                     count: document.getElementById('nameCount')?.textContent,
-                    // No profile header on the editor: it is a form, not a
-                    // second copy of the page you came from.
+                    // No profile header on the editor.
                     noHeader: !document.querySelector('.prof__cover'),
                 };
                 const input = document.getElementById('displayName');
@@ -1102,16 +1023,12 @@ async def main():
                 await a.signOut();
                 return { profile, editor, counted, after };
             """)
-            # The store bug this caught: profiles.get() returned the raw
-            # IDBRequest rather than its .result, so a display name saved fine
-            # and never came back. An IDBRequest is truthy and has no
-            # displayName, so nothing threw — the name just silently stayed the
-            # handle. Round-trip it through the store directly, not the screen.
+            # Regression: profiles.get() returned the IDBRequest instead of its
+            # result, so saved names never loaded. Round-trip through the store.
             roundtrip = await page.eval("""
                 const st = await import('./js/store.js');
                 const a = await import('./js/auth.js');
-                // Self-contained: the block before this one signs out when it
-                // finishes, so this cannot lean on a session it did not make.
+                // Signs in on its own; the previous block signs out.
                 try { await a.signUp('rtuser', 'abcd'); }
                 catch (e) { await a.signIn('rtuser', 'abcd'); }
                 const u = a.currentUser();
@@ -1123,20 +1040,14 @@ async def main():
                               shown: st.shownName(u, got) };
                 await st.profiles.save(u.id, { displayName: '' });
                 await a.signOut();
-                // Put the screen back where these blocks found it. The checks
-                // that follow read the sign-in gate on /log, and leaving the
-                // app parked on /account made them query a form that was no
-                // longer rendered.
+                // Go back to /log; the next checks use the sign-in gate there.
                 location.hash = '#/log';
                 await new Promise(r => setTimeout(r, 900));
                 out.restored = !!document.querySelector('.auth-field');
                 return out;
             """)
-            # THE AVATAR CROPPER. The bug worth pinning: the object URL used to
-            # be revoked as soon as the image decoded, which left the canvas
-            # able to crop from the in-memory image while the stage showed an
-            # empty circle. Everything downstream looked right, so only the
-            # picture told you.
+            # Avatar cropper. Regression: revoking the object URL on load left
+            # the stage blank even though cropping still worked.
             cropper = await page.eval("""
                 const a = await import('./js/auth.js');
                 const loc = await import('./js/auth/local.js');
@@ -1212,20 +1123,17 @@ async def main():
                 try { await a.renameHandle('thirdname'); out.second = 'allowed'; }
                 catch (e) { out.second = e.message; }
 
-                // An old handle stays yours — releasing it would let someone
-                // else be mistaken for who you were.
+                // Old handles stay reserved.
                 out.oldReserved = a.usernameTaken('firstname');
 
-                // Changing only the CASE is not a change and must not be
-                // refused by a cooldown it did not start.
+                // A case-only change isn't blocked by the cooldown.
                 let caseChange = null;
                 try { caseChange = (await a.renameHandle('SecondName')).username; }
                 catch (e) { caseChange = 'refused: ' + e.message; }
                 out.caseChange = caseChange;
 
                 await a.signOut();
-                // Back to where these blocks found the app. The checks after
-                // them read the sign-in gate on /log.
+                // Back to /log for the following checks.
                 location.hash = '#/log';
                 await new Promise(r => setTimeout(r, 900));
                 out.restored = !!document.querySelector('.auth-field');
@@ -1279,17 +1187,14 @@ async def main():
 
             check("no catch entry while signed out",
                   not gated["addBtn"] and not gated["stats"], str(gated))
-            # Only providers CONFIG.auth marks live may appear. A button that
-            # cannot succeed reads as a broken app, which is exactly what
-            # Facebook's did — Meta refuses the permissions to an individual.
+            # Only providers enabled in CONFIG.auth should be shown.
             check("the live provider is offered", gated["google"], str(gated))
             check("disabled providers are not advertised",
                   not gated["facebook"], str(gated))
             check("the username field comes before the providers", gated["order"], str(gated))
             check("the password can be revealed", gated["peek"], str(gated))
-            # The base input rule is six :not()s deep — (0,6,1) — so a plain
-            # `.auth-field input` lost and the leading icon sat on top of the
-            # first letter. Measured, because it looks fine until you read it.
+            # The base input rule is (0,6,1); make sure the auth field padding
+            # actually applies so the icon doesn't overlap the text.
             room = await page.eval("""
                 const box = document.querySelector(".auth-field");
                 const input = box.querySelector("input");
@@ -1303,8 +1208,7 @@ async def main():
             check("sign-up is a separate action, not a tab", gated["signupBtn"], str(gated))
             check("sign-in screen has no email field", not gated["hasEmail"], str(gated))
 
-            # Disabled means "not offered", not "deleted". The code must stay
-            # whole so re-enabling is a config flip, not a rewrite.
+            # Disabled providers are hidden, but the code is still there.
             provider_flag = await page.eval("""
                 const { CONFIG } = await import('./js/config.js');
                 const cloud = await import('./js/auth/cloud.js');
@@ -1343,12 +1247,9 @@ async def main():
             check("no screen text promises a hidden provider",
                   not provider_flag["copy"], str(provider_flag))
 
-            # Floating labels: the name sits inside the empty field, then lifts
-            # and STAYS above once there's content — it must never vanish.
+            # Floating labels: inside the empty field, above it once filled.
             floating = await page.eval("""
-                // Sign-IN uses plain fields with a leading icon now — two fields
-                // on an empty screen do not need a label that animates. Sign-UP
-                // has five and still does, so that is where the pattern lives.
+                // Sign-in uses icon fields; sign-up uses floating labels.
                 document.querySelector('[data-goto=signup]').click();
                 await new Promise(r => setTimeout(r, 800));
                 const wrap = document.querySelector('.float');
@@ -1399,8 +1300,7 @@ async def main():
                   floating["properLabel"] and floating["placeholderBlank"], str(floating))
 
             signup = await page.eval("""
-                // The floating-label block above already switched here, so this
-                // has to be idempotent rather than assume it is on sign-in.
+                // The previous block may already be on sign-up.
                 document.querySelector('[data-goto=signup]')?.click();
                 await new Promise(r => setTimeout(r, 600));
                 return { email: !!document.getElementById('a-email'),
@@ -1416,9 +1316,8 @@ async def main():
             check("sign-up screen has its own heading",
                   signup["heading"] == "Create account", str(signup["heading"]))
 
-            # Every input on the form must actually be styled. The type-based
-            # selector silently skipped type="email", which rendered as a thin
-            # unstyled strip — a whole class of bug that only shows up visually.
+            # Every input on the form must be styled (type="email" was missed
+            # once).
             styling = await page.eval("""
                 const bad = [];
                 const floats = [...document.querySelectorAll('.float')];
@@ -1440,9 +1339,8 @@ async def main():
             check("every floating field has its label", styling["labelled"])
 
             rules = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -1471,23 +1369,18 @@ async def main():
             check("sign-up creates and signs in", rules["user"] == "cole", str(rules))
             check("usernames are case-insensitively unique", bool(rules["dupe"]), str(rules["dupe"]))
             check("wrong password is refused", bool(rules["wrongPw"]), str(rules["wrongPw"]))
-            # Same wording for both, so a shared device doesn't leak which
-            # usernames exist.
+            # Same error for unknown user and wrong password.
             check("unknown user and wrong password read the same",
                   rules["wrongPw"] == rules["noUser"], f"{rules['wrongPw']} vs {rules['noUser']}")
-            # Which one depends on whether Email/Password is enabled in the
-            # Firebase console, so assert the SET, not a member of it. A test
-            # that flips meaning based on external console state is worse than
-            # no test — it fails on a working app and passes on a broken one.
+            # The result depends on whether Email/Password is enabled in the
+            # Firebase console, so accept either valid outcome.
             check("accounts carry a provider for future OAuth",
                   rules["provider"] in ("local", "username"), str(rules["provider"]))
 
             stored = await page.eval("""
                 const raw = localStorage.getItem('angler.users');
-                // Check FIELD VALUES, not the raw blob. 'abcd' is four hex
-                // characters, so scanning the whole string finds it inside a
-                // random salt or SHA-256 digest every so often — a false
-                // failure on a security assertion, which is the worst kind.
+                // Check field values, not the raw JSON: 'abcd' can appear by chance in
+                // a hex salt or hash.
                 const plaintext = JSON.parse(raw).some(
                     (u) => Object.values(u).some((v) => v === 'abcd'));
                 return { plaintext, hashed: /"hash":"[0-9a-f]{64}"/.test(raw),
@@ -1499,9 +1392,8 @@ async def main():
 
             # Two accounts must not see each other's catches.
             scoped = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -1522,6 +1414,7 @@ async def main():
                         theirs: (await m.store.allCatches(other.id)).length,
                         mineStill: (await m.store.allCatches(me.id)).length,
                         everything: (await m.store.allCatches()).length,
+                        guestSeesOwned: (await m.store.catchesFor(null)).filter(r => r.userId).length,
                     };
                 } finally { _cfg.firebase = _fb; }
             """)
@@ -1529,6 +1422,8 @@ async def main():
                   scoped["mine"] == 1 and scoped["theirs"] == 1 and scoped["mineStill"] == 1,
                   str(scoped))
             check("both catches exist in storage", scoped["everything"] >= 2, str(scoped))
+            check("guest mode doesn't show other accounts' catches",
+                  scoped["guestSeesOwned"] == 0, str(scoped))
 
             await page.goto(f"{BASE}/index.html#/")
             await page.goto(f"{BASE}/index.html#/log")
@@ -1540,12 +1435,10 @@ async def main():
             check("signed-in log is usable", signed["add"], str(signed))
             check("log names the signed-in user", "friend" in signed["who"], signed["who"])
 
-            # Everything after this exercises the (now gated) log, so leave a
-            # known account signed in and start it from an empty log.
+            # Leave a known account signed in with an empty log for the rest.
             await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -1563,7 +1456,7 @@ async def main():
             mod = await page.eval("""
                 const m = await import('./js/moderation.js');
                 const a = await import('./js/auth.js');
-                const blocked = ['fuck', 'f_u_c_k', 'sh1t', 'n1gger', 'FUCKer'];
+                const blocked = ['fuck', 'f_u_c_k', 'sh1t', 'n1gger', 'FUCKer', 'bassfuck'];
                 const fine = ['cole', 'wrasse', 'assassin', 'class_act', 'bass-man',
                               'scunthorpe', 'cockle', 'analyst', 'Dickens'];
                 return {
@@ -1588,23 +1481,19 @@ async def main():
 
             # --- provider facade ---
             facade = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
                 try {
                     const a = await import('./js/auth.js');
                     const out = {};
-                    // Read from the saved config: the guard above blanked the live
-                    // one, and this assertion is about the project being set up at
-                    // all, not about which path sign-up happens to take.
+                    // Use the saved config; the live one was blanked above.
                     out.configured = Boolean(_fb && _fb.apiKey && _fb.projectId);
                     out.hasSteps = Array.isArray(a.CLOUD_SETUP_STEPS) && a.CLOUD_SETUP_STEPS.length >= 3;
 
-                    // NOT called for real: with a live config this performs an
-                    // actual redirect to Google and destroys the test session.
+                    // Not actually called: it would redirect to Google.
                     out.googleIsFn = typeof a.signInWithGoogle === 'function';
 
                     // Local accounts still work with no cloud config at all.
@@ -1628,9 +1517,8 @@ async def main():
                   str(facade["googleIsFn"]))
             check("username accounts work whether or not the cloud is set up",
                   facade["localWorks"])
-            # The invariant is CONSISTENCY: 'local' means it never reached
-            # Firebase and cannot sync; 'username' means it did and must.
-            # Either is correct; a local account claiming to sync is not.
+            # 'local' = never reached Firebase, doesn't sync; 'username' = did
+            # and does. Either is fine as long as it's consistent.
             check("sync status matches how the account was actually created",
                   (facade["provider"] == "local" and facade["syncs"] is False)
                   or (facade["provider"] == "username" and facade["syncs"] is True),
@@ -1640,9 +1528,8 @@ async def main():
 
             # A session written by the pre-facade version must still resolve.
             legacy = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -1658,23 +1545,17 @@ async def main():
             """)
             check("legacy sessions still resolve", legacy == "legacyuser", str(legacy))
 
-            # --- account linking seam ---
-            # No UI yet by design, but the model must support one person with
-            # several sign-in methods BEFORE anyone signs up — retrofitting it
-            # later means merging real catch logs.
+            # --- account linking ---
             linking = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
                 try {
                     const a = await import('./js/auth.js');
                     const out = {};
-                    // Read from the saved config: the guard above blanked the live
-                    // one, and this assertion is about the project being set up at
-                    // all, not about which path sign-up happens to take.
+                    // Use the saved config; the live one was blanked above.
                     out.configured = Boolean(_fb && _fb.apiKey && _fb.projectId);
                     out.hasLink = typeof a.linkProvider === 'function';
                     out.hasUnlink = typeof a.unlinkProvider === 'function';
@@ -1683,10 +1564,8 @@ async def main():
 
                     // No cloud account signed in -> linking must refuse clearly.
                     const u = await a.signUp('linktest', 'abcd');
-                    // Account is local; now put the real config back so
-                    // linkProvider refuses with "not synced yet" rather than
-                    // "cloud isn't set up" — those are different failures and
-                    // only the first is what this test is about.
+                    // Restore the config so linkProvider fails with "not synced yet" rather
+                    // than "not set up".
                     _cfg.firebase = _fb;
                     out.localProviders = a.linkedProviders();
                     out.localRefused = null;
@@ -1694,8 +1573,7 @@ async def main():
                     catch (e) { out.localRefused = e.message; }
                     await a.signOut();
 
-                    // Safe to call: no cloud account is signed in, so this throws
-                    // before it can reach signInWithRedirect.
+                    // Safe: throws before reaching signInWithRedirect.
                     out.signedOutRefused = null;
                     try { await a.linkProvider('google'); }
                     catch (e) { out.signedOutRefused = e.message; }
@@ -1713,9 +1591,8 @@ async def main():
 
             check("local accounts report no linked providers",
                   linking["localProviders"] == [], str(linking["localProviders"]))
-            # An account that has never been online has no uid to attach a
-            # provider to. It must refuse, and the refusal has to say the
-            # thing that fixes it, because "cannot be linked" reads permanent.
+            # A never-online account can't be linked, and the error should say
+            # how to fix it.
             check("un-synced accounts cannot be linked",
                   bool(linking["localRefused"]) and "not synced" in linking["localRefused"],
                   str(linking["localRefused"]))
@@ -1750,8 +1627,7 @@ async def main():
                     leaksPassword: a.includes('abcd'),
                 };
             """)
-            # Determinism is the whole feature: a second device has to arrive
-            # at the same credential from the same two things the person typed.
+            # Derivation must be deterministic across devices.
             check("derived password is stable", creds["stable"], str(creds))
             check("derivation is case-insensitive like the username",
                   creds["caseInsensitive"], str(creds))
@@ -1780,8 +1656,7 @@ async def main():
                 const cloudNewer = s.planSync([L('d', '2026-01-01')], [L('d', '2026-02-01')]);
                 const same = s.planSync([L('e', '2026-01-01')], [L('e', '2026-01-01')]);
 
-                // A delete on one phone must reach the other, and must not be
-                // read as 'the cloud is missing a row, push it back'.
+                // Tombstones sync like any other change.
                 const tombstone = s.planSync(
                     [L('f', '2026-01-01')],
                     [L('f', '2026-03-01', { deleted: true })]
@@ -1825,14 +1700,12 @@ async def main():
                 };
             """)
             check("media never leaves the device", strip["noMedia"], str(strip))
-            # Firestore rejects undefined outright, and sending null instead
-            # would wipe a value another device had filled in.
+            # Firestore rejects undefined; null would overwrite other devices' values.
             check("undefined fields are dropped, not sent as null",
                   strip["noUndefined"], str(strip))
             check("a stripped catch remembers it had media",
                   strip["flagged"], str(strip))
-            # Accepting a cloud record wholesale would delete the photo off
-            # the phone that took it, which looks like the app losing it.
+            # Merging a cloud record keeps local media.
             check("pulling a catch keeps this device's photo",
                   strip["keptPhoto"] and strip["tookRemoteValue"], str(strip))
 
@@ -1847,8 +1720,7 @@ async def main():
                 const raw = await store.allRecords('u1');
                 const stone = raw.find(r => r.id === gone.id);
 
-                // Re-keying on upgrade must not look like an edit, or every
-                // catch would appear newer than the cloud's copy.
+                // Re-keying must not bump updatedAt.
                 const before = kept.updatedAt;
                 await store.reassignOwner('u1', 'u2');
                 const moved = (await store.allRecords('u2')).find(r => r.id === kept.id);
@@ -1881,9 +1753,8 @@ async def main():
                   offline["ok"] is False and offline["reason"] == "offline", str(offline))
 
             panel = await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -1917,8 +1788,7 @@ async def main():
             check("every sign-in method is named for a human",
                   panel["rows"] and not panel["rawKeys"], str(panel["rows"]))
             check("the panel explains what sync does", panel["saysWhatSyncIs"], str(panel))
-            # People will not press a button they think might cost them
-            # their log, so the panel has to say that linking is additive.
+            # The linking panel explains that linking keeps the log.
             check("linking says it will not split the account",
                   panel["reassuresAboutLinking"], str(panel))
 
@@ -1932,8 +1802,7 @@ async def main():
                          text: line?.textContent.trim() || '' };
             """)
             check("the log says where the catches live", status["present"], str(status))
-            # A device-only account must say so plainly. Someone who thinks
-            # they are backed up and is not has been actively misled.
+            # Device-only accounts say they don't sync.
             check("a device-only log admits it is not backed up",
                   status["state"] == "local" and "device" in status["text"].lower(),
                   str(status))
@@ -1944,9 +1813,7 @@ async def main():
             await page.wait_for("document.querySelector('#uploadPhoto')", label="identify screen")
 
             cam = await page.eval("""
-                // The camera lives beside Info's search box now, not on Home:
-                // naming a fish you are holding and looking one up by name are
-                // the same question, so they sit behind adjacent controls.
+                // The camera button is next to Info's search box.
                 location.hash = '#/';
                 await new Promise(r => setTimeout(r, 700));
                 const homeCard = document.querySelector('a.card[href="#/identify"]');
@@ -1959,18 +1826,15 @@ async def main():
 
                 return {
                     goneFromHome: !homeCard,
-                    // The old route redirects into the mode rather than 404ing
-                    // to Home, because bookmarks and cached shells exist.
+                    // /identify redirects to photo mode.
                     redirected: location.hash.includes('tab=photo'),
                     besideSearch: !!camBtn && !!box
                         && camBtn.closest('.search-row') === box.closest('.search-row'),
                     camIcon: !!camBtn?.querySelector('svg'),
                     pressed: camBtn?.getAttribute('aria-pressed'),
-                    // The box stays: typing a name is how you leave photo
-                    // mode, which only works if it's still there.
+                    // The search box stays visible in photo mode.
                     searchStays: box?.hidden === false,
-                    // No capture="environment" any more: that handed framing
-                    // to the OS camera app. The viewfinder is in-page.
+                    // No capture="environment"; the viewfinder is in-page.
                     capture: input?.getAttribute('capture'),
                     stage: document.getElementById('shot')?.dataset.mode,
                     hasVideo: !!document.getElementById('camView'),
@@ -1994,14 +1858,12 @@ async def main():
             check("photo mode reads as on, and keeps the search box",
                   cam["pressed"] == "true" and cam["searchStays"], str(cam))
 
-            # A detour, not a destination: it must put you back where you were,
-            # not on the default tab.
+            # Leaving photo mode returns to the previous tab.
             toggle = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 900));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const cam = document.getElementById('infoPhoto');
@@ -2012,8 +1874,7 @@ async def main():
                 const inPhoto = {
                     camera: !!document.getElementById('camStart'),
                     hash: location.hash,
-                    // No reference category is selected while in photo mode —
-                    // it isn't one of them.
+                    // No tab is selected in photo mode.
                     anyTabSelected: !!document.querySelector('[data-tab][aria-selected="true"]'),
                     chipsHidden: document.getElementById('familyFilters').hidden,
                 };
@@ -2021,8 +1882,7 @@ async def main():
                 cam.click();
                 await new Promise(r => setTimeout(r, 500));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 400));
                 const afterToggle = {
@@ -2032,13 +1892,10 @@ async def main():
                     pressed: cam.getAttribute('aria-pressed'),
                 };
 
-                // Typing is the other way out: it can't be answered by a
-                // camera, so it hands you back to browsing instead of being
-                // swallowed.
+                // Typing leaves photo mode.
                 cam.click();
                 await new Promise(r => setTimeout(r, 400));
-                // A term that exists on the tab it returns to (zones), so a
-                // legitimate no-match can't be mistaken for a broken handover.
+                // A term that matches something on the zones tab.
                 box.value = 'sogod';
                 box.dispatchEvent(new Event('input', { bubbles: true }));
                 await new Promise(r => setTimeout(r, 600));
@@ -2068,8 +1925,7 @@ async def main():
                   toggle["typedOut"]["left"] and toggle["typedOut"]["searched"]
                   and toggle["typedOut"]["pressed"] == "false", str(toggle["typedOut"]))
 
-            # The panel holds a blob URL for the shot. Mode changes go through
-            # replaceState, so no hashchange arrives to revoke it — Info has to.
+            # Info must revoke the photo's blob URL (replaceState, no hashchange).
             leak = await page.eval("""
                 const m = await import('./js/pages/identify.js');
                 const host = document.createElement('div');
@@ -2088,11 +1944,8 @@ async def main():
             check("the photo panel hands back a cleanup",
                   leak["returnsCleanup"] and leak["survivedNoPhoto"], str(leak))
 
-            # The live camera, on a fake stream. A real one needs a device and
-            # a permission prompt, but everything worth pinning is ours: does
-            # the shutter freeze a frame, and — the one that costs the user
-            # something if it breaks — does unmounting stop the tracks. A
-            # camera left running is a lit LED and a flat battery.
+            # Live camera on a fake stream: the shutter freezes a frame, and
+            # unmounting stops the tracks.
             live = await page.eval("""
                 const m = await import('./js/pages/identify.js');
                 const host = document.createElement('div');
@@ -2120,8 +1973,7 @@ async def main():
                 const started = {
                     mode: stage.dataset.mode,
                     bound: video.srcObject === fake,
-                    // The rear camera by preference, never by requirement:
-                    // `exact` throws outright on a front-camera-only laptop.
+                    // Rear camera preferred, not required (`exact` fails on laptops).
                     wantsRear: asked?.video?.facingMode?.ideal === 'environment',
                     notExact: !asked?.video?.facingMode?.exact,
                     noAudio: asked?.audio === false,
@@ -2135,8 +1987,7 @@ async def main():
                 const shot = {
                     mode: stage.dataset.mode,
                     still: !!host.querySelector('#camStill').getAttribute('src'),
-                    // Still running: a retake that cold-starts the camera is a
-                    // retake nobody bothers with.
+                    // Camera still running after a shot.
                     stillLive: fake.getTracks().every(t => t.readyState === 'live'),
                     retakeUp: !host.querySelector('#clearPhoto').hidden,
                 };
@@ -2171,8 +2022,7 @@ async def main():
                   live["retaken"] == "live", str(live))
             check("unmounting stops the camera tracks", live["stopped"], str(live))
 
-            # No camera at all is the laptop case and the http:// case. It must
-            # say so and leave the upload route working, not throw.
+            # No camera: show a message, keep upload working.
             nocam = await page.eval("""
                 const m = await import('./js/pages/identify.js');
                 const host = document.createElement('div');
@@ -2215,8 +2065,7 @@ async def main():
             check("no result is shown before a photo exists",
                   cam["noFakeResult"], str(cam))
 
-            # A photo must produce a preview and an honest "not wired up" notice
-            # rather than a spinner that never resolves.
+            # A photo shows a preview and a clear error when the API isn't there.
             shot = await page.eval("""
                 const canvas = document.createElement('canvas');
                 canvas.width = 64; canvas.height = 48;
@@ -2236,16 +2085,14 @@ async def main():
                     preview: !!document.querySelector('#camStill[src]'),
                     altText: document.getElementById('camStill')?.alt || '',
                     clearShown: document.getElementById('clearPhoto')?.hidden === false,
-                    // No Pages Function on the static test server, so the
-                    // call fails. That is the path worth pinning: it must say
-                    // so and must NOT invent a species.
+                    // There's no /api on the test server, so the call fails; it must not
+                    // invent a species.
                     saysFailed: /couldn.t identify|no connection|not set up/i
                         .test(result?.textContent || ''),
                     inventedNothing: !result?.querySelector('.verdict'),
                     buttonRestored: document.getElementById('uploadPhoto').textContent
                         .includes('Upload a photo'),
-                    // The still replaces the viewfinder rather than sitting
-                    // beside it, so what you are looking at is unambiguous.
+                    // The still replaces the viewfinder.
                     stillMode: document.getElementById('shot')?.dataset.mode === 'still',
                 };
             """)
@@ -2253,8 +2100,7 @@ async def main():
             check("the preview is described for screen readers",
                   bool(shot["altText"]), str(shot))
             check("the photo can be cleared", shot["clearShown"], str(shot))
-            # Honesty check: a failed lookup must read as a failure. Silently
-            # showing nothing, or worse a guess, would be the bad outcome.
+            # A failed lookup reads as a failure.
             check("a failed identification says so plainly",
                   shot["saysFailed"], str(shot))
             check("and invents no species when the call fails",
@@ -2317,15 +2163,13 @@ async def main():
             # Both services landing on the same species is the strong case.
             check("agreement is reported as agreement",
                   verdict["agreed"] == ["agreed", True, "high"], str(verdict["agreed"]))
-            # Fishial ranked another fish first but still saw Claude's pick —
-            # closer than the top line suggests.
+            # Fishial ranked another fish first but still listed the LLM's pick.
             check("a lower-ranked match still counts as corroboration",
                   verdict["corroborated"][0] == "corroborated"
                   and verdict["corroborated"][1] == "Sphyraena barracuda"
                   and verdict["corroborated"][2] == "Sphyraena obtusata",
                   str(verdict["corroborated"]))
-            # The whole reason for the cross-check: a species that doesn't
-            # occur here is wrong however confident the classifier was.
+            # A species that doesn't occur here loses, however confident.
             check("a fish that doesn't occur here loses to one that does",
                   verdict["localWins"] == ["local-wins", "Lutjanus argentimaculatus"],
                   str(verdict["localWins"]))
@@ -2374,8 +2218,7 @@ async def main():
             check("a local species ranked first is taken",
                   local["hit"] == ["local-match", "sphyraena-barracuda", True, "high"],
                   str(local["hit"]))
-            # This is the free cross-check earning its keep: Fishial's top pick
-            # doesn't occur here, so its second one wins.
+            # Fishial's top pick isn't local, so its second (local) pick wins.
             check("a foreign top pick is demoted to the local one below it",
                   local["demoted"] == ["local-demoted", "sphyraena-barracuda",
                                        "Micropterus salmoides"],
@@ -2393,13 +2236,10 @@ async def main():
             deploy = await page.eval("""
                 const wrangler = await (await fetch('./wrangler.jsonc')).text();
                 return {
-                    // Without `main` Cloudflare refuses to attach env vars:
-                    // "Variables cannot be added to a Worker that only has
-                    // static assets."
+                    // Env vars need a Worker script (`main`).
                     hasMain: /"main"\\s*:\\s*"worker\\//.test(wrangler),
                     hasAssets: /"binding"\\s*:\\s*"ASSETS"/.test(wrangler),
-                    // Otherwise the asset server answers /api/* with a 404
-                    // before the Worker ever sees it.
+                    // /api/* must reach the Worker before the asset server.
                     apiFirst: /"run_worker_first"[\\s\\S]*?\\/api\\/\\*/.test(wrangler),
                 };
             """)
@@ -2409,10 +2249,8 @@ async def main():
             check("/api/* reaches the Worker before the asset server",
                   deploy["apiFirst"], str(deploy))
 
-            # Provider wiring. Read as source: these run in the Worker, not the
-            # browser, so there is nothing to import here — but a silent typo
-            # in a key name would mean the second opinion never runs and
-            # nobody notices, because the free path answers anyway.
+            # Provider wiring, checked in the source since it runs in the
+            # Worker. A typo in a key name would go unnoticed otherwise.
             llm = await page.eval("""
                 const src = await (await fetch('./worker/_lib/llm.js')).text();
                 const wired = await (await fetch('./worker/identify.js')).text();
@@ -2421,17 +2259,15 @@ async def main():
                     geminiFirst: src.indexOf('GEMINI_API_KEY') < src.indexOf('ANTHROPIC_API_KEY'),
                     bothProviders: src.includes('generativelanguage.googleapis.com')
                         && src.includes('api.anthropic.com'),
-                    // Key in a header, not ?key=, so it stays out of request
-                    // logs. Strip comments first — the source explains the
-                    // choice, and matching that prose is not evidence.
+                    // Key in a header, not ?key=. Strip comments first so the explanation
+                    // in the source doesn't count.
                     keyInHeader: src.includes('x-goog-api-key')
                         && !src.replace(/\/\/.*/g, '').includes('key='),
                     // Both must return the same object or identify.js breaks.
                     oneShape: src.includes('export async function secondOpinion'),
                     // A dead or rate-limited model must not take the feature down.
                     llmFailureTolerated: /catch \(err\)[\s\S]{0,200}llmError/.test(wired),
-                    // 'unknown' should fall through to the free reconciler,
-                    // which can still demote a foreign top pick.
+                    // 'unknown' falls back to reconcileLocal.
                     unknownFallsBack: wired.includes("speciesId !== 'unknown'")
                         && wired.includes('reconcileLocal'),
                 };
@@ -2473,11 +2309,9 @@ async def main():
                     rows: rows.length,
                     groups: [...document.querySelectorAll(".set-group")]
                         .map(e => e.textContent.trim()),
-                    // An index, not the whole of settings on one page: none of
-                    // the controls may be here.
+                    // The index shouldn't contain any controls.
                     noControls: !document.querySelector("#saveTides, #saveWeather, #themePicker"),
-                    // Each row says what it is currently set to. A list that
-                    // only names its sections makes you open every one.
+                    // Each row shows its current value.
                     allHaveValues: rows.every(r => (r.querySelector(".set-row__v")?.textContent || "").trim()),
                     keys: rows.map(r => new URL(r.href, location.href).hash.split("p=")[1]),
                 };
@@ -2488,11 +2322,8 @@ async def main():
                   str(index["groups"]))
             check("every row shows its current value", index["allHaveValues"], str(index))
 
-            # EVERY panel, not a sample. mount() runs whole for whichever panel
-            # is on screen, and it used to assume all of them were — one
-            # unguarded querySelector threw and the router replaced the entire
-            # page with "Something broke on this screen". That is the specific
-            # failure splitting this route invites.
+            # Mount every panel: an unguarded querySelector in one would take
+            # down the whole page.
             broke = []
             for key in index["keys"]:
                 await page.goto(f"{BASE}/index.html#/settings?p={key}")
@@ -2508,23 +2339,20 @@ async def main():
             check("every settings panel opens without breaking", not broke,
                   "; ".join(broke))
 
-            # A panel that no longer exists, a typo, an old bookmark — all of
-            # them have to land somewhere useful rather than on a blank screen.
+            # Unknown panels fall back to the index.
             await page.goto(f"{BASE}/index.html#/settings?p=nonsense")
             await asyncio.sleep(0.8)
             fallback = await page.eval("""
                 return { rows: document.querySelectorAll(".set-row").length,
                          back: !!document.querySelector(".set-back") };
             """)
-            # The refresh button. It exists for the exact case Gabriel hit:
-            # pushed a change, still looking at the old one.
+            # Refresh button.
             await page.goto(f"{BASE}/index.html#/settings?p=about")
             await page.wait_for("document.querySelector('#refreshBtn')", label="about panel")
             refresh = await page.eval("""
                 const up = await import("./js/updates.js");
                 const btn = document.getElementById("refreshBtn");
-                // Offline it must REFUSE: with no network the cache is the app,
-                // and clearing it leaves a blank screen on the next load.
+                // Refuses offline (the cache is the only copy of the app).
                 const real = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
                 Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
                 const offline = await up.forceRefresh();
@@ -2551,8 +2379,7 @@ async def main():
                 const shown = document.getElementById('appVersion')?.textContent.trim();
                 const semver = /^\d+\.\d+\.\d+$/;
 
-                // The list must be newest-first and every version distinct,
-                // or "which build is this" has no answer.
+                // Newest first, no duplicate versions.
                 const versions = CHANGELOG.map(r => r.version);
                 const dates = CHANGELOG.map(r => r.date);
                 const descending = dates.every((d, i) => i === 0 || dates[i - 1] >= d);
@@ -2566,8 +2393,7 @@ async def main():
                     current: APP_VERSION,
                     // The number on screen must be the number the code claims.
                     matchesConstant: shown === `v${APP_VERSION}`,
-                    // ...and the newest entry in the history, or the history
-                    // is describing a build nobody is running.
+                    // ...and matches the newest changelog entry.
                     matchesNewest: CHANGELOG[0].version === APP_VERSION,
                     allSemver: versions.every(v => semver.test(v)),
                     unique: new Set(versions).size === versions.length,
@@ -2594,8 +2420,7 @@ async def main():
             check("the build line reports what is really cached",
                   ver["hasBuildLine"], str(ver))
 
-            # A version that doesn't move with the cache is worse than none:
-            # it would claim a build the device isn't running.
+            # CACHE_VERSION must be set.
             bumped = await page.eval("""
                 const sw = await (await fetch('./sw.js')).text();
                 const cache = (sw.match(/CACHE_VERSION = '([^']+)'/) || [])[1];
@@ -2611,9 +2436,7 @@ async def main():
             sets = await page.eval("""
                 const art = await import('./js/art.js');
                 const modern = art.ICON_NAMES.modern, pixel = art.ICON_NAMES.pixel;
-                // Every icon must exist in BOTH sets. A name only the pixel set
-                // has would silently fall back and look imported from another
-                // app; one only the modern set has is dead weight.
+                // Both icon sets must have the same names.
                 return {
                     modern: modern.length, pixel: pixel.length,
                     missingFromModern: pixel.filter(n => !modern.includes(n)),
@@ -2622,17 +2445,13 @@ async def main():
                     allDraw: modern.every(n => art.icon(n, { size: 24 }).includes('<svg')),
                 };
             """)
-            # The manifest paints the splash screen on install, and nothing in
-            # the app reads it — so it is the one surface that can sit on a
-            # retired palette for months without anyone noticing.
+            # Manifest colours should match the current palette.
             man = await page.eval("""
                 const [m, css] = await Promise.all([
                     fetch('./manifest.json').then(r => r.json()),
                     fetch('./css/style.css').then(r => r.text()),
                 ]);
-                // Plain string search rather than a built regex: the pattern
-                // has to survive Python, then the CDP JSON, and an escape lost
-                // on the way just returns nothing and looks like a real failure.
+                // Plain string search; regex escapes get mangled between Python and CDP.
                 const at = css.indexOf('--cream:');
                 const cream = at < 0 ? ''
                     : (css.slice(at + 8, at + 30).match(/#[0-9a-fA-F]{6}/) || [''])[0].toLowerCase();
@@ -2652,9 +2471,7 @@ async def main():
                 localStorage.removeItem('angler.artMode');
                 const clean = { mode: am.getArtMode(), unlocked: am.isRetroUnlocked() };
 
-                // A stored 'retro' with no unlock must not resurrect the pixel
-                // art — if site data is cleared while retro is on there would
-                // be no visible way back.
+                // A stored 'retro' without the unlock is ignored.
                 localStorage.setItem('angler.artMode', 'retro');
                 const stray = am.getArtMode();
                 localStorage.removeItem('angler.artMode');
@@ -2718,8 +2535,7 @@ async def main():
             check("modern really renders the drawn art",
                   not swapped["modern"]["icon"] and not swapped["modern"]["brand"], str(swapped))
 
-            # It has to survive a reload, or it is a party trick rather than a
-            # preference.
+            # Survives a reload.
             kept = await page.eval("""
                 location.hash = '#/';
                 await new Promise(r => setTimeout(r, 600));
@@ -2785,9 +2601,8 @@ async def main():
             await page.goto(f"{BASE}/index.html#/log")
             # The log is gated now, so sign in before exercising it.
             await page.eval("""
-                // Force the LOCAL path. Without this, sign-up reaches Firebase and
-                // creates a real account in the developer's project — which then
-                // makes the next run fail with "username already taken".
+                // Blank the Firebase config so sign-up stays local (otherwise it creates
+                // a real account in the project).
                 const { CONFIG: _cfg } = await import('./js/config.js');
                 const _fb = _cfg.firebase;
                 _cfg.firebase = {};
@@ -2930,8 +2745,7 @@ async def main():
             # -------------------------------------------------- info page
             print("\nInfo page")
             await page.goto(f"{BASE}/index.html#/info")
-            # Phone width lands on the pile of folders. Open Everything so the
-            # rest of this block sees the cards it is about.
+            # Phone width shows the folder pile; open Everything first.
             await page.wait_for("document.querySelector('.dcard')", label="deck")
             # Everything is the first folder in the drawer. Opening it is how this block sees cards at all.
             await page.eval("""
@@ -2940,8 +2754,7 @@ async def main():
                 r.scrollTop = r.scrollHeight;
                 r.dispatchEvent(new Event('scroll'));
                 r.click();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
@@ -2957,13 +2770,10 @@ async def main():
                     return false;
                 };
                 const btn = (id) => document.querySelector(`.bookmark[data-tab="${id}"]`);
-                // Each tab has its own pile and its own open folder, so
-                // switching tabs lands on that tab's pile — the cards are one
-                // press further in.
+                // Each tab has its own open folder, so switching lands on that tab's pile.
                 const openAll = async () => {
                     (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                     await new Promise(r => setTimeout(r, 350));
                 };
@@ -2976,8 +2786,7 @@ async def main():
                 await openAll();
                 seen.gear = await wait('.gear-card');
                 seen.gearCount = document.querySelectorAll('.gear-card').length;
-                // Family filters belong to Fishes only; a class that sets
-                // display beats [hidden] unless CSS says otherwise.
+                // Family filters only on Fishes.
                 const ff = document.getElementById('familyFilters');
                 seen.familyChipsHidden = getComputedStyle(ff).display === 'none';
                 seen.hashFollowsTab = location.hash.includes('tab=gear');
@@ -3000,15 +2809,13 @@ async def main():
             pile = await ev_pile(page)
             check("info opens as a deck of folders",
                   pile["folders"] >= 6 and not pile["cards"], str(pile))
-            # Fanned DOWNWARD from one place: every card shares a centre line and
-            # each sits lower than the one in front, so its bill shows.
+            # Cards share a centre line, each lower than the one in front.
             check("the line comes from the top",
                   pile["centred"] and pile["ascending"], str(pile))
             check("every upcoming name is fully readable",
                   pile["billsClear"], str(pile))
             check("every bill carries a label", pile["allLabelled"], str(pile))
-            # The pictures are what you choose by: a number says how many, a
-            # photograph says what.
+            # Folders show preview pictures.
             check("the front folder shows four examples",
                   pile["frontShots"] >= 4, str(pile))
             check("the count sits beside the name, quieter",
@@ -3016,17 +2823,14 @@ async def main():
             check("only the front folder drifts", pile["floatingOne"], str(pile))
             check("a folder is a bill narrower than its body",
                   pile["billNarrower"], str(pile))
-            # Four visible cards — the front one plus three bills — so four
-            # distinct fills is all of them.
+            # Four visible cards (front + three tabs), four distinct tints.
             check("the folders are colour-coded",
                   pile["distinctColours"] >= 4, str(pile))
             # The idle float is what stops a card looking printed on the screen.
             check("the cards float rather than sit still",
                   pile["floating"], str(pile))
 
-            # THE PAGE MUST NOT SCROLL under the swipe. A page that moves when
-            # you drag a card steals the gesture, which is the fastest way to
-            # make a carousel feel broken.
+            # The page must not scroll while swiping the deck.
             locked = await page.eval("""
                 const doc = document.documentElement;
                 return {
@@ -3040,9 +2844,8 @@ async def main():
                   locked["klass"] and locked["bodyOverflow"] == "hidden"
                   and locked["room"] <= 2, str(locked))
 
-            # Swiping moves you ALONG the line — continuously, and without
-            # removing anything. The rail is a real scroller, so this drives it
-            # the way a finger would.
+            # Swiping moves along the line without removing anything. Drive
+            # the rail scroller directly.
             swiped = await page.eval("""
                 const rail = document.querySelector("[data-deck-rail]");
                 const cards = [...document.querySelectorAll(".dcard")];
@@ -3050,16 +2853,9 @@ async def main():
                 const frontOf = () => document.querySelector(".dcard.is-live")?.dataset.key;
                 const first = frontOf();
 
-                // Mid-swipe: the stack must follow continuously, not snap on
-                // release. Half a step should leave the front card half-gone.
-                //
-                // Snapping is turned off for the measurement, because `y
-                // mandatory` CORRECTS a programmatic scroll to a half position —
-                // the browser puts it back on a snap point before anything can
-                // read it, so the honest state is unobservable with it on.
-                //
-                // The line runs the other way now: card 0 rests at the END of
-                // the rail, and advancing means scrolling UP.
+                // Mid-swipe the stack should follow continuously. Snap is turned off
+                // for the measurement since it would correct a half-step scroll. Card 0
+                // rests at the end of the rail; advancing scrolls up.
                 const rest = rail.scrollHeight - rail.clientHeight;
                 const snap = getComputedStyle(rail).scrollSnapType;
                 rail.style.scrollSnapType = "none";
@@ -3067,11 +2863,8 @@ async def main():
                 rail.dispatchEvent(new Event("scroll"));
                 await new Promise(r => requestAnimationFrame(r));
                 await new Promise(r => requestAnimationFrame(r));
-                // Measured on the card ARRIVING, not the one leaving. A passed
-                // card is deliberately invisible almost at once now, so its
-                // opacity says nothing about whether the stack is interpolating.
-                // Its neighbour's offset does: partway through a step it must
-                // be partway between its two resting positions.
+                // Measure the arriving card: it should be between its two resting
+                // positions.
                 const midY = new DOMMatrixReadOnly(
                     getComputedStyle(cards[1]).transform).f;
                 rail.style.scrollSnapType = "";
@@ -3090,9 +2883,8 @@ async def main():
             check("swiping moves along the line",
                   swiped["after"] and swiped["after"] != swiped["first"], str(swiped))
             check("nothing is ever removed", swiped["stillAllThere"], str(swiped))
-            # Partway through a step the next card is partway to the front —
-            # strictly between its two resting offsets. Snapping to an index and
-            # animating between them would read as a slideshow.
+            # Mid-step, the next card should be between its two resting
+            # positions (continuous, not snapping).
             check("the stack follows the swipe continuously",
                   -42 < swiped["midY"] < -1, str(swiped))
             check("the rail snaps card to card",
@@ -3138,9 +2930,7 @@ async def main():
             check("the x goes back to the deck",
                   closed["folders"] >= 6 and not closed["cards"], str(closed))
             check("the deck is pinned again", closed["pinned"], str(closed))
-            # The open folder is a window over the deck: pushing its header down
-            # puts it away, like every other panel in this app that covers
-            # something. An x you have to find was the odd one out.
+            # Dragging the open folder's header down closes it.
             dragged = await page.eval("""
                 document.querySelector("[data-deck-rail]").click();
                 await new Promise(r => setTimeout(r, 1000));
@@ -3172,8 +2962,7 @@ async def main():
             check("you come back to the card you opened",
                   closed["live"] == swiped["after"], str(closed))
 
-            # A query is a request to SEE matches. Hiding them behind a card you
-            # have to open first would make the search box a decoration.
+            # A search skips the deck and lists matches.
             searched = await page.eval("""
                 const box = document.getElementById("infoSearch");
                 box.value = "tuna";
@@ -3195,20 +2984,17 @@ async def main():
                   tabs["familyChipsOnFishes"] and tabs["familyChipsHidden"], str(tabs))
             check("the hash tracks the active tab", tabs["hashFollowsTab"], str(tabs))
 
-            # Info › Zones opens the same write-up as the map, so its fish must
-            # drill down in place too. Separate call site, so worth its own
-            # check: the shared component working doesn't prove it was wired.
+            # Info › Zones uses the same zone write-up; check its fish open in
+            # place too (separate call site).
             info_drill = await page.eval("""
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 400));
                 document.querySelector('.zone-card').click();
@@ -3257,8 +3043,7 @@ async def main():
                 location.hash = '#/info?tab=gear';
                 await new Promise(r => setTimeout(r, 700));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 document.querySelector('.gear-card').click();
@@ -3301,8 +3086,7 @@ async def main():
                 location.hash = '#/info?tab=zones';
                 await new Promise(r => setTimeout(r, 800));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const heads = [...document.querySelectorAll('.section-head h2')]
@@ -3317,8 +3101,7 @@ async def main():
                 location.hash = '#/info?tab=fishes';
                 await new Promise(r => setTimeout(r, 700));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 const i = document.getElementById('infoSearch');
@@ -3341,8 +3124,7 @@ async def main():
                 location.hash = '#/species?open=sphyraena-barracuda';
                 await new Promise(r => setTimeout(r, 900));
                 (() => { const r = document.querySelector('[data-deck-rail]'); if (r) { r.scrollTop = r.scrollHeight; r.dispatchEvent(new Event('scroll')); r.click(); return true; } return false; })();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(r => setTimeout(r, 700));
                 await new Promise(r => setTimeout(r, 350));
                 return { hash: location.hash,
@@ -3356,9 +3138,7 @@ async def main():
             nav = await page.eval("""
                 document.querySelector('.sheet-backdrop')?.remove();
                 document.body.classList.remove('is-sheet-open');
-                // Rendered children only. The rail's brand, group headings,
-                // Log and Settings live in the same nav and sit out at this
-                // width; counting them would describe a bar nobody sees.
+                // Only visible children (rail-only items are hidden at this width).
                 const shown = (el) => getComputedStyle(el).display !== 'none';
                 const items = [...document.querySelectorAll('.tabbar a')].filter(shown);
                 const account = document.querySelector('.tabbar a[data-tab="/account"]');
@@ -3371,12 +3151,10 @@ async def main():
                 const kids = [...barEl.children].filter(shown);
                 return {
                     order: items.map(e => e.querySelector('span').textContent.trim()),
-                    // The + is a slot in the bar, in the middle, where the Log
-                    // tab used to be.
+                    // The + is the middle slot.
                     fabInBar: barEl.contains(fabEl),
                     fabSlot: kids.indexOf(fabEl), slots: kids.length,
-                    // It BULGES: its top is above the bar's, and it is still
-                    // rooted in the row rather than hovering clear of it.
+                    // It sticks up above the bar but is still in the row.
                     bulge: Math.round(bar.top - fab.top),
                     rooted: fab.bottom < bar.bottom && fab.bottom > bar.top,
                     centred: Math.abs((fab.left + fab.right) / 2
@@ -3397,8 +3175,7 @@ async def main():
                   and nav["centred"], str(nav))
             check("the + bulges up out of the bar",
                   nav["bulge"] >= 10 and nav["rooted"], str(nav))
-            # It replaced the Log TAB, not the Log SCREEN. If this ever fails,
-            # the app has a route nothing in the chrome can reach.
+            # The log is still reachable from the + menu.
             check("the log is still reachable from the +", nav["logReachable"], str(nav))
             check("the nav floats clear of every edge", nav["floats"], str(nav))
             check("account tab opens the account screen",
@@ -3424,8 +3201,7 @@ async def main():
                                labels: [...menu.querySelectorAll('[data-quick] span:last-child')]
                                           .map(e => e.textContent.trim()),
                                bars: bars(),
-                               // Opacity is what the transition animates; if the
-                               // items are up but transparent, nothing moved.
+                               // Items must actually become visible.
                                visible: getComputedStyle(menu.querySelector('[data-quick]')).opacity };
 
                 veil.click();
@@ -3439,8 +3215,7 @@ async def main():
             check("it offers log, spot and photo",
                   fab["open"]["labels"] == ["Log a catch", "Drop a spot", "Identify a photo"],
                   str(fab["open"]["labels"]))
-            # The morph is the same two bars rotating, so the transforms must
-            # actually differ between states — a swapped glyph would not.
+            # The + to x morph changes the bars' transforms.
             check("the + really turns into an x",
                   fab["shut"]["bars"] != fab["open"]["bars"], str(fab))
             check("the actions animate in rather than appearing",
@@ -3460,8 +3235,7 @@ async def main():
                 r.scrollTop = r.scrollHeight;
                 r.dispatchEvent(new Event('scroll'));
                 r.click();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
@@ -3564,11 +3338,9 @@ async def main():
             """)
             check("species detail sheet opens", sheet)
 
-            # The sheet must show the big angled hero; the cards behind it must
-            # keep the small horizontal sprite.
-            # Aspect ratio can't tell these apart (a 'deep' body is near-square
-            # either way), so compare each rendered viewBox against the actual
-            # grid dimensions in HEROES vs SPRITES.
+            # The sheet shows the angled hero; cards keep the small sprite.
+            # Compare rendered viewBoxes with HEROES vs SPRITES grid sizes, since
+            # aspect ratio alone can't tell them apart.
             art_split = await page.eval("""
                 const p = await import('./js/pixel.js');
                 const vb = (el) => {
@@ -3585,9 +3357,8 @@ async def main():
                 const heroGrid = p.HEROES[s.hero] || p.HEROES[s.sprite];
                 const spriteGrid = p.SPRITES[s.sprite];
 
-                // The retro art is checked through the API rather than the DOM.
-                // Flipping the mode here would re-render the page and take the
-                // open sheet with it, breaking every test below that needs one.
+                // Check retro art via the API; switching modes would re-render and close
+                // the sheet.
                 const fromString = (svg) => {
                     const m = svg.match(/viewBox="0 0 (\\d+) (\\d+)"/);
                     return m ? `${m[1]}x${m[2]}` : null;
@@ -3635,9 +3406,7 @@ async def main():
             check("modern shows a photo or an honest gap, never a sprite",
                   art_split["cardIsPhotoOrGap"] and art_split["sheetIsPhotoOrGap"]
                   and art_split["noSpriteAnywhere"], str(art_split))
-            # A species with no licensed photo must SAY so. A borrowed fish here
-            # would read as "this is what it looks like", which is the one thing
-            # a species guide must never be wrong about.
+            # Species without a licensed photo show a "no photo" placeholder.
             check("a species with no photo says so rather than faking one",
                   art_split["photosInManifest"] > 0 or art_split["gapSaysSo"],
                   str(art_split))
@@ -3652,8 +3421,7 @@ async def main():
             """)
             check("fishbase link built", "fishbase.se/summary/" in fb and "-" in fb, fb)
 
-            # Real photos come from Wikipedia (free licences); FishBase photos
-            # are copyrighted and must stay as outbound links only.
+            # Photos come from Wikipedia; FishBase is only linked.
             photo = await page.eval("""
                 const p = await import('./js/api/photos.js');
                 const hit = await p.fetchPhoto('Lutjanus argentimaculatus');
@@ -3669,8 +3437,7 @@ async def main():
             shown = await page.eval("""
                 const sec = document.querySelector('.sheet [data-gallery]');
                 const imgs = sec ? sec.querySelectorAll('.gallery__item img').length : 0;
-                // The gallery must sit BELOW the written information, not
-                // directly under the hero sprite.
+                // The gallery comes after the text.
                 const hero = document.querySelector('.sheet .species-card__art--hero');
                 const facts = document.querySelector('.sheet .meta-list');
                 const order = sec && hero && facts
@@ -3710,11 +3477,8 @@ async def main():
             if not configured:
                 check("tide provider configured", False, "no key set — skipping live check")
             else:
-                # Seed the cache with a synthetic response rather than calling
-                # the API. The free tier is ~100 requests a MONTH, and a suite
-                # that runs dozens of times a day will exhaust it — which it
-                # did. This exercises the parsing and rendering, which is what
-                # the test is actually for; the network call is not the subject.
+                # Seed the cache with a fake response instead of calling the API
+                # (the free tier is ~100 requests/month).
                 await page.eval("""
                     const now = Date.now();
                     const h = 3600e3;
@@ -3770,8 +3534,7 @@ async def main():
                 const d = await import('./js/data/index.js');
                 const region = d.getRegion(d.DEFAULT_REGION_ID);
 
-                // Nearby GPS readings must snap to the same grid cell, or every
-                // few metres of drift burns a tide-API request.
+                // Nearby readings round to the same cell.
                 const a = g.roundCoords({ lat: 11.2381234, lon: 125.0043210 });
                 const b = g.roundCoords({ lat: 11.2401111, lon: 125.0061111 });
                 const far = g.roundCoords({ lat: 11.9000000, lon: 125.9000000 });
@@ -3832,8 +3595,7 @@ async def main():
                     prompted = true;
                     ok({ coords: { latitude: 11.238, longitude: 125.004, accuracy: 20 } });
                 };
-                // Must navigate AWAY first — setting the hash to its current
-                // value fires no hashchange, so the page would never re-render.
+                // Navigate away first (same hash = no hashchange).
                 location.hash = '#/';
                 await new Promise(r => setTimeout(r, 400));
                 location.hash = '#/conditions';
@@ -3915,8 +3677,7 @@ async def main():
                 return {
                     exists: !!screen,
                     noZoneList: !document.querySelector('[data-zone]'),
-                    // On a phone the weather is a drawer OVER the foot of the
-                    // map, not a row above it — the map gets the whole screen.
+                    // Phone: the weather is a drawer over the map.
                     overlays: ir.top > wr.top + 20 && ir.bottom <= wr.bottom + 2,
                     outOfFlow: getComputedStyle(info).position === 'absolute',
                     mapShare: wr.height / r.height,
@@ -3938,8 +3699,7 @@ async def main():
                   str(layout))
             check("the weather drawer sits over the foot of the map",
                   layout["overlays"] and layout["outOfFlow"], str(layout))
-            # A slim back-to-home strip sits above the map now that the nav
-            # bar is gone entirely, so the map owns everything except that.
+            # The map fills everything except the back-to-home strip.
             check("the map gets nearly the whole screen on a phone",
                   layout["mapShare"] >= 0.90, f"{layout['mapShare']:.2f}")
             check("the way home is a real row above the map",
@@ -3955,8 +3715,7 @@ async def main():
             """)
             check("phone layout is a single column", wide["cols"] == 1, str(wide))
 
-            # Everything asked for must be visible without scrolling the panel:
-            # conditions, the five-day strip, and the link through to tides.
+            # Conditions, forecast and tides link visible without scrolling.
             visible = await page.eval("""
                 const info = document.querySelector('.map-screen__info');
                 const box = info.getBoundingClientRect();
@@ -4017,8 +3776,7 @@ async def main():
             check("dots can drive the deck", deck["dotDrivesDeck"], str(deck))
             check("deck opens on conditions", deck["startedAtFirst"], str(deck))
 
-            # Both pages must be the same height, or the panel resizes as you
-            # swipe and the map jumps with it.
+            # Both deck pages are the same height.
             even = await page.eval("""
                 const pages = [...document.querySelectorAll('.wx-deck__page')];
                 const h = pages.map(p => Math.round(p.getBoundingClientRect().height));
@@ -4047,8 +3805,7 @@ async def main():
             oneline = await page.eval("""
                 const el = document.getElementById('mapSource');
                 const cs = getComputedStyle(el);
-                // line-height computes to "normal" here, so derive the
-                // single-line height from the font size instead of parsing it.
+                // line-height is "normal", so use the font size.
                 const fs = parseFloat(cs.fontSize) || 12;
                 const h = el.getBoundingClientRect().height;
                 return { height: Math.round(h), fontSize: fs,
@@ -4065,8 +3822,7 @@ async def main():
                 const drawer = document.getElementById('wxDrawer').getBoundingClientRect();
                 return { barGone: getComputedStyle(bar).display === 'none',
                          barInert: bar.hasAttribute('inert'),
-                         // Nothing below the map now, so it must reach the
-                         // bottom of the window itself.
+                         // The map reaches the bottom of the window.
                          bottomGap: Math.round(window.innerHeight - m.bottom),
                          drawerGap: Math.round(window.innerHeight - drawer.bottom) };
             """)
@@ -4077,10 +3833,8 @@ async def main():
             check("the weather drawer sits on the bottom edge",
                   -2 <= gap["drawerGap"] <= 4, str(gap))
 
-            # The map is the only element that could run clean off the window,
-            # and did — every other surface on this screen is inset. The bottom
-            # is exempt on purpose: the tab bar is already a hard edge, checked
-            # directly above.
+            # The map is inset on the sides like other panels; the bottom meets
+            # the tab bar.
             inset = await page.eval("""
                 const map = document.getElementById('fishMap').getBoundingClientRect();
                 const screen = document.querySelector('.map-screen').getBoundingClientRect();
@@ -4113,8 +3867,7 @@ async def main():
                 r.scrollTop = r.scrollHeight;
                 r.dispatchEvent(new Event('scroll'));
                 r.click();
-                // Opening grows the folder over the page first; the content
-                // is not there until that has finished.
+                // Wait for the open animation to finish.
                 await new Promise(x => setTimeout(x, 1000));
                 return 1;
             """)
@@ -4181,9 +3934,7 @@ async def main():
             check("a long drag closes the sheet", long_drag["gone"], str(long_drag))
             check("closing unlocks the page behind", long_drag["unlocked"], str(long_drag))
 
-            # Navigating away with a sheet open bypasses close(), which is what
-            # unlocks the body. Left stranded, every later page stays pinned at
-            # position:fixed with a stale negative offset.
+            # Navigating away with a sheet open must still unlock the body.
             stranded = await page.eval("""
                 document.querySelector('.species-card').click();
                 await new Promise(r => setTimeout(r, 400));
@@ -4280,9 +4031,7 @@ async def main():
             check("far-away position is explained", "no zones nearby" in far, far)
 
             # --- the map is fenced to the country ----------------------------
-            # Manila is 600 km from any zone but is still somewhere this app can
-            # answer for; Tokyo is not. The line is the country, not the region,
-            # and the two cases must not be collapsed into one.
+            # Manila (far from any zone, same country) is fine; Tokyo is not.
             fence = await page.eval("""
                 const g = await import('./js/api/geo.js');
                 const d = await import('./js/data/index.js');
@@ -4333,9 +4082,7 @@ async def main():
             check("panning out of the country is refused",
                   locked.get("stillInBox"), str(locked))
 
-            # Outside the country the map must NOT fly to the fix — maxBounds
-            # would drag the view back to the border anyway and strand the
-            # "you are here" dot off screen, which reads as a broken map.
+            # Outside the country, don't fly to the fix.
             abroad = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const m = el._leafletMap;
@@ -4355,8 +4102,7 @@ async def main():
             check("a fix from abroad keeps the region on screen",
                   abroad["lon"] < 130 and abroad["pins"] > 0, str(abroad))
 
-            # ...and the weather falls back to the region's home rather than
-            # forecasting for wherever the phone happens to be.
+            # ...and the weather uses the region's home.
             home = await page.eval("""
                 const wui = await import('./js/weather-ui.js');
                 const d = await import('./js/data/index.js');
@@ -4388,15 +4134,13 @@ async def main():
                   home["awayLabel"])
             check("a fix elsewhere in the country is still used",
                   home["inPhSource"] == "device" and home["inPhLat"] == 15, str(home))
-            # The home is the port, not open water — it is also the tide cache
-            # key, and tides for an unnamed offshore point help nobody.
+            # The region's home point is Tacloban (also the tide cache key).
             check("the region's weather home is Tacloban",
                   abs(home["regionCoords"]["lat"] - 11.238) < 0.02
                   and abs(home["regionCoords"]["lon"] - 125.004) < 0.02,
                   str(home["regionCoords"]))
 
-            # Refusing must fall back to the whole of Leyte, not leave the map
-            # wherever it happened to be sitting.
+            # Refusing location shows the whole region.
             refused = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const d = await import('./js/data/index.js');
@@ -4422,10 +4166,7 @@ async def main():
                   all(refused[k] for k in ("coversWest", "coversEast", "coversNorth", "coversSouth")),
                   str(refused))
 
-            # Zoomed all the way out is a place the user can actually get to —
-            # the map's own minZoom allows it — and every zone's minZoom used to
-            # fail there, so it showed bare tiles and "0 of 21 zones shown".
-            # The old fix clamped the ZOOM, which cropped the island instead.
+            # Fully zoomed out, the broadest tier of zones should still show.
             empty = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const m = el._leafletMap;
@@ -4441,9 +4182,7 @@ async def main():
                   not empty["bare"] and empty["tried"] > 1,
                   f"bare at zoom {[o['z'] for o in empty['bare']]}")
 
-            # 21 pins over one island is only readable if they don't stack. Two
-            # zones 1 km apart is a data mistake, not a rendering one — it means
-            # a pin for a whole bay has been parked on one town's beach.
+            # No two zone pins too close together.
             crowd = await page.eval("""
                 const d = await import('./js/data/index.js');
                 const zones = d.zonesFor(d.DEFAULT_REGION_ID);
@@ -4456,8 +4195,7 @@ async def main():
                 for (let i = 0; i < zones.length; i++)
                     for (let j = i + 1; j < zones.length; j++) {
                         const dist = km(zones[i].coords, zones[j].coords);
-                        // Below ~2.5 km the pins overlap at the zoom where both
-                        // first appear, whichever zoom that is.
+                        // Below ~2.5 km the pins overlap.
                         if (dist < 2.5) tooClose.push(
                             `${zones[i].name} / ${zones[j].name} = ${dist.toFixed(1)} km`);
                     }
@@ -4466,9 +4204,7 @@ async def main():
             check("no two zone pins sit on top of each other",
                   not crowd, "; ".join(crowd))
 
-            # Map pins must stay horizontal — angled art aliases badly at 34px —
-            # and must come through the art façade so they follow the mode. They
-            # used to call renderSprite directly and stayed pixel on a modern map.
+            # Map pins use the small horizontal art via the art facade.
             pin = await page.eval("""
                 const art = await import('./js/art.js');
                 const svg = document.querySelector('.zone-pin svg');
@@ -4478,8 +4214,7 @@ async def main():
                 return {
                     viewBox: `${v[2]}x${v[3]}`,
                     landscape: v[2] >= v[3] && box.width >= box.height - 1,
-                    // Byte-identical to what the façade returns for the current
-                    // mode, which is the only way to prove it went through it.
+                    // Same markup as the art facade returns.
                     viaFacade: svg.outerHTML.includes('viewBox="' + v.join(' ') + '"')
                         && art.icon('fish', { size: 34 }).includes('viewBox="0 0 ' + v[2] + ' ' + v[3] + '"'),
                     drawn: svg.innerHTML.length > 40,
@@ -4501,9 +4236,7 @@ async def main():
             check("zone sheet shows habitat advice",
                   "Fishing this water" in sheet_txt, sheet_txt[:120])
 
-            # --- a fish opens IN the sheet, not on another page --------------
-            # "Species detail" used to be a link to #/info?open=<id>, which
-            # threw away the map, the zone and your place in the list.
+            # --- a fish opens in the sheet, not on another page --------------
             drill = await page.eval("""
                 const sheet = document.querySelector('.sheet');
                 const zoneTitle = document.querySelector('.sheet__head h2').textContent;
@@ -4543,8 +4276,7 @@ async def main():
             check("the redirect to Info is gone, not just bypassed",
                   not drill.get("oldLink"), str(drill))
 
-            # The species card lists the other waters the fish turns up in. From
-            # a zone sheet those move the sheet; they used to leave the map too.
+            # Zone links on the species card move the sheet.
             hop = await page.eval("""
                 const sheet = document.querySelector('.sheet');
                 const chip = sheet.querySelector('a[href*="tab=zones&zone="]');
@@ -4600,8 +4332,7 @@ async def main():
                 return s ? s.innerText : '';
             """)
 
-            # The sheet must actually sit above the map. Leaflet's panes reach
-            # z-index 1000, so a hit-test is the only honest check here.
+            # Hit-test: the sheet is above Leaflet's panes.
             on_top = await page.eval("""
                 const sheet = document.querySelector('.sheet');
                 const r = sheet.getBoundingClientRect();
@@ -4633,10 +4364,7 @@ async def main():
             await asyncio.sleep(0.3)
             await page.shot("map-zone-sheet-scrolled", full=False)
 
-            # --- tapping a zone swings the weather onto it -------------------
-            # Leyte is 150 km end to end, so the conditions where you're
-            # standing can be no guide at all to the water you were thinking of
-            # running out to.
+            # --- tapping a zone switches the weather to it -------------------
             zone_wx = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const m = el._leafletMap;
@@ -4683,8 +4411,7 @@ async def main():
             check("dismissing zone weather goes back to your own",
                   not back["resetShown"] and back["hasCard"], str(back))
 
-            # "Centre on me" means me in the weather panel too, or the button
-            # half-answers: the map moves to you and the card still doesn't.
+            # "Centre on me" also resets the weather.
             via_locate = await page.eval("""
                 const zones = (await import('./js/data/index.js'))
                     .zonesFor('leyte');
@@ -4704,8 +4431,7 @@ async def main():
             check("centring on your location takes the weather back too",
                   via_locate["took"] and not via_locate["stillZone"], str(via_locate))
 
-            # Browsing zones must not fire a request per tap: neighbouring
-            # zones are minutes apart in a forecast that updates hourly.
+            # Weather is cached between zone taps.
             wx_cache = await page.eval("""
                 const w = await import('./js/api/weather.js');
                 w.clearWeatherCache();
@@ -4731,9 +4457,7 @@ async def main():
             # --- your own spots ----------------------------------------------
             print("\nYour spots")
 
-            # The link is a plain https URL on both platforms on purpose: a
-            # wrong platform guess degrades to a working map page rather than
-            # a dead scheme URL that opens nothing.
+            # Plain https links on both platforms.
             dirs = await page.eval("""
                 const m = await import('./js/map-spots.js');
                 const at = { lat: 11.238, lon: 125.004 };
@@ -4755,9 +4479,7 @@ async def main():
             check("no scheme URL that could open nothing",
                   all(u.startswith("https://") for u in dirs.values()), str(dirs))
 
-            # A long press drops a pin and asks. A short press, and a press that
-            # turns into a pan, must not — panning is the gesture people make
-            # most on a map, and a popup thrown into it would be maddening.
+            # Long press drops a pin; a short press or a pan must not.
             press = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const r = el.getBoundingClientRect();
@@ -4839,8 +4561,7 @@ async def main():
                   saved["hasDirections"] and "maps" in (saved["href"] or "")
                   and saved["opensAway"] == "_blank", str(saved))
 
-            # Spots belong to an account. Two users on one phone must not see
-            # each other's marks — the same rule the catch log already follows.
+            # Users on the same device don't see each other's spots.
             owners = await page.eval("""
                 const { store } = await import('./js/store.js');
                 await store.clearSpots();
@@ -4856,8 +4577,7 @@ async def main():
                                        lat: 1, lon: 1, name: 'Away' });
                 const stillHere = await store.allSpots('user-a', 'leyte');
 
-                // Deleting leaves a tombstone that no screen shows, so the
-                // removal can sync later rather than silently coming back.
+                // Deleting leaves a hidden tombstone.
                 await store.deleteSpot(a[0].id);
                 const afterDelete = await store.allSpots('user-a', 'leyte');
                 await store.clearSpots();
@@ -4879,10 +4599,7 @@ async def main():
                   owners["stamped"], str(owners))
 
             # --- spots belong to an account ---------------------------------
-            # Two things at once. Signing out must stop you ADDING a spot with
-            # nobody to own it, and must stop you SEEING other people's — a
-            # signed-out lookup used to mean "every user's", which on a shared
-            # phone handed over somebody's fishing marks.
+            # Signed out: can't add spots, and can't see other users' spots.
             gated = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const auth = await import('./js/auth.js');
@@ -4895,8 +4612,7 @@ async def main():
                 await store.saveSpot({ userId: 'someone-else', regionId: 'leyte',
                                        lat: 11.1, lon: 125.0, name: 'Not yours' });
 
-                // Put the session back afterwards rather than really signing
-                // out and leaving every later test signed out too.
+                // Restore the session afterwards.
                 const savedSession = localStorage.getItem('angler.session');
                 const wasSignedIn = auth.isSignedIn();
                 localStorage.removeItem('angler.session');
@@ -4916,8 +4632,7 @@ async def main():
                     otherVisible,
                     prompted: !!pop,
                     heading: pop?.querySelector('.spot-pop__name')?.textContent.trim(),
-                    // The gesture must not silently do nothing — that reads as
-                    // broken rather than as a rule.
+                    // Signed out, a long press explains why.
                     noNameField: !pop?.querySelector('[data-name]'),
                     offersSignIn: !!pop?.querySelector('a[href="#/log"]'),
                     saysWhy: (pop?.querySelector('.spot-pop__why')?.textContent || '')
@@ -4972,8 +4687,7 @@ async def main():
                 return {
                     upTop: Math.round(upTop),
                     downTop: Math.round(box.top),
-                    // Still on screen when down — a drawer you cannot grab is a
-                    // panel you have destroyed.
+                    // The grip stays visible when collapsed.
                     stillShowing: Math.round(window.innerHeight - box.top),
                     gripHittable: !!atGrip && !!atGrip.closest('#wxGrip'),
                     peek: getComputedStyle(d).getPropertyValue('--wx-peek').trim(),
@@ -5029,9 +4743,7 @@ async def main():
                 await new Promise(r => setTimeout(r, 300));
 
                 const { store } = await import('./js/store.js');
-                // Whoever is signed in by this point in the suite — a spot
-                // filed under null would be correctly invisible to them, which
-                // is the scoping working, not the filter failing.
+                // Use whoever is signed in at this point.
                 const { currentUser } = await import('./js/auth.js');
                 await store.saveSpot({ userId: currentUser()?.id || null, regionId: 'leyte',
                                        lat: 11.0, lon: 125.0, name: 'Filter test' });
@@ -5127,8 +4839,7 @@ async def main():
                   any("arcgisonline" in u and "World_Imagery" in u for u in base["sat"]["urls"])
                   and not any("openstreetmap" in u for u in base["sat"]["urls"]),
                   str(base["sat"]))
-            # Imagery with no names on it is hard to navigate by, and on open
-            # water the names are most of what there is to go on.
+            # Satellite view has a labels layer.
             check("satellite keeps place names on top",
                   any("Boundaries_and_Places" in u for u in base["sat"]["urls"]),
                   str(base["sat"]["urls"]))
@@ -5142,9 +4853,7 @@ async def main():
             check("the basemap choice is remembered",
                   base["back"]["remembered"] == "map", str(base["back"]))
 
-            # Esri serves row before column. Getting it the usual way round
-            # yields a plausible-looking map of somewhere else entirely, which
-            # no amount of "tiles loaded" would catch.
+            # Esri tiles are {z}/{y}/{x}.
             tileorder = await page.eval("""
                 const src = await (await fetch('./js/pages/map.js')).text();
                 return { esriYX: src.includes('World_Imagery/MapServer/tile/{z}/{y}/{x}'),
@@ -5153,10 +4862,8 @@ async def main():
             check("Esri tiles are addressed row-then-column",
                   tileorder["esriYX"] and tileorder["osmXY"], str(tileorder))
 
-            # Esri imagery over Leyte stops at 18. Asking for 19 does not 404 —
-            # it returns a real tile reading "Map data not yet available", so
-            # the map appears to break at the last zoom step. maxNativeZoom
-            # stops the request and upscales the 18 tile instead.
+            # Esri imagery over Leyte stops at 18 (19 returns a placeholder
+            # tile), so maxNativeZoom must be 18.
             native = await page.eval("""
                 const el = document.querySelector('#fishMap');
                 const m = el._leafletMap;
@@ -5203,9 +4910,7 @@ async def main():
                 return {
                     width: Math.round(bar.getBoundingClientRect().width),
                     rolled: bar.classList.contains('is-rolled'),
-                    // The swell belongs to the BAR, not the button — the whole
-                    // point of moving it off the +, so that it leaves when the
-                    // bar leaves instead of following the button as a collar.
+                    // The bump is on the bar (::before), not the button.
                     bump: getComputedStyle(bar, '::before').width,
                     // And the + carries no ring of its own any more.
                     fabShadow: getComputedStyle(document.getElementById('quickBtn')).boxShadow,
@@ -5215,8 +4920,7 @@ async def main():
                   str(home))
             check("the swell is drawn by the bar, not the button",
                   home["bump"].endswith("px") and float(home["bump"][:-2]) > 40, str(home))
-            # A ring is a 0-blur spread shadow. The drop shadow underneath has
-            # blur, so a spread-only layer is what would give a collar away.
+            # No 0-blur spread shadow (ring) on the button.
             check("the + has no ring around it",
                   "0px 0px 0px" not in home["fabShadow"], home["fabShadow"])
 
@@ -5230,9 +4934,7 @@ async def main():
                 return {
                     hidden: document.body.classList.contains('is-nav-hidden'),
                     gone: getComputedStyle(bar).display === 'none',
-                    // display:none is not enough on its own — focus already
-                    // inside the bar has to be dropped too, or the ring is left
-                    // on something that does not render.
+                    // Focus inside the hidden bar is dropped.
                     inert: bar.hasAttribute('inert'),
                     // Nothing of the nav may be left on screen, + included.
                     fabGone: document.getElementById('quickBtn')
@@ -5245,8 +4947,7 @@ async def main():
                     stripH: Math.round(
                         document.querySelector('.map-screen__top').getBoundingClientRect().height),
                     tall: mapHeight(),
-                    // What the same screen measures with the bar put back —
-                    // the only honest baseline for "hiding it bought room".
+                    // Baseline with the bar shown.
                     wasOpen: await (async () => {
                         document.body.classList.remove('is-nav-hidden');
                         bar.removeAttribute('inert');
@@ -5268,8 +4969,7 @@ async def main():
                   and hidden["backGoes"] == "#/", str(hidden))
             check("the way home is at the top, in reach of the eye not the map",
                   hidden["backHigh"] is not None and hidden["backHigh"] < 60, str(hidden))
-            # Hiding has to actually BUY the map something, or it is just a
-            # disappearing act — and the strip must cost less than the bar did.
+            # Hiding the bar gives the map more room than the strip costs.
             check("hiding the nav makes the map screen taller",
                   hidden["tall"] > hidden["wasOpen"] + 10,
                   f'map {hidden["tall"]} vs elsewhere {hidden["wasOpen"]}')

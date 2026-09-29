@@ -1,31 +1,20 @@
-"""
-Pull local (vernacular) fish names from FishBase into the species catalogue.
+"""Pull local fish names from FishBase into the species catalogue.
 
-    python tools/fetch_fishbase.py            # dry run — prints what it would add
-    python tools/fetch_fishbase.py --write    # actually edit the catalogue
+    python tools/fetch_fishbase.py            # dry run
+    python tools/fetch_fishbase.py --write    # edit the catalogue
 
 Needs duckdb:  pip install duckdb
 
-WHY THIS IS A BUILD-TIME TOOL AND NOT AN API CALL
--------------------------------------------------
-FishBase publishes versioned Parquet snapshots on public S3 (no key, no
-signup) — the same ones the rOpenSci `rfishbase` package reads. There is no
-live species API worth depending on, and we would not want one: the app has to
-work on a boat with no signal. So the names are baked into js/data at build
-time, exactly like the sprites in tools/author_sprites.py.
+Reads FishBase's public Parquet snapshots on S3 (the same ones rfishbase
+uses). Names are baked into js/data at build time since the app has to work
+offline.
 
-LICENCE
--------
-FishBase data is CC BY-NC 4.0. Free for personal, non-commercial use with
-attribution, which is what this app is. If this ever becomes commercial the
-FishBase team have to be contacted first — see <https://fishbase.org>.
+FishBase data is CC BY-NC 4.0: fine for this personal, non-commercial app;
+contact FishBase before any commercial use.
 
-PRIORITY: BFAR OUTRANKS FISHBASE
---------------------------------
-BFAR Region VIII data is regional — collected in these waters. FishBase's
-COMNAMES is national. Where they disagree the regional source wins, so names
-already in the catalogue are never removed, never reordered, and always come
-first. FishBase only ever appends.
+BFAR Region VIII names (regional data) take priority over FishBase's national
+COMNAMES: existing names are never removed or reordered, FishBase names are
+only appended.
 """
 
 import argparse
@@ -41,24 +30,19 @@ SNAPSHOT = 'v23.01'
 FB = f'https://data.source.coop/cboettig/fishbase/fb/{SNAPSHOT}/parquet'
 SLB = f'https://data.source.coop/cboettig/fishbase/slb/{SNAPSHOT}/parquet'
 
-# FishBase language -> the key used in `local: { ... }`.
-#
-# 'Visayan' is deliberately absent. It is a language GROUP covering Waray,
-# Cebuano and Hiligaynon; filing those rows under any single one would invent
-# precision the source does not have.
+# FishBase language -> key in `local: { ... }`. 'Visayan' is left out since
+# it covers several languages.
 LANG_MAP = {'Waray-waray': 'war', 'Cebuano': 'ceb', 'Tagalog': 'tl'}
 ORDER = ['war', 'ceb', 'tl']
 
-# Real rows in FishBase, but loanwords and anglicisms rather than local
-# knowledge — "Barracuda" is not a Waray name for a barracuda.
+# Loanwords rather than local names ("Barracuda" isn't a Waray name).
 JUNK = re.compile(
     r'^(barracuda|baracuda|nylon|rumpe|rompe|rumpi|tursilyo|torsilyo|trosilyo|'
     r'penyosa|bikuda|siga-sigaro|kandado)',
     re.I,
 )
 
-# Keeps the detail sheet readable. BFAR names are never counted out by this —
-# they are added before the cap applies.
+# Cap for readability. BFAR names are added before the cap applies.
 CAP = 8
 
 
@@ -119,7 +103,7 @@ def main():
     try:
         # Squid and crab live in SeaLifeBase, not FishBase.
         rows += fetch_names(con, SLB, entries)
-    except Exception as err:  # noqa: BLE001 — informational, never fatal
+    except Exception as err:  # noqa: BLE001 - informational, never fatal
         print(f'sealifebase unavailable: {str(err)[:100]}')
 
     found = {}
@@ -135,10 +119,8 @@ def main():
             continue
 
         have = e['have']
-        # Every BFAR name for this species in ANY language. A FishBase name
-        # that matches one is almost certainly the real name, so it ranks
-        # first — ranking alphabetically instead kept 'iso' and dropped
-        # 'maya maya', which is the name everyone actually uses.
+        # BFAR names in any language. FishBase names matching one rank first
+        # (otherwise alphabetical order dropped 'maya maya' for 'iso').
         corroborated = {variant_key(n) for names in have.values() for n in names}
 
         merged = {}
@@ -187,7 +169,7 @@ def main():
         SRC.write_text(js, encoding='utf-8')
         print(f'written -> {SRC.relative_to(ROOT)}')
     else:
-        print('dry run — pass --write to apply')
+        print('dry run - pass --write to apply')
 
 
 if __name__ == '__main__':

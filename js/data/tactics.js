@@ -1,16 +1,10 @@
-// ---------------------------------------------------------------------------
-// LURE & RETRIEVE RECOMMENDATIONS
+// Lure and retrieve advice, keyed by family (how the fish feeds) and by
+// habitat type (how to present to it). A species can override its family's
+// advice with its own `tactics` block.
 //
-// Rather than repeating tactics on all ~27 species, advice is keyed by family
-// (how the fish feeds) and by habitat type (how you have to present to it).
-// A species can override its family default with its own `tactics` block.
-//
-// TO EXTEND:
-//   - new family        -> add to FAMILY_TACTICS
-//   - new water type    -> add to HABITAT_TACTICS, and use that `type` on a zone
-//   - one-off species   -> add `tactics: { lures, retrieve }` to the species
-// This file is region-agnostic; families and habitats repeat across the world.
-// ---------------------------------------------------------------------------
+//   new family       -> add to FAMILY_TACTICS
+//   new water type   -> add to HABITAT_TACTICS and use that `type` on a zone
+//   one-off species  -> add `tactics: { lures, retrieve }` to the species
 
 export const FAMILY_TACTICS = {
   Leiognathidae: {
@@ -140,7 +134,7 @@ export const FAMILY_TACTICS = {
   },
 };
 
-// How the water itself changes your approach.
+// Habitat-specific advice.
 export const HABITAT_TACTICS = {
   mangrove: {
     label: 'Mangrove & creek',
@@ -182,16 +176,14 @@ export const HABITAT_TACTICS = {
     advice:
       'Watch for birds and surface commotion — they find the fish before you do. Troll to locate, then cast into the school from the edge. Never drive through it.',
   },
-  // Straits are channels with the volume turned up. Surigao runs to 8 knots
-  // (Wikipedia; see docs/leyte-waters-research.md), which is faster than most
-  // bancas can make way against — so this advice leads with getting home.
+  // Surigao Strait runs up to 8 knots (see docs/leyte-waters-research.md),
+  // faster than many bancas can make headway against.
   strait: {
     label: 'Strait & tidal narrows',
     advice:
       'Check the tide before you commit, not after. Flow reverses hard and can run faster than you can motor against it, so fish the slack either side of the turn and keep something solid downstream of you. Work the eddy lines behind points and pilings — that is where bait gets held and predators wait. Never anchor in the main flow.',
   },
-  // The existing 'offshore' advice is all surface pelagics — birds, trolling,
-  // casting into schools — and is actively wrong over a drop-off.
+  // Separate from 'offshore', whose surface-pelagic advice doesn't fit a drop-off.
   deep: {
     label: 'Deep water & drop-off',
     advice:
@@ -204,13 +196,13 @@ const FALLBACK = {
   retrieve: 'Fish bait near the bottom and let the current work it. Vary depth until you find fish.',
 };
 
-/** Tactics for one species: its own override, else its family's, else generic. */
+/** Species tactics: own override, else family, else generic. */
 export function tacticsFor(species) {
   if (species?.tactics) return species.tactics;
   return FAMILY_TACTICS[species?.family] || FALLBACK;
 }
 
-/** Merge the distinct lure suggestions across a set of species. */
+/** Distinct lure suggestions across a set of species. */
 export function lureSummary(speciesList) {
   const seen = new Set();
   for (const s of speciesList) {

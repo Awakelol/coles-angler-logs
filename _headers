@@ -1,9 +1,7 @@
-# Cache headers for Netlify and Cloudflare Pages (both read this file).
-# Vercel uses vercel.json instead — keep the two in sync.
+# Cache headers for Netlify and Cloudflare Pages. Vercel uses vercel.json;
+# keep the two in sync.
 #
-# The service worker and the shell must never be cached by the CDN or the
-# browser, or a deploy won't be noticed. Everything else is safe to cache
-# hard, because sw.js is network-first for code and will refetch anyway.
+# sw.js and the shell must not be cached, or deploys won't be picked up.
 
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate

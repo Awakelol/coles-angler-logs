@@ -1,28 +1,10 @@
-// ---------------------------------------------------------------------------
-// AVATAR CROPPER — choose which part of the photo becomes the circle.
+// Avatar cropper: drag and zoom a photo inside a circular mask (avatars are
+// shown round everywhere). The area outside the circle is dimmed, not hidden.
 //
-// The old flow centre-cropped a square and that was the whole story: hold the
-// camera slightly off and your face ended up against the edge with a shoulder
-// in the middle, and there was nothing you could do about it. Now you drag and
-// zoom until it looks right.
+// Output matches prepareAvatar(): a square JPEG up to 256px.
 //
-// THE MASK IS A CIRCLE, NOT A SQUARE, because the avatar is round everywhere it
-// appears. A square guide asks you to imagine the corners being cut off, and
-// people frame for the square they can see rather than the circle they get —
-// so hair and chins end up clipped. The circle is the promise; what is outside
-// it is dimmed rather than hidden, because you still need to see what you are
-// dragging.
-//
-// WHAT IT PRODUCES is exactly what prepareAvatar() produced: a square JPEG no
-// larger than 256px. Only the choice of which square changed, so nothing
-// downstream — storage, the manifest, sync — knows this exists.
-//
-// The maths is deliberately in stage pixels rather than image pixels. `scale`
-// is how many screen pixels one image pixel occupies, `ox/oy` are the image's
-// top-left corner in stage space, and the visible square is always [0,D]. That
-// makes the clamp a two-line max/min instead of a coordinate-system argument,
-// and the source rect falls out by dividing by scale.
-// ---------------------------------------------------------------------------
+// Coordinates are in stage pixels: `scale` is screen px per image px, `ox/oy`
+// is the image's top-left in stage space, and the visible square is [0,D].
 
 import { LIMITS, fmtMB } from './media.js';
 import { openSheet, toast } from './ui.js';
@@ -31,13 +13,9 @@ const OUT = 256; // matches prepareAvatar(), so nothing downstream changes
 const MAX_ZOOM = 4;
 
 /**
- * Load a File into an HTMLImageElement and hand back the object URL with it.
- *
- * THE URL IS NOT REVOKED HERE, and that is the whole point. Revoking on load
- * leaves a perfectly good decoded image whose `.src` is a dead reference — the
- * canvas still draws from it, so cropping worked and the saved avatar was
- * right, while the stage showed an empty circle. The caller revokes when the
- * sheet closes.
+ * Load a File into an Image. The object URL is returned rather than revoked
+ * here; revoking on load leaves the <img> in the stage blank. The caller
+ * revokes it when the sheet closes.
  */
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -54,10 +32,7 @@ function loadImage(file) {
 
 /**
  * Open the cropper. Resolves with a square JPEG Blob, or null if cancelled.
- *
- * Rejects only on a photo that cannot be used at all — too big, or not an
- * image. Cancelling is a normal outcome and resolves rather than throws, so
- * callers do not have to tell "changed their mind" apart from "broken file".
+ * Rejects only if the file can't be used (too big, not an image).
  */
 export async function cropAvatar(file) {
   if (!file || !String(file.type || '').startsWith('image/')) {
@@ -84,9 +59,6 @@ export async function cropAvatar(file) {
         <div class="crop">
           <div class="crop__stage" data-stage>
             <img class="crop__img" data-img alt="" draggable="false">
-            <!-- Dim outside, ring on the line. The ring is what people frame
-                 to, so it is drawn at full strength while everything outside
-                 it is pushed back. -->
             <div class="crop__mask" aria-hidden="true"></div>
           </div>
           <label class="crop__zoom">
@@ -108,9 +80,7 @@ export async function cropAvatar(file) {
         const zoom = root.querySelector('[data-zoom]');
         el.src = url;
 
-        // D is read after layout: the stage is a CSS square whose size depends
-        // on the viewport, and guessing it would put the circle off-centre on
-        // a small phone.
+        // Measure D after layout; the stage size comes from CSS.
         let D = 0;
         let base = 1; // scale at which the image exactly covers the stage
         let z = 1;
@@ -119,7 +89,7 @@ export async function cropAvatar(file) {
 
         const scale = () => base * z;
 
-        /** Keep the image covering the stage — no empty corners, ever. */
+        /** Keep the image covering the whole stage. */
         const clamp = () => {
           const w = img.naturalWidth * scale();
           const h = img.naturalHeight * scale();
@@ -140,8 +110,7 @@ export async function cropAvatar(file) {
           const prev = D;
           D = box.width;
           base = D / Math.min(img.naturalWidth, img.naturalHeight);
-          // Keep the centre of the crop put when the stage resizes, rather
-          // than snapping back to the middle of the photo.
+          // Keep the crop centred on the same spot when the stage resizes.
           if (prev) {
             const k = D / prev;
             ox *= k;
@@ -153,7 +122,7 @@ export async function cropAvatar(file) {
           draw();
         };
 
-        /** Zoom about a point in stage space, so the pixel under it stays put. */
+        /** Zoom around a stage point, keeping that point fixed. */
         const zoomTo = (next, cx, cy) => {
           next = Math.min(MAX_ZOOM, Math.max(1, next));
           if (next === z) return;
@@ -166,7 +135,7 @@ export async function cropAvatar(file) {
           draw();
         };
 
-        // --- dragging, and pinching, from the same pointer book ------------
+        // --- drag and pinch ---------------------------------------------------
         const pts = new Map();
         let start = null;
 
@@ -197,7 +166,7 @@ export async function cropAvatar(file) {
           pts.set(e.pointerId, local(e));
           const c = centre();
           if (pts.size === 2 && start?.d) {
-            // Pinch: scale about the midpoint, and pan with it in one gesture.
+            // Pinch: zoom around the midpoint and pan with it.
             const next = Math.min(MAX_ZOOM, Math.max(1, start.z * (spread() / start.d)));
             const before = scale();
             z = next;
@@ -214,7 +183,7 @@ export async function cropAvatar(file) {
 
         const release = (e) => {
           if (!pts.delete(e.pointerId)) return;
-          // Re-baseline, or lifting one finger of a pinch jumps the image.
+          // Re-baseline so lifting one finger doesn't make the image jump.
           start = pts.size ? { c: centre(), ox, oy, z, d: pts.size === 2 ? spread() : 0 } : null;
         };
         stage.addEventListener('pointerup', release);
@@ -232,7 +201,6 @@ export async function cropAvatar(file) {
 
         zoom.addEventListener('input', () => zoomTo(Number(zoom.value), D / 2, D / 2));
 
-        // The stage is sized by CSS, so wait for layout before measuring it.
         requestAnimationFrame(layout);
         const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(layout) : null;
         ro?.observe(stage);
@@ -248,9 +216,8 @@ export async function cropAvatar(file) {
           const canvas = document.createElement('canvas');
           canvas.width = canvas.height = OUT;
           const g = canvas.getContext('2d');
-          // The visible square is [0,D] in stage space; dividing by the scale
-          // puts it back in image pixels. Clamped because a fractional pixel
-          // over the edge makes drawImage paint a transparent sliver.
+          // Convert the visible square back to image pixels, clamped so drawImage
+          // doesn't paint a transparent sliver at the edge.
           const side = Math.min(D / s, Math.min(img.naturalWidth, img.naturalHeight));
           const sx = Math.max(0, Math.min(img.naturalWidth - side, -ox / s));
           const sy = Math.max(0, Math.min(img.naturalHeight - side, -oy / s));
@@ -271,8 +238,7 @@ export async function cropAvatar(file) {
           );
         });
 
-        // Closing by the grip, the X, Escape or the backdrop is a cancel. The
-        // promise must settle either way or the caller waits forever.
+        // Any other way of closing counts as cancel; always settle the promise.
         const seal = () => finish(null);
         root.addEventListener('sheet-closed', seal);
         const mo = new MutationObserver(() => {

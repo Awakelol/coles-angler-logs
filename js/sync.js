@@ -1,33 +1,14 @@
-// ---------------------------------------------------------------------------
-// FIRESTORE SYNC
+// Firestore sync for catch logs.
 //
-// Makes a catch log follow its owner between devices. IndexedDB stays the
-// source of truth — every write lands locally first and is pushed afterwards —
-// because the app is used on the water where there is frequently no signal,
-// and a screen that refuses to record a fish until the network agrees is
-// useless at the exact moment it is needed.
+// IndexedDB stays the source of truth; writes happen locally and get pushed
+// later so logging works without signal.
 //
-// SHAPE.  users/{uid}/catches/{catchId}, one document per catch. Scoping by
-// uid rather than a userId field means the security rules are three lines and
-// obviously correct, and a device can only ever request its own data.
+// Layout: users/{uid}/catches/{catchId}. Photos and clips are stripped before
+// upload (Firestore docs cap at 1 MiB, and Cloud Storage needs billing), so
+// media stays on the device that took it. See stripForCloud.
 //
-// RECORDS ONLY.  Photos and clips are stripped before upload and stay on the
-// phone that took them. Firestore documents cap at 1 MiB and media belongs in
-// Cloud Storage, which needs a billing account on projects created recently.
-// Deliberate, and the boundary is one function — stripForCloud — so adding
-// media later means writing the uploader, not unpicking this.
-//
-// MERGE.  Last write wins on updatedAt, which every record carries (see
-// store.saveCatch). Not a CRDT and not trying to be: a fishing log is edited
-// by one person on one device at a time, and the failure mode of last-write-
-// wins here is losing an edit made on a phone that was offline while the same
-// catch was edited elsewhere. Vanishingly rare, and the alternative costs more
-// complexity than the problem is worth.
-//
-// DELETES.  Tombstones, not absences — see the note at the top of js/store.js.
-// A row missing from the cloud means "this device has something new", never
-// "the cloud deleted it".
-// ---------------------------------------------------------------------------
+// Merge is last-write-wins on updatedAt. Deletes are tombstones (see store.js),
+// so a row missing from the cloud just means it hasn't been pushed yet.
 
 import { store } from './store.js';
 import { firebaseHandles, currentUid } from './auth/cloud.js';
@@ -39,31 +20,25 @@ const LAST_SYNC_KEY = 'angler.lastSync';
 
 let fsPromise = null;
 
-/** Load the Firestore SDK once, on first sync. It is not part of app start-up. */
+/** Lazy-load the Firestore SDK on first sync. */
 function loadFirestore() {
   if (!fsPromise) {
     fsPromise = import(/* @vite-ignore */ FS_URL).catch((e) => {
-      fsPromise = null; // let a later attempt retry rather than wedging
+      fsPromise = null; // allow a retry
       throw e;
     });
   }
   return fsPromise;
 }
 
-// --- the pure part ----------------------------------------------------------
-//
-// Kept free of Firestore, IndexedDB and the clock so it can be tested directly
-// with plain objects. Every interesting decision this module makes is here.
+// --- pure helpers (no Firestore/IndexedDB, easy to test) --------------------
 
 /** Fields that never leave the device. */
 const LOCAL_ONLY = ['photo', 'video', 'poster'];
 
 /**
- * A catch as it goes to Firestore: no media, no undefined values.
- *
- * Firestore rejects `undefined` outright, and an optional field the user left
- * blank is exactly how one gets there — so they are dropped rather than sent
- * as null, which would overwrite a value another device had filled in.
+ * A catch as sent to Firestore: no media and no undefined values (Firestore
+ * rejects undefined; sending null instead could clobber another device's value).
  */
 export function stripForCloud(record) {
   const out = {};
@@ -71,8 +46,7 @@ export function stripForCloud(record) {
     if (LOCAL_ONLY.includes(k) || v === undefined) continue;
     out[k] = v;
   }
-  // Remembered so the UI can say "photo is on your other phone" rather than
-  // leaving a catch looking as though it never had one.
+  // Lets other devices show that a photo exists somewhere.
   if (record.photo) out.hasPhotoElsewhere = true;
   if (record.video) out.hasVideoElsewhere = true;
   return out;
@@ -81,7 +55,7 @@ export function stripForCloud(record) {
 const stamp = (r) => r?.updatedAt || r?.createdAt || '';
 
 /**
- * Decide what moves in each direction.
+ * Work out what to push and what to pull.
  *
  * @param {Array} localRows  every local record for this user, tombstones included
  * @param {Array} cloudRows  every cloud document for this user
@@ -118,11 +92,8 @@ export function planSync(localRows, cloudRows) {
 }
 
 /**
- * Fold a cloud record into the local one.
- *
- * The local media fields are preserved: the cloud copy never carried them, and
- * accepting it wholesale would delete the photo off the device that took it —
- * which looks exactly like the app losing your picture.
+ * Apply a cloud record over the local one, keeping local media fields (the
+ * cloud copy never has them).
  */
 export function mergeIncoming(cloudRecord, localRecord) {
   const merged = { ...cloudRecord };
@@ -134,7 +105,7 @@ export function mergeIncoming(cloudRecord, localRecord) {
   return merged;
 }
 
-// --- the plumbing -----------------------------------------------------------
+// --- sync ---------------------------------------------------------------------
 
 export function lastSyncedAt() {
   try {
@@ -148,7 +119,7 @@ function noteSynced() {
   try {
     localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
   } catch {
-    /* private mode; the timestamp is a nicety */
+    /* private mode */
   }
 }
 
@@ -163,11 +134,7 @@ export function clearSyncState() {
 let running = null;
 
 /**
- * Reconcile this device with the cloud.
- *
- * Never throws — the caller is usually a screen that has already rendered, and
- * a sync failure is a status line, not an error page. Concurrent calls share
- * one run rather than racing each other into duplicate writes.
+ * Sync this device with the cloud. Never throws; concurrent calls share one run.
  *
  * @returns {Promise<{ok: boolean, pushed?: number, pulled?: number, reason?: string}>}
  */
@@ -207,13 +174,11 @@ async function doSync() {
 
     const { push, pull } = planSync(localRows, cloudRows);
 
-    // Pull first. If the push half fails on a flaky connection, the device has
-    // still gained whatever the cloud knew, and the push retries next time.
+    // Pull first so a failed push still leaves us up to date.
     for (const remote of pull) {
       const existing = localRows.find((r) => r.id === remote.id) || null;
       const merged = mergeIncoming(remote, existing);
-      // A tombstone that arrived from elsewhere still has to be stored, not
-      // applied and forgotten, or the next sync would push the row back up.
+      // Store incoming tombstones too, or the next sync would push the row back.
       await store.putRaw({ ...merged, userId: uid });
     }
 
@@ -225,18 +190,13 @@ async function doSync() {
     return { ok: true, pushed: push.length, pulled: pull.length };
   } catch (err) {
     console.warn('[sync]', err);
-    // The one worth naming: rules not published, or Firestore never created.
+    // Usually means the rules aren't published or Firestore isn't set up.
     const denied = err?.code === 'permission-denied' || /permission/i.test(err?.message || '');
     return { ok: false, reason: denied ? 'permission-denied' : 'failed' };
   }
 }
 
-/**
- * Sync in the background after a local change.
- *
- * Fire-and-forget on purpose: saving a catch must feel instant, and whether
- * the network agreed is not something to wait on before closing the form.
- */
+/** Fire-and-forget sync after a local change. */
 export function syncSoon() {
   syncNow().catch(() => {});
 }

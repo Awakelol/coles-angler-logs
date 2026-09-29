@@ -1,33 +1,17 @@
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// AUTH FACADE
+// Auth facade. Pages talk to this, never to a provider directly.
 //
-// The app talks to this and never to a provider directly. Two kinds of account
-// coexist deliberately:
+// Two kinds of account:
+//   local  (auth/local.js)  username + password stored in this browser. Works
+//                           offline with no Firebase project. Doesn't sync.
+//   cloud  (auth/cloud.js)  Firebase Auth: Google, plus username accounts via
+//                           derived email/password credentials. Syncs.
 //
-//   local  (js/auth/local.js)  username + password kept in this browser. Needs
-//                              nothing — no network, no Firebase project — and
-//                              is the fallback whenever the cloud is not
-//                              reachable. Does not sync on its own.
-//   cloud  (js/auth/cloud.js)  Firebase Auth. Google, and username accounts
-//                              via derived Email/Password credentials.
-//                              Genuinely verified, and the basis for sync.
+// Username accounts are created in the cloud when possible and mirrored
+// locally so sign-in still works offline. An account created offline stays
+// local until the next online sign-in, which upgrades it in place.
 //
-// A USERNAME ACCOUNT IS BOTH. It is created in the cloud when the cloud is
-// available, and mirrored locally so sign-in still works with no signal. An
-// account created offline is local-only until the first successful online
-// sign-in, at which point it is upgraded in place — same username, same
-// password, same catches — without asking, because the alternative is a
-// person's log silently not being backed up.
-//
-// Keeping both means the app still works with zero setup and no signal, which
-// is the normal case on the water, while anyone who wants their log on more
-// than one device can have that.
-//
-// currentUser() is SYNCHRONOUS on purpose — render() calls it while building
-// markup. Cloud profiles are therefore cached in localStorage and reconciled
-// with Firebase in the background by init(), rather than being awaited.
-// ---------------------------------------------------------------------------
+// currentUser() is synchronous because render() calls it, so cloud profiles
+// are cached in localStorage and refreshed in the background by init().
 
 import * as local from './auth/local.js';
 import * as cloud from './auth/cloud.js';
@@ -35,7 +19,7 @@ import { store } from './store.js';
 
 const SESSION_KEY = 'angler.session';
 
-// Re-exported so pages don't need to know which provider owns what.
+// Re-exported so pages don't need to import from auth/ directly.
 export const {
   USERNAME_RULES,
   validateUsername,
@@ -49,18 +33,14 @@ export const {
 } = local;
 
 /**
- * Rename the signed-in account's handle.
- *
- * LOCAL ONLY, and that is a real limit rather than an oversight. A cloud
- * account's handle is its Firebase Email/Password identity, and changing that
- * means an updateEmail() call plus a re-auth — neither of which can be done
- * from here without the current password. A synced account is told so instead
- * of being offered a control that would half-work.
+ * Rename the signed-in account's handle. Local accounts only: for synced ones
+ * the handle is the Firebase email, which would need updateEmail() + re-auth.
  */
 export async function renameHandle(next) {
   const session = currentUser();
   if (!session) throw new Error('Sign in first.');
-  if (session.syncs) {
+  // provider 'username' is an offline mirror of a synced account.
+  if (session.syncs || session.provider === 'username') {
     throw new Error('Handles on synced accounts cannot be changed here yet.');
   }
   return local.renameHandle(session.id, next);
@@ -74,7 +54,7 @@ function readSession() {
   try {
     const raw = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
     if (raw && raw.kind && raw.id) return raw;
-    // Sessions used to be a bare local user id; keep those working.
+    // Older sessions were stored as a bare local user id.
     if (typeof raw === 'string') return { kind: 'local', id: raw };
     const legacy = localStorage.getItem(SESSION_KEY);
     return legacy ? { kind: 'local', id: legacy } : null;
@@ -120,46 +100,33 @@ export function isSignedIn() {
 
 // --- username accounts -------------------------------------------------------
 //
-// One pair of functions for what is really two storage backends, because the
-// person typing a username and password should not have to know or care which
-// one answered. The rules, in order:
-//
-//   SIGN UP   cloud first when it's reachable, local otherwise. A local-only
-//             sign-up is not a lesser account, just one that hasn't met the
-//             network yet.
-//   SIGN IN   local first, always. It is instant, it works with no signal, and
-//             it is the common case. Only when there is no local record do we
-//             go to the cloud — which is exactly the "new device" path, and the
-//             thing that makes this sync rather than backup.
-//   UPGRADE   a successful local sign-in with the cloud reachable quietly
-//             promotes the account and pushes its catches up.
+//   sign up   cloud if reachable, otherwise local.
+//   sign in   local first (instant, works offline). Falls back to the cloud
+//             when this device has no record of the user (new device).
+//   upgrade   after a local sign-in, if online, connect the account to the
+//             cloud so it starts syncing.
 
-/** Is the network plausibly there? navigator.onLine only ever rules it out. */
+// navigator.onLine can only tell us we're definitely offline.
 const maybeOnline = () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false);
 
 const cloudUsable = () => cloud.cloudConfigured() && maybeOnline();
 
 /**
- * Keep a local mirror of a cloud username account.
- *
- * Without this, a synced account could not sign in on its own device with no
- * signal — which is the situation the app was built for. The mirror stores the
- * cloud uid as its id, so catches written offline are already keyed correctly
- * and need no rewriting when the connection comes back.
+ * Keep a local copy of a cloud username account so it can sign in offline.
+ * Uses the cloud uid as its id so offline catches are already keyed right.
  */
 async function mirrorLocally(username, password, uid) {
   try {
     if (local.getById(uid)) return;
     await local.adopt({ id: uid, username, password, provider: 'username' });
   } catch (err) {
-    // A failed mirror costs offline sign-in, not the account. Not worth
-    // failing a sign-up that otherwise worked.
+    // Only costs offline sign-in; don't fail the sign-up over it.
     console.warn('[auth] could not mirror account locally', err);
   }
 }
 
 export async function signUp(username, password, email = '') {
-  // Validate before touching the network so the errors are ours and instant.
+  // Validate locally first so errors are immediate.
   const nameError = local.validateUsername(username);
   if (nameError) throw new Error(nameError);
   const pwError = local.validatePassword(password);
@@ -178,9 +145,7 @@ export async function signUp(username, password, email = '') {
       if (err?.code === 'auth/email-already-in-use') {
         throw new Error('That username is already taken. Try signing in instead.');
       }
-      // Anything else — offline mid-request, Email/Password not enabled in the
-      // Firebase console, quota — falls through to a local account rather than
-      // refusing to let someone start logging catches.
+      // Network, config or quota problems: fall back to a local account.
       console.warn('[auth] cloud sign-up unavailable, creating a local account', err);
     }
   }
@@ -191,14 +156,11 @@ export async function signUp(username, password, email = '') {
 }
 
 export async function signIn(username, password) {
-  // 1. This device already knows them.
   let localUser = null;
   try {
     localUser = await local.signIn(username, password);
   } catch (err) {
-    // No local record is not a failure yet — it's the new-device case. A
-    // WRONG PASSWORD is, and must not fall through to the cloud, or the error
-    // would come back as something confusing about the network.
+    // No local record means try the cloud. A wrong password stops here.
     if (err?.code !== 'no-such-user') throw err;
   }
 
@@ -208,7 +170,7 @@ export async function signIn(username, password) {
     return upgraded || { ...localUser, syncs: false };
   }
 
-  // 2. No local record. Either a new device, or a username that doesn't exist.
+  // No local record: a new device, or an unknown username.
   if (!cloud.cloudConfigured()) throw new Error('Wrong username or password.');
   if (!maybeOnline()) {
     throw new Error('That account is not on this device yet — connect to the internet to sign in.');
@@ -220,15 +182,9 @@ export async function signIn(username, password) {
     writeSession({ kind: 'cloud', id: profile.id });
     return { ...profile, syncs: true };
   } catch (err) {
-    // Everything that isn't plainly a connection problem reads as one message.
-    //
-    // Firebase distinguishes "no such user" from "wrong password", and it also
-    // has a dozen setup and quota codes. Passing any of them through would let
-    // a shared device be probed for which usernames exist, and would put
-    // "auth/operation-not-allowed" in front of someone who only mistyped. None
-    // of these codes depend on whether the account exists, so collapsing them
-    // loses no information the person could act on. The real code is still
-    // recorded by cloud.js for lastAuthError() and the console.
+    // Collapse everything but network errors into one message so the form
+    // doesn't reveal which usernames exist. cloud.js still records the real
+    // error for lastAuthError().
     if (err?.code === 'auth/network-request-failed') {
       throw new Error('No connection — that account is not on this device yet.');
     }
@@ -237,15 +193,25 @@ export async function signIn(username, password) {
 }
 
 /**
- * Promote a local-only account to a synced one, in place.
- *
- * Runs after a successful local sign-in, so we hold a password we know is
- * correct — the only moment this is possible without asking for it again.
- * Returns the cloud profile on success, null if it wasn't possible, and never
- * throws: failing to upgrade must not fail the sign-in that already worked.
+ * After a successful local sign-in, connect the account to the cloud: either
+ * sign a mirrored account back in, or promote a local-only one in place.
+ * Returns the cloud profile, or null if that wasn't possible. Never throws.
  */
 async function tryUpgrade(username, password, localUser) {
-  if (!cloudUsable() || localUser.provider === 'username') return null;
+  if (!cloudUsable()) return null;
+
+  if (localUser.provider === 'username') {
+    // Local mirror of a cloud account (same id as the uid).
+    try {
+      const profile = await cloud.signInWithPassword(username, password);
+      if (profile.id !== localUser.id) return null;
+      writeSession({ kind: 'cloud', id: profile.id });
+      return { ...profile, syncs: true };
+    } catch (err) {
+      console.warn('[auth] could not reconnect this account to sync', err);
+      return null;
+    }
+  }
 
   try {
     let profile;
@@ -253,14 +219,11 @@ async function tryUpgrade(username, password, localUser) {
       profile = await cloud.signUpWithPassword(username, password);
     } catch (err) {
       if (err?.code !== 'auth/email-already-in-use') throw err;
-      // Already registered — this device is just meeting the account for the
-      // first time. Signing in reaches the same uid, which is what matters.
+      // Already registered elsewhere; sign in instead.
       profile = await cloud.signInWithPassword(username, password);
     }
 
-    // The catches were written against the local id. Re-key them to the cloud
-    // uid before anything syncs, or they'd belong to nobody. Spots are owned
-    // the same way and would be just as orphaned.
+    // Re-key catches and spots from the local id to the uid before syncing.
     await store.reassignOwner(localUser.id, profile.id);
     await store.reassignSpotOwner(localUser.id, profile.id);
     local.deleteAccount(localUser.id);
@@ -268,9 +231,8 @@ async function tryUpgrade(username, password, localUser) {
     writeSession({ kind: 'cloud', id: profile.id });
     return { ...profile, syncs: true, justUpgraded: true };
   } catch (err) {
-    // Wrong password against an existing cloud account of the same name is the
-    // interesting case: someone else owns that username. Their local account
-    // still works, so say nothing and leave it alone.
+    // e.g. someone else owns this username in the cloud. The local account
+    // still works, so leave it as is.
     console.warn('[auth] could not upgrade this account to sync', err);
     return null;
   }
@@ -287,9 +249,8 @@ function requireCloud(what) {
 }
 
 /**
- * Returns the profile when a popup completed, or null when the browser was
- * sent away on a redirect (init() finishes that on the way back) or the user
- * closed the popup.
+ * Returns the profile, or null if the popup was closed or we fell back to a
+ * redirect (init() finishes that on return).
  */
 async function cloudSignIn(name, label) {
   requireCloud(label);
@@ -301,25 +262,18 @@ async function cloudSignIn(name, label) {
 export const signInWithGoogle = () => cloudSignIn('google', 'Google sign-in');
 export const signInWithFacebook = () => cloudSignIn('facebook', 'Facebook sign-in');
 
-/** The last sign-in failure, so the UI can show something concrete. */
 export const lastAuthError = cloud.lastAuthError;
 export const clearAuthError = cloud.clearAuthError;
 
 // --- account linking --------------------------------------------------------
-//
-// One person, one account, several ways in. Linking does not change the
-// Firebase uid, and the catch log is keyed by uid, so connecting Google to a
-// username account is genuinely additive — a second door, not a second room.
+// Linking keeps the Firebase uid, so the catch log is unaffected.
 
-/** Attach another provider to the signed-in account. */
 export async function linkProvider(name) {
   requireCloud('Account linking');
   const user = currentUser();
   if (!user) throw new Error('Sign in before connecting another account.');
   if (!user.syncs) {
-    // A local-only account has no uid to attach anything to. This is now rare
-    // — it means the account was made offline and has never been online since
-    // — and it fixes itself on the next connected sign-in.
+    // Local-only (created offline); fixed by the next online sign-in.
     throw new Error('This account is not synced yet. Sign in again with a connection first.');
   }
   return cloud.linkProvider(name);
@@ -330,22 +284,15 @@ export async function unlinkProvider(providerId) {
   await cloud.unlinkProvider(providerId);
 }
 
-/** Short provider names linked to the current account, e.g. ['google']. */
+/** e.g. ['username', 'google'] */
 export function linkedProviders() {
   return currentUser()?.providers || [];
 }
 
-/**
- * A sign-in that collided with an existing account, awaiting a link.
- * Non-null means: this email already has an account via another provider.
- */
 export const pendingLink = cloud.pendingLink;
 export const clearPendingLink = cloud.clearPendingLink;
 
-/**
- * Run once at start-up, before the first render.
- * Finishes any provider redirect and reconciles the cached cloud profile.
- */
+/** Run once before the first render: finish redirects, refresh the cache. */
 export async function init() {
   const justSignedIn = await cloud.completeRedirect();
   if (justSignedIn) {
@@ -369,7 +316,6 @@ export function deleteAccount(userId) {
   if (readSession()?.id === userId) writeSession(null);
 }
 
-/** Whether this account's catches are backed by the cloud. */
 export function syncs() {
   return currentUser()?.syncs === true;
 }

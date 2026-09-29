@@ -1,34 +1,22 @@
-// ---------------------------------------------------------------------------
-// PERSISTENCE
+// Persistence.
 //
-// Catches live in IndexedDB so photos can be stored as Blobs (localStorage is
-// strings-only and would blow its ~5 MB quota on the first photo). Small
-// preferences stay in localStorage where the synchronous read is convenient.
+// Catches, spots and profiles live in IndexedDB (photos are Blobs, which
+// localStorage can't hold). Small prefs stay in localStorage.
 //
-// IndexedDB is the source of truth even for accounts that sync: the app has to
-// work on the water with no signal, so every write lands here first and is
-// pushed later (js/sync.js).
+// IndexedDB is the source of truth even for synced accounts: writes land here
+// first and js/sync.js pushes them later, so the app works offline.
 //
-// DELETES ARE SOFT. A removed catch becomes a tombstone — the record stays with
-// `deleted: true` and a fresh updatedAt — rather than vanishing. Hard deletion
-// cannot survive syncing: phone A deletes a catch, phone B still has it, the
-// next pull sees a row A doesn't have and helpfully restores it. The user
-// deletes it again. Forever. A tombstone is a fact that can be synced; an
-// absence is not. Tombstones are purged after TOMBSTONE_TTL_DAYS, by which
-// point every device has long since seen them.
-// ---------------------------------------------------------------------------
+// Deletes are soft: a deleted row keeps `deleted: true` and a new updatedAt so
+// the deletion can sync to other devices. Otherwise another device would just
+// push the row back. Tombstones are purged after TOMBSTONE_TTL_DAYS.
 
 const DB_NAME = 'anglerlog';
-// v2 added SPOTS, v3 added PROFILES. The upgrade only creates what is missing,
-// so an existing database keeps every catch in it.
+// v2 added spots, v3 added profiles.
 const DB_VERSION = 3;
 const CATCHES = 'catches';
 const SPOTS = 'spots';
 const PROFILES = 'profiles';
 
-// Long enough that a phone left in a drawer for a season still learns about
-// deletions when it comes back; short enough that the store doesn't grow
-// forever with rows nobody will ever look at.
 const TOMBSTONE_TTL_DAYS = 180;
 
 let dbPromise = null;
@@ -47,15 +35,12 @@ function openDb() {
         store.createIndex('by-species', 'speciesId');
         store.createIndex('by-region', 'regionId');
       }
-      // Places the user dropped on the map themselves — their own marks, as
-      // opposed to the zones and spots that ship with a region.
+      // User-dropped map spots (not the region's built-in ones).
       if (!db.objectStoreNames.contains(SPOTS)) {
         const store = db.createObjectStore(SPOTS, { keyPath: 'id' });
         store.createIndex('by-region', 'regionId');
       }
-      // Display name and avatar, one row per account. Here rather than in
-      // localStorage because an avatar is a Blob, and localStorage is strings
-      // with a ~5 MB cap — the same reason catches live here.
+      // Display name + avatar blob, one row per account.
       if (!db.objectStoreNames.contains(PROFILES)) {
         db.createObjectStore(PROFILES, { keyPath: 'id' });
       }
@@ -88,8 +73,6 @@ function txIn(name, mode, fn) {
   );
 }
 
-// Every existing call reads and writes catches; keeping the short name means
-// the store below stays as it was.
 const tx = (mode, fn) => txIn(CATCHES, mode, fn);
 const spotTx = (mode, fn) => txIn(SPOTS, mode, fn);
 
@@ -97,11 +80,8 @@ const wrap = (req) => ({ __req: req });
 
 export const store = {
   /**
-   * Catches belonging to the signed-in user, newest first.
-   *
-   * Records are scoped by `userId` so several people can share a device and
-   * keep separate logs. Entries written before profiles existed have no
-   * userId; they're adopted by the first account created (see adoptOrphans).
+   * A user's live catches, newest first. Pass null for every record on the
+   * device. Rows with no userId predate accounts (see adoptOrphans).
    */
   async allCatches(userId = null) {
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
@@ -111,18 +91,21 @@ export const store = {
   },
 
   /**
-   * Everything including tombstones. Only js/sync.js wants this — every screen
-   * in the app should be calling allCatches() and seeing live records.
+   * The log a page should show: the user's catches, or for a guest (no user)
+   * only the catches with no owner, never other accounts' rows.
    */
+  async catchesFor(userId) {
+    if (userId) return this.allCatches(userId);
+    return (await this.allCatches(null)).filter((r) => !r.userId);
+  },
+
+  /** Includes tombstones. For sync only; screens should use allCatches(). */
   async allRecords(userId = null) {
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
     return userId === null ? rows : rows.filter((r) => r.userId === userId);
   },
 
-  /**
-   * Hand pre-profile entries to a user. Called once when the first account is
-   * created, so switching on profiles doesn't appear to delete the log.
-   */
+  /** Give ownerless rows to a user. Called when the first account is created. */
   async adoptOrphans(userId) {
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
     const orphans = rows.filter((r) => !r.userId);
@@ -133,19 +116,15 @@ export const store = {
   },
 
   /**
-   * Move every record from one owner id to another.
-   *
-   * Called when a device-only account is upgraded to a synced one: the catches
-   * were written against a random local id and must be re-keyed to the Firebase
-   * uid before anything is pushed, or they would sync as nobody's.
+   * Re-key a user's rows, e.g. local id -> Firebase uid when a device-only
+   * account is upgraded. Must happen before the first push.
    */
   async reassignOwner(fromUserId, toUserId) {
     if (!fromUserId || !toUserId || fromUserId === toUserId) return 0;
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
     const mine = rows.filter((r) => r.userId === fromUserId);
     for (const row of mine) {
-      // updatedAt is deliberately NOT touched. These are the same catches, and
-      // bumping it would make them look newer than a copy already in the cloud.
+      // Leave updatedAt alone so these don't look newer than the cloud copy.
       await tx('readwrite', (s) => s.put({ ...row, userId: toUserId }));
     }
     return mine.length;
@@ -172,38 +151,31 @@ export const store = {
   },
 
   /**
-   * Write a record exactly as given, without touching updatedAt.
-   *
-   * saveCatch() stamps updatedAt because a local edit has just happened. A
-   * record arriving from the cloud has NOT just been edited — stamping it
-   * would make this device look like it held the newest copy, and the next
-   * sync would push it straight back, forever.
+   * Write a record as-is without stamping updatedAt. Used for rows pulled from
+   * the cloud; stamping them would make sync push them straight back.
    */
   async putRaw(record) {
     await tx('readwrite', (s) => s.put(record));
     return record;
   },
 
-  /**
-   * Soft delete. The row survives as a tombstone so the deletion can sync;
-   * see the note at the top of this file for why an absence cannot.
-   */
+  /** Soft delete (see top of file). */
   async deleteCatch(id) {
     const existing = await tx('readonly', (s) => wrap(s.get(id)));
     if (!existing) return;
-    // Media is the bulk of the bytes and a tombstone has no use for it.
+    // Drop the media; a tombstone doesn't need it.
     const { photo, video, poster, ...rest } = existing;
     await tx('readwrite', (s) =>
       s.put({ ...rest, deleted: true, updatedAt: new Date().toISOString() })
     );
   },
 
-  /** Really remove a row. Used by sync reconciliation and tombstone purging. */
+  /** Permanently remove a row. Used by sync and tombstone purging. */
   async hardDelete(id) {
     await tx('readwrite', (s) => s.delete(id));
   },
 
-  /** Drop tombstones old enough that every device has certainly seen them. */
+  /** Remove tombstones older than ttlDays. */
   async purgeTombstones(ttlDays = TOMBSTONE_TTL_DAYS) {
     const cutoff = new Date(Date.now() - ttlDays * 86400000).toISOString();
     const rows = (await tx('readonly', (s) => wrap(s.getAll()))) || [];
@@ -221,15 +193,11 @@ export const store = {
     await tx('readwrite', (s) => s.clear());
   },
 
-  // --- the user's own spots -------------------------------------------------
+  // --- user spots -------------------------------------------------------------
   //
-  // Distinct from `region.spots`, which are the named places that ship with a
-  // region and are the same for everybody. These are marks somebody dropped on
-  // the map themselves — the gap in the reef only they know about — so they
-  // are owned, scoped by userId exactly as catches are, and carry the same
-  // createdAt / updatedAt / deleted shape. Nothing syncs them yet; having the
-  // shape already right is what makes that a small change rather than a
-  // migration.
+  // Not the same as `region.spots` (built-in places). These are per-user map
+  // marks with the same shape as catches (userId, timestamps, soft delete).
+  // They don't sync yet.
 
   /** One user's spots in a region, newest first. Tombstones excluded. */
   async allSpots(userId = null, regionId = null) {
@@ -250,7 +218,7 @@ export const store = {
     return record;
   },
 
-  /** Soft delete, for the same reason catches get one — see the file header. */
+  /** Soft delete. */
   async deleteSpot(id) {
     const existing = await spotTx('readonly', (s) => wrap(s.get(id)));
     if (!existing) return;
@@ -259,7 +227,7 @@ export const store = {
     );
   },
 
-  /** Pre-account spots join the first account created, as catches do. */
+  /** Same as adoptOrphans, for spots. */
   async adoptOrphanSpots(userId) {
     const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
     const orphans = rows.filter((r) => !r.userId);
@@ -267,7 +235,7 @@ export const store = {
     return orphans.length;
   },
 
-  /** Re-key when a device-only account becomes a synced one. */
+  /** Same as reassignOwner, for spots. */
   async reassignSpotOwner(fromUserId, toUserId) {
     if (!fromUserId || !toUserId || fromUserId === toUserId) return 0;
     const rows = (await spotTx('readonly', (s) => wrap(s.getAll()))) || [];
@@ -293,26 +261,14 @@ export const store = {
 const PREFS_KEY = 'angler.prefs';
 
 /**
- * WHO YOU ARE, as opposed to who you sign in as.
+ * Display name and avatar. The username (handle) is the account identity;
+ * the display name is optional and falls back to the handle.
  *
- * The username is the handle — chosen at sign-up, unique, and what the account
- * IS. The display name is a label on top of it and can be anything, including
- * nothing, in which case the handle is shown. Keeping them apart means someone
- * can rename themselves without their sign-in breaking.
- *
- * NOT SYNCED YET. Firestore rules currently permit users/{uid}/catches only,
- * so a profile document would be denied. The shape is ready for it — one
- * document per account, keyed by the same id — but publishing the rule is a
- * console action, so this stays on the device until that happens.
+ * Device-only for now: the Firestore rules only allow users/{uid}/catches.
  */
 export const profiles = {
   async get(userId) {
     if (!userId) return null;
-    // wrap(), like every other read in this file. Without it txIn resolves
-    // with the IDBRequest itself rather than its .result — and an IDBRequest
-    // is truthy and has no displayName, so `|| null` never fired and every
-    // caller silently saw a profile with no fields in it. Display names and
-    // avatars were being written correctly and never read back.
     return (await txIn(PROFILES, 'readonly', (s) => wrap(s.get(userId)))) || null;
   },
 
@@ -324,7 +280,7 @@ export const profiles = {
     return next;
   },
 
-  /** Forget the avatar without forgetting the name. */
+  /** Remove the avatar, keep the name. */
   async clearAvatar(userId) {
     const current = await this.get(userId);
     if (!current) return null;
@@ -334,7 +290,7 @@ export const profiles = {
   },
 };
 
-/** What to call someone: their display name if they set one, else the handle. */
+/** Display name if set, otherwise the username. */
 export function shownName(user, profile) {
   const chosen = (profile?.displayName || '').trim();
   return chosen || user?.username || '';
@@ -362,8 +318,8 @@ export const prefs = {
 // --- derived stats ---------------------------------------------------------
 
 /**
- * Personal records. `biggest` keys on species and prefers weight, falling back
- * to length so an entry with only one of the two still counts.
+ * Personal records. "Biggest" per species compares weight first, then length,
+ * so entries with only one of the two still count.
  */
 export function computeStats(catches) {
   const stats = {
@@ -407,9 +363,9 @@ export function computeStats(catches) {
 
 // --- backup ----------------------------------------------------------------
 
-/** Photos and clips are dropped from the export — Blobs don't survive JSON. */
-export async function exportJson() {
-  const catches = await store.allCatches();
+/** Photos and clips aren't included; Blobs don't survive JSON. */
+export async function exportJson(userId = null) {
+  const catches = await store.catchesFor(userId);
   return JSON.stringify(
     {
       app: "Cole's Angler Log",
@@ -427,13 +383,14 @@ export async function exportJson() {
   );
 }
 
-export async function importJson(text) {
+/** Imported catches are given to `userId` so they show up in that user's log. */
+export async function importJson(text, userId = null) {
   const data = JSON.parse(text);
   if (!Array.isArray(data.catches)) throw new Error('Not a valid Angler Log export');
   let n = 0;
   for (const c of data.catches) {
-    const { hadPhoto, hadVideo, ...rest } = c;
-    await store.saveCatch(rest);
+    const { hadPhoto, hadVideo, deleted, ...rest } = c;
+    await store.saveCatch({ ...rest, userId });
     n++;
   }
   return n;

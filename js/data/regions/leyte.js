@@ -1,18 +1,12 @@
-// ---------------------------------------------------------------------------
-// REGION: Leyte, Philippines
+// Region: Leyte, Philippines.
 //
-// Species emphasis follows BFAR Region VIII (Eastern Visayas) survey findings:
-// Leiognathidae (ponyfish), Lutjanidae (snappers) and Gerreidae (mojarras)
-// dominate landings, alongside the small pelagics that drive municipal catch.
+// Species emphasis follows BFAR Region VIII (Eastern Visayas) surveys:
+// ponyfish (Leiognathidae), snappers (Lutjanidae) and mojarras (Gerreidae)
+// dominate landings, along with small pelagics.
 //
-// This file describes a PLACE. The fish themselves live in the shared
-// catalogue at js/data/species/indo-pacific.js and are referenced here by id,
-// so a species can be a possible catch in any number of regions and zones
-// without being duplicated.
-//
-// TO ADD A SPECIES TO THIS REGION: make sure it exists in the catalogue, then
-// add its id to `species` below and to whichever zones it turns up in.
-// ---------------------------------------------------------------------------
+// Species are defined in js/data/species/indo-pacific.js and referenced here
+// by id. To add one to this region, add its id to `species` below and to the
+// zones where it occurs.
 
 export default {
   id: 'leyte',
@@ -21,16 +15,11 @@ export default {
   blurb: 'The waters around Leyte island — Pacific-facing gulf on one side, the deeper Bohol Sea on the other, and everything from mangrove creeks to 8-knot straits in between.',
   timezone: 'Asia/Manila',
 
-  // Home for the weather + tide dashboard: where they point when the device
-  // won't give a location, or gives one from outside the country.
-  //
-  // Tacloban, not the middle of the gulf. This used to be 11.0/125.2, an
-  // offshore point with no station, no name and nobody standing on it — and
-  // it is also the tide cache key, so predictions were being fetched for open
-  // water rather than for the port everyone actually launches from.
+  // Used for weather/tides when there's no device location (or it's outside
+  // the country). Tacloban, since this is also the tide cache key.
   coords: { lat: 11.238, lon: 125.004 },
 
-  // Named fishing spots. Add freely — the catch log builds its dropdown here.
+  // Named spots; also used for the catch log's dropdown.
   spots: [
     { id: 'tacloban-bay', name: 'Cancabato Bay (Tacloban)', coords: { lat: 11.238, lon: 125.004 }, type: 'bay' },
     { id: 'san-pedro-bay', name: 'San Pedro Bay', coords: { lat: 11.10, lon: 125.02 }, type: 'bay' },
@@ -49,49 +38,30 @@ export default {
     { id: 'surigao-strait', name: 'Surigao Strait', coords: { lat: 10.167, lon: 125.383 }, type: 'strait' },
   ],
 
-  // Map view: where the map opens, and how far it can be zoomed out.
-  // `bounds` frames the whole of Leyte plus the gulf and southern Samar — it's
-  // the fallback view when the device won't share a location.
+  // Map settings. `bounds` covers Leyte, the gulf and southern Samar and is
+  // the default view.
   map: {
     center: { lat: 10.85, lon: 125.00 },
     zoom: 9,
     minZoom: 7,
-    // 19 is as far as both tile sources go. It was 15, which is about "this
-    // bay" — not close enough to pick out the actual reef edge or wharf you
-    // meant, which is the whole point of putting a spot on a map.
+    // Both tile sources go to 19.
     maxZoom: 19,
     bounds: { south: 9.85, west: 124.15, north: 11.6, east: 126.0 },
 
-    // How far you may pan away from the region — the Philippines, here.
-    // Deliberately much wider than `bounds`: this is not "where the fish
-    // are", it is "where this app is about". You can still drag up to Luzon
-    // to see where a storm is coming from; you cannot drag out to the
-    // Pacific and lose the country entirely.
-    //
-    // It is also what counts as being in the area. A fix outside this box
-    // sends the weather back to `coords` above rather than reporting the
-    // conditions wherever the phone happens to be.
-    //
-    // Corners are the archipelago's extremes: Y'Ami in the Batanes to the
-    // north, the Tawi-Tawi group to the south, Balabac west, Pusan Point
-    // east — each rounded outward. The far-western Kalayaan claim is left
-    // out on purpose; including it would stretch the box across several
-    // hundred km of open sea nobody is fishing from Leyte.
+    // Panning limit, and the box that counts as "in the area" for weather.
+    // Covers the whole Philippines (Y'Ami to Tawi-Tawi, Balabac to Pusan
+    // Point, rounded out), minus the far-western Kalayaan group.
     panBounds: { south: 4.2, west: 116.0, north: 21.4, east: 126.8 },
   },
 
   // ---------------------------------------------------------------------
-  // FISHING ZONES — the pins on the map.
+  // Fishing zones (map pins).
   //
-  //   type      key from HABITAT_TACTICS in js/data/tactics.js; drives the
-  //             habitat advice shown when a pin is opened
-  //   minZoom   pin appears at this zoom and closer. Broad offshore grounds
-  //             use a low value; small creeks use a high one, so detail
-  //             reveals itself as you zoom in
-  //   species   ids from the shared catalogue — the POSSIBLE catches here.
-  //             The same species can and should appear in several zones.
-  //
-  // TO ADD A ZONE: copy an entry, set coords, pick a type, list species ids.
+  //   type      HABITAT_TACTICS key (js/data/tactics.js)
+  //   minZoom   pin shows at this zoom and closer (low for broad offshore
+  //             grounds, high for small creeks)
+  //   species   catalogue ids of possible catches; species can be in
+  //             several zones
   // ---------------------------------------------------------------------
   zones: [
     {
@@ -121,12 +91,8 @@ export default {
       water: 'Leyte Gulf',
       name: 'San Pedro Bay',
       type: 'bay',
-      // Mid-basin, between the Tacloban–Palo shore and the Samar side. The pin
-      // used to sit at 11.10/125.02, which is 1.1 km off Tanauan — a pin for
-      // the whole bay parked on one town's shallows, and close enough to the
-      // Tanauan zone's own pin that the two collided from zoom 10 in.
-      // INFERRED from the surrounding coastline, not from a source. Worth a
-      // local check that this is open water and fished as San Pedro Bay.
+      // Mid-bay between the Tacloban-Palo shore and Samar. Position inferred
+      // from the coastline, not a source; worth checking locally.
       coords: { lat: 11.18, lon: 125.06 },
       minZoom: 8,
       depth: '5–30 m',
@@ -296,7 +262,7 @@ export default {
     },
 
     // =====================================================================
-    // NORTH COAST — Carigara Bay and the San Juanico Strait
+    // NORTH COAST: Carigara Bay and the San Juanico Strait
     // Carigara Bay is part of the Samar Sea; the strait joins it to the gulf.
     // =====================================================================
     {
@@ -359,7 +325,7 @@ export default {
     },
 
     // =====================================================================
-    // WEST COAST — Ormoc Bay and the Camotes Sea
+    // WEST COAST: Ormoc Bay and the Camotes Sea
     // =====================================================================
     {
       id: 'z-ormoc-bay',
@@ -424,7 +390,7 @@ export default {
     },
 
     // =====================================================================
-    // SOUTH — Sogod Bay and the Surigao Strait
+    // SOUTH: Sogod Bay and the Surigao Strait
     // Fishery Management Area 9, and a different sea: this is the Bohol Sea.
     // =====================================================================
     {
@@ -492,9 +458,7 @@ export default {
     },
   ],
 
-  // Possible catches in this region — ids from the shared catalogue in
-  // js/data/species/indo-pacific.js. A species may appear in any number of
-  // regions and zones; nothing here is exclusive.
+  // Possible catches in this region (catalogue ids).
   species: [
     'photopectoralis-bindus', 'gazza-minuta', 'leiognathus-equulus', 'secutor-ruconius',
     'lutjanus-argentimaculatus', 'lutjanus-fulviflamma', 'lutjanus-russellii', 'lutjanus-johnii',

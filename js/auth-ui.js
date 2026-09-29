@@ -1,17 +1,7 @@
-// ---------------------------------------------------------------------------
-// THE SIGN-IN CARD
+// Sign-in / sign-up card, used on the log gate, Account and Settings.
 //
-// One card, three homes: the catch log's gate, the Account screen, and
-// Settings. It used to live inside js/pages/log.js, which meant the only way
-// to sign in was to visit the log — so Account and Settings, the two screens
-// about your account, both had to send you somewhere else to get one.
-//
-// Extracted rather than copied. Three copies of an auth form is three places
-// to fix a bug in, and the one that gets missed is the one someone is using.
-//
-// WHICH VIEW IS SHOWING lives here rather than in the router, so the browser
-// Back button still means "leave this screen", not "go back a form step".
-// ---------------------------------------------------------------------------
+// The signin/signup view state lives here rather than in the router so the
+// Back button leaves the screen instead of stepping back through the form.
 
 import { CONFIG } from './config.js';
 import { store, prefs } from './store.js';
@@ -24,10 +14,10 @@ import { esc, toast } from './ui.js';
 
 let gateView = 'signin';
 
-/** 'signin' | 'signup' — what the card is currently showing. */
+/** 'signin' | 'signup' */
 export const authView = () => gateView;
 
-/** The heading a page should put above the card. */
+/** Heading for the page to show above the card. */
 export const authHeading = () =>
   gateView === 'signup'
     ? { eyebrow: 'New angler', title: 'Create account',
@@ -35,17 +25,11 @@ export const authHeading = () =>
     : { eyebrow: 'Your logbook', title: 'Sign in',
         blurb: 'Sign in so your catches stay yours.' };
 
-// ---------------------------------------------------------------------------
-// GUEST MODE
+// --- guest mode ------------------------------------------------------------
 //
-// Not a fake account - a catch saved without one gets `userId: null` and is
-// adopted by the first account made (store.adoptOrphans). That behaviour has
-// always been there; the gate was simply hiding it, which made "you can start
-// now and keep it later" a promise the screen contradicted.
-//
-// Spots stay behind the account. They are filtered by userId with no orphan
-// path, and that gate is deliberate.
-// ---------------------------------------------------------------------------
+// Guests aren't a fake account: their catches get userId null and are adopted
+// by the first account created (store.adoptOrphans). Map spots still need an
+// account.
 
 const GUEST_KEY = 'guestMode';
 export const isGuest = () => prefs.get(GUEST_KEY, false) === true;
@@ -78,13 +62,13 @@ const providerButtons = () => enabledProviders().map((n) => PROVIDER_MARKUP[n]).
 
 const PROVIDER_LABELS = { google: 'Google', facebook: 'Facebook' };
 
-/** "Google" / "Google or Facebook" — never a provider we aren't showing. */
+/** e.g. "Google" or "Google or Facebook", only for enabled providers. */
 const providerNames = () => {
   const names = enabledProviders().map((n) => PROVIDER_LABELS[n]);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] || '';
 };
 
-/** Cloud sign-in is offered only when it's configured AND has a live provider. */
+/** Offer cloud sign-in only if configured and a provider is enabled. */
 const cloudSignInAvailable = () => cloudConfigured() && enabledProviders().length > 0;
 
 function signInHtml() {
@@ -189,32 +173,24 @@ function signUpHtml() {
     </div>`;
 }
 
-/** The card itself. Wrap it in whatever heading the page wants. */
 export function authCardHtml() {
   return `<div class="card" id="authCard">${gateView === 'signup' ? signUpHtml() : signInHtml()}</div>`;
 }
 
 /**
- * Wire whichever view is showing. Returns false if there is no card here.
+ * Wire up the card. Returns false if there's no card in `root`.
  *
  * @param {object} opts
- *   onDone     after a successful sign-in, sign-up, or guest choice. The page
- *              decides what that means — the log re-renders itself, Account and
- *              Settings re-render to show the account that now exists.
- *   onSwap     after switching between sign in and sign up, for a page whose
- *              heading sits OUTSIDE the card and has to follow it. A page that
- *              passes this is expected to re-render and remount.
- *   allowGuest the log offers it; Account and Settings do not. Choosing to look
- *              around without an account is something you do on the way to the
- *              log, not on the screen about your account.
+ *   onDone     called after sign-in, sign-up or choosing guest mode
+ *   onSwap     called after switching between sign in and sign up, for pages
+ *              whose heading is outside the card (they should re-render)
+ *   allowGuest show the guest option (log page only)
  */
 export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGuest = true } = {}) {
   const card = root.querySelector('#authCard');
   if (!card) return false;
 
-  // Delegated, so they survive the innerHTML swap below. The listeners inside
-  // wire() are bound to elements that swap DOES destroy, which is why they are
-  // in a function that can be run again.
+  // Delegated so they survive the card being re-rendered; wire() handles the rest.
   card.addEventListener('click', (e) => {
     const goto = e.target.closest('[data-goto]');
     if (!goto) return;
@@ -228,8 +204,7 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
     swapTo(goto.dataset.goto);
   });
 
-  // Reveal the password rather than make people retype it. aria-pressed
-  // carries the state, so a screen reader hears the toggle change too.
+  // Show/hide password.
   card.addEventListener('click', (e) => {
     const peek = e.target.closest('[data-peek]');
     if (!peek) return;
@@ -241,8 +216,7 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
     peek.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
   });
 
-  // Re-render the card in place rather than the whole route: switching between
-  // sign in and sign up shouldn't scroll the page or touch the router.
+  // Swap views in place without going through the router.
   function swapTo(view) {
     gateView = view;
     card.innerHTML = view === 'signup' ? signUpHtml() : signInHtml();
@@ -250,18 +224,11 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
     else wire();
   }
 
-  /**
-   * Everything bound to an element the swap replaces.
-   *
-   * Previously this ran once, because swapping re-navigated and remounted the
-   * whole route. Sharing the card means a page can swap without a remount, so
-   * the provider buttons and the form have to be re-found each time or the
-   * second view comes up inert.
-   */
+  /** Bind handlers on elements that get replaced when the view swaps. */
   function wire() {
     const errorLine = card.querySelector('#authError');
 
-    // A failed redirect from a previous page load leaves a reason behind.
+    // Show the reason left by a failed redirect.
     const priorError = lastAuthError();
     if (priorError && errorLine) {
       errorLine.textContent =
@@ -284,7 +251,7 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
             onDone();
             return;
           }
-          // Redirect path, or the popup was dismissed.
+          // Redirected, or popup dismissed.
           btn.disabled = false;
           btn.innerHTML = label;
         } catch (err) {
@@ -315,8 +282,7 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
           }
           const isFirstAccount = listUsers().length === 0;
           const user = await signUp(username, password, String(fd.get('email') || ''));
-          // Entries logged before profiles existed would otherwise appear lost —
-          // and so would any spots dropped on the map in that time.
+          // Give pre-account catches and spots to this user.
           const adopted = isFirstAccount ? await store.adoptOrphans(user.id) : 0;
           if (isFirstAccount) await store.adoptOrphanSpots(user.id);
           toast(
@@ -329,9 +295,7 @@ export function mountAuthCard(root, { onDone = () => {}, onSwap = null, allowGue
           toast(`Signed in as ${user.username}`);
         }
         gateView = 'signin'; // so signing out later lands on the right screen
-        // Whoever they were a moment ago, they have an account now. Leaving the
-        // flag set would keep the gate hidden after a later sign-out, which is
-        // the one moment it has to come back.
+        // Clear guest mode so the gate comes back after a later sign-out.
         setGuest(false);
         onDone();
       } catch (err) {

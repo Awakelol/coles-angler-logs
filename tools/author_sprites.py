@@ -34,21 +34,19 @@ PAL = {
 
 # name: (fork_depth, rows)   fork_depth None = no caudal fin (squid/crab)
 #
-# Detail that makes these read as fish rather than blobs, taken from the
-# reference art: a pointed snout, a gill line behind the head, a dorsal fin
-# that stands proud of the back, and pelvic/anal fins hanging clear underneath
-# with a gap of outline between them and the belly.
+# Pointed snout, gill line, a dorsal fin standing off the back, and pelvic /
+# anal fins separated from the belly by outline.
 BODIES = {
 
 # =========================================================================
-# DETAIL PASS — what stops these reading as blobs:
-#   1. a real EYE: 3x3 socket, white sclera, pupil, plus a highlight pixel
-#   2. a MOUTH line and jaw at the snout, not a blunt nose
-#   3. an OPERCULUM (gill cover) arc behind the head
-#   4. FIN RAYS drawn as alternating F/S columns instead of solid blocks
-#   5. a LATERAL LINE running the flank
-#   6. species MARKINGS (A) — bars, spots, stripes — that break up the flank
-#   7. staggered scale dither rather than uniform horizontal bands
+# Detail:
+#   1. eye: 3x3 socket, sclera, pupil, highlight
+#   2. mouth line and jaw
+#   3. operculum (gill cover) arc
+#   4. fin rays as alternating F/S columns
+#   5. lateral line
+#   6. markings (A): bars, spots, stripes
+#   7. staggered scale dither
 # =========================================================================
 
 # --- snapper: sloped forehead, big eye, deep body (Lutjanidae) ------------
@@ -388,20 +386,16 @@ BODIES = {
 
 
 # =========================================================================
-# HEROES — large angled art, shown ONLY on the species detail sheet.
+# HEROES: large angled art for the species detail sheet only.
 #
-# Style, taken from the reference art:
-#   - body on a ~35 degree axis, nose upper-right, tail lower-left
-#   - NO black outline: 'O' is the palette's darkest slot, which is a dark
-#     shade of the body hue (crimson's O is #2b0f14, a dark red), so the
-#     silhouette self-outlines instead of looking like a sticker
-#   - a bright specular streak (H) down the upper flank — this is what makes
-#     them read as living fish rather than flat shapes
-#   - smooth tonal blocks S -> D -> B -> M -> L, dither used sparingly
-#   - small eye set high on the head, sclera + pupil + one highlight pixel
+#   - body on a ~35° axis, nose upper-right, tail lower-left
+#   - no black outline: 'O' is a dark shade of the body hue
+#   - specular streak (H) along the upper flank
+#   - smooth tonal steps S -> D -> B -> M -> L, little dither
+#   - small eye set high, sclera + pupil + highlight
 #
-# Tails are hand-drawn here: the fan generator only works on horizontal
-# bodies, so HEROES are built with fork=None.
+# Tails are hand-drawn here (the fin generator only handles horizontal
+# bodies), so HEROES use fork=None.
 # =========================================================================
 HEROES = {
 
@@ -442,14 +436,13 @@ HEROES = {
 }
 
 # =========================================================================
-# ICONS — non-species art. Rendered with the dedicated 'weather' palette,
-# which carries five cloud tones (S->H) plus two golds (F edge, A core) so
-# clouds have real depth and the sun has a rim rather than being flat.
+# ICONS: non-species art, drawn for the 'weather' palette (cloud tones S..H,
+# gold F rim and A core).
 # =========================================================================
 ICONS = {
 
-# Round disc with a darker rim (F), a bright core offset up-left (H), and
-# eight separated rays. The rays must not touch the disc or it reads as a gear.
+# Disc with a darker rim, offset highlight and eight rays kept clear of the
+# disc (touching, it looks like a gear).
 'sunny': [
 '                    ',
 '         FF         ',
@@ -607,18 +600,12 @@ ICONS = {
 '  MMMMMMMMMMMM      ',
 ],
 
-# Curling breaker. The barrel is the whole point: the crest turns over to the
-# right and the pocket beneath it is left EMPTY, so the hollow reads as the
-# tube. Foam (L) rides the crest and the face; the body darkens downward
-# through B and D into S at the waterline.
+# Curling wave: the crest turns over to the right with an empty pocket under
+# it. Foam (L) on the crest and face, darkening to S at the waterline.
 # --- gear icons -----------------------------------------------------------
-# Drawn with the same palette slots as everything else so they recolour per
-# category. Deliberately simple silhouettes: they sit at ~48px on a card.
+# Simple silhouettes using the normal palette slots so they recolour.
 
-# The blank is drawn in B, not A. Accent is yellow-ish in nearly every
-# palette, so an all-A rod came out identical in all of them — three rods
-# on one screen looked like the same picture three times. B recolours;
-# A is now only the reel seat, which is meant to catch the eye.
+# Rod blank in B so it recolours per palette; A only for the reel seat.
 'rod': [
 '                 BB ',
 '                BB  ',
@@ -717,8 +704,7 @@ ICONS = {
 '  OOOOOOOOOOOOOO    ',
 ],
 
-# Body in B so it recolours per palette; the lens is the only fixed-value
-# part, because a lens that changes colour stops reading as glass.
+# Body in B; the lens keeps a fixed colour.
 'camera': [
 '     OOOO           ',
 '    OBBBBO          ',
@@ -759,9 +745,8 @@ ICONS = {
 'DDSSSSSSSSSSSSSSSSSSSSSSSSSSSS',
 ],
 
-# Traditional J-hook: round eye, straight shank, U-bend, and a barbed point
-# rising on the left. Two pixels thick — a one-pixel version reads as bent
-# wire at icon size. The point tapers to a single pixel so it looks sharp.
+# J-hook: eye, shank, bend and barbed point. Two pixels thick, tapering to
+# one at the point.
 'hook': [
 '         AAAA',
 '        AA  AA',
@@ -802,12 +787,7 @@ ICONS = {
 '   BBBBBBBBBB     ',
 ],
 
-# Bangka / pump boat: narrow hull with bamboo outriggers either side, which
-# is what people actually fish from here — not the generic launch this was.
-# Bangka / pump boat, seen head-on. Side-on the outrigger arms and float
-# stack into yet another horizontal bar and it reads as a layered ferry;
-# from the front the cross-beam and two floats give the unmistakable
-# outrigger silhouette.
+# Bangka (outrigger boat), seen head-on so the outriggers read clearly.
 'boat': [
 '             AA           ',
 '             AAAA         ',
@@ -857,9 +837,8 @@ def build(fork, rows):
         for r in grid:
             r.extend('.' * (total_w - len(r)))
 
-        # A caudal fin attaches at a narrow peduncle and flares outward, with a
-        # notch cut into the trailing edge. Building it column by column (rather
-        # than row by row) is what gives it that shape instead of a flat slab.
+        # Build the tail column by column: narrow at the peduncle, flaring out
+        # with a notch in the trailing edge.
         ped_half = max(half * 0.26, 1.2)   # height where it meets the body
         tip_half = half * 1.02             # height at the outer lobes
 
@@ -898,14 +877,9 @@ def build(fork, rows):
 
 
 def rotate(grid, degrees, scale=3):
-    """
-    Build an angled hero from a horizontal sprite.
-
-    Hand-drawing diagonal bodies row by row is unreliable — the silhouette
-    drifts and reads as a sausage. Instead the horizontal art, which is
-    already tuned, is supersampled, rotated with nearest-neighbour sampling
-    (so pixels stay hard rather than blurring), then majority-downsampled.
-    A cleanup pass fills pinholes and re-outlines the result.
+    """Build an angled hero from a horizontal sprite: supersample, rotate with
+    nearest-neighbour sampling, majority-downsample, then fill pinholes and
+    re-outline.
     """
     import math
 
@@ -978,9 +952,8 @@ def rotate(grid, degrees, scale=3):
 sprites = {n: build(f, rows) for n, (f, rows) in BODIES.items()}
 icons = {n: build(None, rows) for n, rows in ICONS.items()}
 
-# Heroes are derived from the horizontal art. The source sprites face LEFT,
-# so each is mirrored first, then tilted — putting the nose up-right and the
-# tail down-left, matching the reference art.
+# Heroes are derived from the left-facing horizontal sprites: mirrored,
+# then tilted nose-up.
 HERO_ANGLE = -32
 heroes = {
     n: rotate([r[::-1] for r in g], HERO_ANGLE)
@@ -1033,8 +1006,7 @@ CRIMSON = {
     'A': '#ffb703', 'E': '#ffffff', 'P': '#10141c',
 }
 
-# Icons are rendered in the app with different colourways, so preview each
-# with the one it actually uses — a wave judged in cloud-grey is meaningless.
+# Preview icons with the palette each one uses in the app.
 OCEAN = {'O': '#0b1a28', 'S': '#14536b', 'D': '#1f6f8b', 'B': '#3fa9c9', 'M': '#7fcbe0',
          'L': '#dff3fa', 'H': '#ffffff', 'F': '#1a7f9c', 'A': '#ffd23f',
          'E': '#ffffff', 'P': '#10141c'}

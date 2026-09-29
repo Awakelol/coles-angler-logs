@@ -8,9 +8,7 @@ import { store, computeStats } from '../js/store.js';
 const log = [];
 const say = (m) => { log.push(m); document.getElementById('out').textContent = log.join('\n'); };
 
-// THIS PAGE DELETES THE CATCH LOG. It is deployed alongside the app, so it
-// must refuse to run anywhere except a local dev server — otherwise a single
-// stray URL on the live site would wipe real data.
+// Destructive: wipes the catch log. Only runs on localhost.
 const LOCAL = ['localhost', '127.0.0.1', '::1', ''];
 if (!LOCAL.includes(location.hostname)) {
   say('REFUSED: this test destroys the catch log and only runs on localhost.');

@@ -1,9 +1,7 @@
-// ---------------------------------------------------------------------------
 // App shell: hash router, region switching, page mounting.
 //
-// Routes are declared in ROUTES. Each page module exports
-// `render(ctx) -> html` and optionally `mount(root, ctx)`.
-// ---------------------------------------------------------------------------
+// Each page module exports `render(ctx) -> html` and optionally
+// `mount(root, ctx)`.
 
 import { loadOverrides, loadLocalConfig } from './config.js';
 import { watchForUpdates } from './updates.js';
@@ -23,15 +21,13 @@ import * as info from './pages/info.js';
 import * as account from './pages/account.js';
 import * as settings from './pages/settings.js';
 
-// Untracked local keys first, then anything entered in Settings wins.
+// config.local.js first, then anything saved in Settings on top.
 await loadLocalConfig();
 loadOverrides();
 
-// Finishes a Google sign-in redirect before the first render, so the app
-// doesn't flash the signed-out gate on the way back from the provider.
+// Finish any pending Google sign-in redirect before the first render.
 await initAuth();
 
-// Order here is incidental; the tab bar decides what the user sees.
 const ROUTES = [
   { path: '/', page: home },
   { path: '/map', page: mapPage },
@@ -42,11 +38,7 @@ const ROUTES = [
   { path: '/settings', page: settings },
 ];
 
-// Species, Tips and Identify were folded into Info. Old links still exist in
-// the wild — bookmarks, a home-screen shortcut, an app shell cached before the
-// merge — so they are translated to the equivalent Info tab rather than
-// falling through to Home. replaceState keeps the dead URL out of the back
-// stack.
+// Old routes that now live as tabs under Info. Kept so bookmarks still work.
 const LEGACY_ROUTES = { '/species': 'fishes', '/tips': 'zones', '/identify': 'photo' };
 
 const main = document.getElementById('main');
@@ -76,13 +68,7 @@ function syncTabs(path) {
   }
 }
 
-/**
- * Whether to cross-fade between pages.
- *
- * Checked per navigation rather than once at start-up: the OS reduced-motion
- * setting can change while the app is open, and someone who turns it on
- * because motion is making them ill should not have to restart the app.
- */
+// Checked on every navigation since reduced-motion can change at runtime.
 function canAnimatePages() {
   if (typeof document.startViewTransition !== 'function') return false;
   return !matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -108,26 +94,18 @@ async function render() {
   syncTabs(route.path);
   syncNavRoll(route.path);
 
-  // The brand bar earns its space on the home screen and nowhere else: every
-  // other page opens with its own name in a heading twice the size, so the bar
-  // is a second title above the real one, costing 68px of a phone screen.
+  // Only the home screen shows the brand bar; other pages have their own heading.
   document.body.classList.toggle('no-topbar', route.path !== '/');
-  // Which light is behind this screen. On <html>, not <body>: the bloom is
-  // painted on the root, and a custom property set on the body would inherit
-  // downwards past the element that actually reads it.
+  // Picks the per-page background glow (painted on <html>, so set it there).
   document.documentElement.dataset.page =
     route.path === '/' ? 'home' : route.path.slice(1);
-  // Info pins the page while its deck is up. Leaving that set on the way out
-  // would lock every other screen at one viewport with no way to scroll.
+    // Info locks page scroll while its deck is open; clear that on the way out.
   document.body.classList.remove('deck-locked');
   document.documentElement.classList.remove('deck-locked');
   publishTopbarHeight();
 
-  // A sheet left open when the route changes would float over the new page.
-  // Removing it isn't enough: openSheet() locks the body with position:fixed
-  // and a negative top to stop the page scrolling underneath, and only its own
-  // close() undoes that. Navigating away bypassed it, leaving every subsequent
-  // page pinned and scrolled to a stale offset.
+  // Close any sheet left open by the previous page. openSheet() pins the body
+  // with position:fixed, so undo that here as well.
   const stranded = document.querySelectorAll('.sheet-backdrop');
   if (stranded.length) {
     for (const sheet of stranded) sheet.remove();
@@ -140,23 +118,17 @@ async function render() {
       main.innerHTML = route.page.render(ctx);
     };
 
-    // Cross-fade the page when the browser can do it. Only the markup swap is
-    // wrapped — mount() often waits on the network, and holding the transition
-    // open for a weather fetch would freeze the old page on screen for seconds.
-    // updateCallbackDone resolves as soon as the DOM is updated, so mount()
-    // proceeds while the animation finishes on its own.
+    // Only the markup swap goes inside the view transition. mount() can wait
+    // on the network and we don't want the old page frozen on screen meanwhile.
     if (canAnimatePages()) {
       try {
         const transition = document.startViewTransition(swap);
-        // `ready` and `finished` REJECT when a transition is skipped — which
-        // is routine: tapping two tabs quickly, or navigating with the tab
-        // hidden. Nothing needs doing about it, but leaving them unhandled
-        // raises unhandledrejection and looks like a real fault.
+        // These reject when a transition is skipped (e.g. fast tab switching).
         transition.ready?.catch(() => {});
         transition.finished?.catch(() => {});
         await transition.updateCallbackDone;
       } catch {
-        swap(); // a transition already running, or the browser refused
+        swap();
       }
     } else {
       swap();
@@ -176,7 +148,6 @@ async function render() {
       </div></section>`;
   }
 
-  // Don't fight the browser when it's restoring a scroll position.
   if (token === renderToken) {
     window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     main.focus({ preventScroll: true });
@@ -195,7 +166,6 @@ function buildRegionPicker() {
     (r) => `<option value="${esc(r.id)}"${r.id === active ? ' selected' : ''}>${esc(r.name)}</option>`
   ).join('');
 
-  // A single region needs no picker.
   select.parentElement.hidden = REGIONS.length < 2;
 
   select.addEventListener('change', () => {
@@ -204,14 +174,8 @@ function buildRegionPicker() {
   });
 }
 
-/**
- * Publish the top bar's real height as --topbar-h.
- *
- * The map screen sizes itself to fill exactly what's left of the viewport, so
- * it needs this precisely. Hardcoding it breaks the moment the brand text
- * wraps at a narrow width — the map would either fall short or push the page
- * into scrolling, which is the one thing that layout is trying to avoid.
- */
+// Exposes the top bar's height as --topbar-h. The map fills the rest of the
+// viewport and needs the exact value (the brand text can wrap on narrow screens).
 let publishTopbarHeight = () => {};
 
 function trackTopbarHeight() {
@@ -219,10 +183,8 @@ function trackTopbarHeight() {
   if (!bar) return;
   const publish = () =>
     document.documentElement.style.setProperty('--topbar-h', `${bar.offsetHeight}px`);
-  // Kept so a route change can republish immediately. A hidden bar measures 0,
-  // which is what the map's height and the folder pile's sticky offsets need —
-  // but waiting for the observer to notice leaves one frame at the old height,
-  // and on the map that frame is a visible jump.
+  // Called directly on route change so the map doesn't jump for a frame
+  // while waiting on the ResizeObserver.
   publishTopbarHeight = publish;
   publish();
   if (typeof ResizeObserver === 'function') {
@@ -235,40 +197,18 @@ function trackTopbarHeight() {
 function buildBrandMark() {
   const mark = document.getElementById('brandMark');
   if (mark) mark.innerHTML = brandMark({ size: 40 });
-  // The rail carries the brand at desktop widths, where the top bar's copy is
-  // hidden. Drawn regardless of width — it costs one small SVG, and building it
-  // on a resize handler instead would leave the rail blank for a frame every
-  // time someone drags a window across the breakpoint.
   const rail = document.getElementById('railMark');
   if (rail) rail.innerHTML = brandMark({ size: 34 });
 }
 
-// --- the + and its quick actions -------------------------------------------
+// --- nav bar ---------------------------------------------------------------
 //
-// Lives here rather than in a page module: the nav is outside the router's
-// view, so a page that owned this would take it down on every navigation.
-// ---------------------------------------------------------------------------
-// THE HIDDEN NAV
-//
-// On the map the bar goes away completely and the map takes the whole screen.
-// Only on the map: it is the one screen where the content IS the viewport and
-// every pixel of chrome is taken from it.
-//
-// It used to retract into the +, which kept a 58px puck and its clear space
-// parked over the map for no return — a bar shrunk to a button is still a bar
-// in the way. Going means going. What replaces it is the map's own top strip
-// (see map.js), a back-to-home row that is smaller than the puck was and, un-
-// like it, tells you where the button leads.
-//
-// The state is a class on <body>, not a style on the bar, because --tab-space
-// is what every screen leaves clear for the nav — the map's height and margin
-// both derive from it, so zeroing that one token is what actually gives the
-// room away. Leaflet notices via the ResizeObserver map.js already has.
-// ---------------------------------------------------------------------------
+// On phones the bar is hidden on the map so the map gets the full screen; the
+// map page has its own back row instead. Hiding is done with a body class
+// because --tab-space (the room every page leaves for the nav) keys off it.
 
 const NAV_HIDES = new Set(['/map']);
 
-/** Whether the bar is currently hidden. */
 export function navHidden() {
   return document.body.classList.contains('is-nav-hidden');
 }
@@ -278,45 +218,27 @@ const PHONE = () => matchMedia('(max-width: 899px)').matches;
 function setNavHidden(hide) {
   const bar = document.querySelector('.tabbar');
   if (!bar) return;
-  // The hiding is phone-only. Above 899px the bar is a side rail on a window
-  // with room to spare, and taking the primary navigation away to buy space
-  // that is not scarce is a trade in the wrong direction.
+  // Desktop keeps the rail visible everywhere.
   hide = hide && PHONE();
   document.body.classList.toggle('is-nav-hidden', hide);
-  // display:none already takes it out of the tab order, but `inert` also drops
-  // any focus that is currently INSIDE it — without that, hiding the bar while
-  // a tab is focused leaves the focus ring on an element that no longer
-  // renders, and the next Tab starts from nowhere.
+  // inert also drops focus that's currently inside the bar.
   bar.toggleAttribute('inert', hide);
   if (hide && bar.contains(document.activeElement)) document.activeElement.blur();
-  // The + lives in the bar, so hiding it hides the quick actions with it. An
-  // open menu would otherwise be left floating over the map with no button.
+  // Close the quick-action menu if it was open.
   const btn = document.getElementById('quickBtn');
   if (hide && btn?.getAttribute('aria-expanded') === 'true') btn.click();
 }
 
-/** Called on every render: the map hides the bar, everything else restores it. */
 function syncNavRoll(path) {
   setNavHidden(NAV_HIDES.has(path));
 }
 
-// Dragging a window across the breakpoint has to re-decide, or a bar hidden on
-// a narrow window stays hidden — and unreachable — once it is a rail.
+// Re-check when the window crosses the breakpoint.
 matchMedia('(max-width: 899px)').addEventListener?.('change', () => {
   syncNavRoll(parseHash().path);
 });
 
-
-// ---------------------------------------------------------------------------
-// THE COLLAPSED RAIL
-//
-// Desktop only, and remembered. Narrowing to icons is a preference about how
-// you want to work, not a response to the window, so it outlives the session.
-//
-// The labels are hidden by CLIPPING rather than display:none — the rail's width
-// is what animates, and a label that vanishes on the first frame makes the
-// panel look like it emptied before it moved.
-// ---------------------------------------------------------------------------
+// --- collapsible desktop rail ------------------------------------------------
 
 const RAIL_PREF = 'railCollapsed';
 
@@ -328,10 +250,7 @@ function setRailCollapsed(collapsed) {
   btn.setAttribute('aria-expanded', String(!collapsed));
   btn.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
 
-  // With the labels clipped away, the icons are the only thing left to read.
-  // A native title rather than a styled tooltip because the rail scrolls, and
-  // anything drawn inside it would be cut off at the panel's edge — which is
-  // the one place a tooltip must not be.
+  // Icons only when collapsed, so give them native tooltips.
   for (const el of bar.querySelectorAll('a[data-tab], #quickBtn')) {
     const label = el.getAttribute('aria-label');
     if (collapsed && label) el.setAttribute('title', label);
@@ -344,11 +263,14 @@ function wireRailToggle() {
   if (!btn) return;
   setRailCollapsed(prefs.get(RAIL_PREF, false) === true);
   btn.addEventListener('click', () => {
-    const next = document.body.classList.contains('rail-collapsed') ? false : true;
+    const next = !document.body.classList.contains('rail-collapsed');
     prefs.set(RAIL_PREF, next);
     setRailCollapsed(next);
   });
 }
+
+// --- the + button and its quick actions ------------------------------------
+// Lives here because the nav sits outside the router's view.
 
 function wireQuickActions() {
   const btn = document.getElementById('quickBtn');
@@ -359,8 +281,7 @@ function wireQuickActions() {
   const setOpen = (open) => {
     btn.setAttribute('aria-expanded', String(open));
     btn.setAttribute('aria-label', open ? 'Close' : 'Add');
-    // `hidden` has to come off before the class goes on, or the browser has
-    // nothing to animate from and the items simply appear.
+    // Unhide first, then add the class next frame so the transition runs.
     if (open) {
       menu.hidden = false;
       veil.hidden = false;
@@ -372,7 +293,6 @@ function wireQuickActions() {
     } else {
       menu.classList.remove('is-open');
       veil.classList.remove('is-open');
-      // Wait for the fade before hiding, so it does not vanish mid-transition.
       setTimeout(() => {
         if (btn.getAttribute('aria-expanded') === 'false') {
           menu.hidden = true;
@@ -382,11 +302,8 @@ function wireQuickActions() {
     }
   };
 
-  // On a phone the stack rises from the bottom centre, which is where the + is.
-  // On the rail the + is top-left, and a menu that opened at the far corner of
-  // the window would look like it belonged to something else — so it is
-  // measured off the button rather than positioned by a second set of rules
-  // that would have to be kept in step with the rail's padding.
+  // Phone: CSS positions the menu above the +. Desktop: open it beside the
+  // rail, level with the button.
   const wide = () => matchMedia('(min-width: 900px)').matches;
   function placeMenu() {
     if (!wide()) {
@@ -395,9 +312,6 @@ function wireQuickActions() {
     }
     const r = btn.getBoundingClientRect();
     const rail = btn.closest('.tabbar').getBoundingClientRect();
-    // Beside the rail rather than below the button: dropped straight down it
-    // covers the navigation it belongs to, and you choose an action while the
-    // thing that opened it is hidden behind the choice.
     menu.style.left = `${Math.round(rail.right + 12)}px`;
     menu.style.top = `${Math.round(r.top)}px`;
     menu.style.bottom = 'auto';
@@ -412,14 +326,12 @@ function wireQuickActions() {
     setOpen(btn.getAttribute('aria-expanded') !== 'true');
   });
   veil.addEventListener('click', () => setOpen(false));
-  // Choosing an action navigates; the menu must not still be up when you land.
   for (const a of menu.querySelectorAll('[data-quick]')) {
     a.addEventListener('click', () => setOpen(false));
   }
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') setOpen(false);
   });
-  // Navigating any other way closes it too.
   window.addEventListener('hashchange', () => setOpen(false));
 }
 
@@ -428,14 +340,11 @@ wireRailToggle();
 
 window.addEventListener('hashchange', render);
 
-// index.html already applied the theme before first paint; this re-asserts it
-// and keeps 'system' following the OS while the app is open.
+// index.html sets the theme before first paint; this keeps 'system' in sync.
 applyTheme();
 watchSystemTheme();
 
-// Which art set is in force. Re-drawn on change rather than reloaded: the mark
-// lives outside the router's view, so a re-render alone would leave the old
-// one in the top bar.
+// The brand mark is outside the router's view, so redraw it explicitly.
 applyArtMode();
 onArtModeChange(() => {
   buildBrandMark();

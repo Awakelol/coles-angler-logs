@@ -1,17 +1,8 @@
-// ---------------------------------------------------------------------------
-// DEVICE LOCATION
+// Device location, used so weather and tides follow the user.
 //
-// Used by the Conditions screen so weather and tides can follow you rather
-// than being pinned to the region's centre point.
-//
-// Coordinates are deliberately ROUNDED before being handed to the tide API.
-// WorldTides' free tier is roughly 100 requests/month and responses are cached
-// per coordinate pair — with raw GPS, every few metres of drift would be a
-// fresh cache key and a fresh request, draining the month's quota in an
-// afternoon. Rounding to ~0.05 degrees (about 5 km) means everywhere within a
-// few kilometres shares one cached response, which is well inside the
-// catchment of any tide station anyway.
-// ---------------------------------------------------------------------------
+// Coordinates are rounded to ~0.05° (~5 km) before being used as a tide cache
+// key. WorldTides' free tier is ~100 requests/month, and raw GPS jitter would
+// otherwise make every reading a cache miss.
 
 const GRID_DEG = 0.05;      // ~5.5 km
 const TIMEOUT_MS = 12000;
@@ -28,8 +19,7 @@ export function geolocationSupported() {
 
 /**
  * @returns {Promise<{lat:number, lon:number, accuracyM:number}>}
- * @throws {Error} with a `code` of 'unsupported' | 'denied' | 'unavailable' |
- *         'timeout' so callers can explain the failure rather than guess.
+ * @throws {Error} with `code` 'unsupported' | 'denied' | 'unavailable' | 'timeout'
  */
 export function getLocation() {
   if (!geolocationSupported()) {
@@ -37,7 +27,7 @@ export function getLocation() {
     err.code = 'unsupported';
     return Promise.reject(err);
   }
-  // Geolocation needs a secure context; localhost counts as secure.
+  // Needs a secure context (https or localhost).
   if (typeof isSecureContext !== 'undefined' && !isSecureContext) {
     const err = new Error('Location needs a secure (https) connection.');
     err.code = 'unavailable';
@@ -71,7 +61,7 @@ export function getLocation() {
 
 const EARTH_KM = 6371;
 
-/** Great-circle distance in km — used to say how far you are from the region. */
+/** Great-circle distance in km. */
 export function distanceKm(a, b) {
   const rad = (d) => (d * Math.PI) / 180;
   const dLat = rad(b.lat - a.lat);
@@ -83,15 +73,8 @@ export function distanceKm(a, b) {
 }
 
 /**
- * Is a point inside a `{ south, west, north, east }` box?
- *
- * Used for the country a region belongs to, not the region itself: a fix in
- * Manila is far from any Leyte zone but is somewhere this app can sensibly
- * show weather for, while a fix in Tokyo is not.
- *
- * No antimeridian handling — a box that wraps 180° would need west > east and
- * an OR here instead. Nothing this app ships is anywhere near it, and guessing
- * at the intent of an inverted box would hide a typo rather than catch it.
+ * Is a point inside a `{ south, west, north, east }` box? Used with the
+ * region's country bounds. Doesn't handle boxes crossing the antimeridian.
  */
 export function withinBounds(coords, bounds) {
   if (!bounds || !coords) return true; // no box declared means no restriction
@@ -103,7 +86,7 @@ export function withinBounds(coords, bounds) {
   );
 }
 
-/** Nearest named zone or spot in a region, so the readout has a place name. */
+/** Nearest named zone or spot in a region. */
 export function nearestPlace(region, coords) {
   const candidates = [...(region.zones || []), ...(region.spots || [])];
   let best = null;

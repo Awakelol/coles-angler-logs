@@ -1,29 +1,16 @@
-// ---------------------------------------------------------------------------
-// THEME
+// Theme: 'light', 'dark' or 'system'.
 //
-// Three settings: 'light', 'dark', 'system'. The choice lives in its own
-// localStorage key rather than in prefs, because index.html reads it in a
-// blocking inline script before first paint — without that, the page renders
-// cream and then snaps to dark, which is worse than having no dark mode.
-//
-// The applied theme is written to <html data-theme>, and CSS keys off that.
-// 'system' resolves live, so the app follows the phone flipping to dark at
-// sunset without needing a reload.
-// ---------------------------------------------------------------------------
+// Stored under its own localStorage key (not prefs) because index.html reads it
+// in an inline script before first paint to avoid a light->dark flash. The
+// resolved theme goes on <html data-theme>.
 
 export const THEME_KEY = 'angler.theme';
 export const THEMES = ['light', 'dark', 'system'];
 
-// The light theme has been rebuilt on the blue/off-white palette; dark has not.
-// Rather than ship a half-retuned dark mode, the picker is hidden and light is
-// forced. The theme system itself is untouched — flip this back to false and
-// the setting returns, along with whatever dark mode currently looks like.
+// Set to true to hide the theme picker and force light mode.
 export const THEME_LOCKED = false;
 
-// Matches the --cream / page background of each theme, so the phone's status
-// bar and PWA chrome tint to match instead of staying stuck on yellow.
-// Must match --cream / the page canvas for each theme, or the phone's status
-// bar sits a shade off the top of the page. Dark is GitHub's canvas colour.
+// Status bar colour. Keep in sync with --cream in style.css.
 const THEME_COLOR = { light: '#F6F4EA', dark: '#080B14' };
 
 export function getTheme() {
@@ -36,7 +23,7 @@ export function systemPrefersDark() {
   return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-/** The theme actually in force — 'system' resolved to light or dark. */
+/** 'system' resolved to 'light' or 'dark'. */
 export function resolvedTheme(choice = getTheme()) {
   return choice === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : choice;
 }
@@ -44,7 +31,6 @@ export function resolvedTheme(choice = getTheme()) {
 export function applyTheme(choice = getTheme()) {
   const resolved = resolvedTheme(choice);
   document.documentElement.setAttribute('data-theme', resolved);
-  // Tells the browser to render form controls and scrollbars to match.
   document.documentElement.style.colorScheme = resolved;
 
   const meta = document.querySelector('meta[name="theme-color"]');

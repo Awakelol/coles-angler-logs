@@ -1,5 +1,4 @@
-# Not part of the site. The Worker is bundled from wrangler.jsonc's `main`,
-# so shipping its source as a static asset too would be pure noise.
+# Not static assets (the Worker is bundled separately via wrangler.jsonc).
 worker/
 wrangler.jsonc
 _screenshots/

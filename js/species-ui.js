@@ -1,16 +1,4 @@
-// ---------------------------------------------------------------------------
-// SHARED SPECIES UI
-//
-// The full write-up for one fish. Opened from two places — Info › Fishes, and
-// from a zone's list of possible catches on the map — so the markup lives here
-// rather than in either. Same arrangement as zone-ui.js and weather-ui.js.
-//
-// It used to live in js/pages/info.js, which is why a zone's "Species detail"
-// button was a link to #/info?open=<id>: reaching the markup meant going to
-// the page that owned it. That threw away the map, the zone you were reading
-// and your place in it, to show a card that fits perfectly well in the sheet
-// already open.
-// ---------------------------------------------------------------------------
+// Species detail card. Shared by Info › Fishes and the zone sheet on the map.
 
 import { fishbaseUrl, localNames, zonesForSpecies, primaryName } from './data/index.js';
 import { speciesArt, speciesPhotoCredit } from './art.js';
@@ -85,17 +73,11 @@ export function speciesDetailHtml(s, regionId) {
       <a class="btn btn--sm" href="#/log?species=${esc(s.id)}">Log a catch</a>
     </div>
     <p class="field__hint" style="margin-top:10px">
-      FishBase opens in a new tab for photos and full biology. Photos aren't embedded here — they're copyrighted by their contributors.
+      FishBase opens in a new tab with more photos and the full biology.
     </p>`;
 }
 
-/**
- * Fills the sheet's photo gallery once it's in the DOM.
- *
- * Sits below the written information rather than under the hero art: the
- * pixel sprite establishes what the app thinks the fish is, the facts explain
- * it, and the photos are the reference you check afterwards.
- */
+/** Fill the sheet's photo gallery once it's in the DOM. */
 export function mountSheetPhoto(s) {
   return async (rootEl) => {
     const section = rootEl.querySelector('[data-gallery]');
@@ -104,8 +86,7 @@ export function mountSheetPhoto(s) {
 
     let photos = await fetchPhotos(s.scientific, 4);
 
-    // Commons search can come back empty for less-documented species; the
-    // Wikipedia summary image is a reliable single fallback.
+    // Fall back to the Wikipedia summary image if Commons has nothing.
     if (!photos.length) {
       const one = await fetchPhoto(s.scientific);
       if (one) photos = [one];

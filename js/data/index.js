@@ -1,30 +1,25 @@
-// ---------------------------------------------------------------------------
-// DATA REGISTRY
+// Data registry.
 //
-// Two independent things, deliberately kept apart:
+//   species catalogue  region-independent list of fish (js/data/species/)
+//   regions            places, each listing species ids found there
+//                      (js/data/regions/)
 //
-//   SPECIES CATALOGUE  a flat, region-independent list of fish (js/data/species/)
-//   REGIONS            places, each listing the species ids that are POSSIBLE
-//                      there (js/data/regions/)
+// Species are stored once and referenced by id from any number of regions
+// and zones.
 //
-// Species are not owned by a region. The same great barracuda appears in a
-// Tacloban harbour, off a reef and in a channel — listed by id in each, stored
-// once. Adding a region never means copying species data.
-//
-// TO ADD A REGION:
+// Adding a region:
 //   1. Copy js/data/regions/leyte.js to js/data/regions/<your-region>.js
 //   2. Edit its details and list the species ids that occur there.
 //   3. Import it below and add it to REGIONS.
-// TO ADD A SPECIES:
+// Adding a species:
 //   1. Append it to js/data/species/indo-pacific.js (or a new catalogue file).
-//   2. List its id under whichever regions and zones it turns up in.
-// ---------------------------------------------------------------------------
+//   2. List its id in the regions and zones where it occurs.
 
 import { INDO_PACIFIC_SPECIES } from './species/indo-pacific.js';
 import leyte from './regions/leyte.js';
 import { GENERAL_TIPS } from './tips.js';
 
-// Add further catalogue files here; ids must stay unique across all of them.
+// Catalogue files; ids must be unique across all of them.
 const CATALOGUES = [INDO_PACIFIC_SPECIES];
 
 export const SPECIES = new Map();
@@ -39,22 +34,14 @@ export const REGIONS = [leyte];
 export const DEFAULT_REGION_ID = 'leyte';
 
 /**
- * Region ids that have been renamed, mapped to their current id.
- *
- * Catches are stored with the `regionId` that was current when they were
- * logged, and those records outlive a rename. Right now getRegion() falls back
- * to REGIONS[0] for anything unknown, so a legacy id LOOKS fine — until a
- * second region exists, at which point every old catch silently attaches to
- * whichever region happens to be first in the array.
- *
- * Translating on read costs one lookup and closes that off permanently. Keep
- * entries here forever; they are tiny and someone's log depends on them.
+ * Renamed region ids -> current id. Old catches keep the regionId they were
+ * logged with, so keep these entries around.
  */
 const RENAMED = {
   'leyte-gulf': 'leyte', // the gulf became the whole island
 };
 
-/** The current id for a possibly-legacy one. */
+/** Current id for a possibly-renamed one. */
 export const currentRegionId = (id) => RENAMED[id] || id;
 
 export function getRegion(id) {
@@ -62,12 +49,12 @@ export function getRegion(id) {
   return REGIONS.find((r) => r.id === wanted) || REGIONS[0];
 }
 
-/** Look up a species by id, from anywhere in the catalogue. */
+/** Species by id. */
 export function getSpecies(id) {
   return SPECIES.get(id) || null;
 }
 
-/** Resolve a list of species ids to species objects, dropping unknown ids. */
+/** Species ids -> species objects, skipping unknown ids. */
 export function resolveSpecies(ids) {
   const out = [];
   for (const id of ids || []) {
@@ -78,7 +65,7 @@ export function resolveSpecies(ids) {
   return out;
 }
 
-/** Species possible in a region. Falls back to the union of its zones. */
+/** Species in a region. Falls back to the union of its zones. */
 export function allSpecies(regionId) {
   const region = getRegion(regionId);
   if (region.species?.length) return resolveSpecies(region.species);
@@ -96,28 +83,20 @@ export function tipsFor(regionId) {
 }
 
 /**
- * Tips filed under one Info tab — the "Trivia" section of Fishes, Gear or
- * Zones. An uncategorised tip falls back to 'zones' rather than vanishing,
- * so adding a tip without a category still shows up somewhere.
+ * Tips for one Info tab (fishes, gear or zones). Tips without a category go
+ * under 'zones'.
  */
 export function triviaFor(regionId, category) {
   return tipsFor(regionId).filter((t) => (t.category || 'zones') === category);
 }
 
-/** A region's zones, in declaration order. */
 export function zonesFor(regionId) {
   return getRegion(regionId).zones || [];
 }
 
 /**
- * Zones grouped by the body of water they sit in, in first-appearance order.
- *
- * Leyte is not surrounded by one sea — the Pacific-facing gulf and the deeper
- * Bohol Sea side behave differently enough that a flat list of twenty zones
- * would read as noise. Grouping restores the shape of the place.
- *
- * A zone with no `water` lands in 'Other' rather than vanishing, so forgetting
- * the field degrades instead of losing data.
+ * Zones grouped by body of water, in first-appearance order. Zones with no
+ * `water` go under 'Other'.
  */
 export function zonesByWater(regionId) {
   const groups = new Map();
@@ -129,7 +108,7 @@ export function zonesByWater(regionId) {
   return [...groups.values()];
 }
 
-/** Group a region's species by family, for the guide's section headers. */
+/** Species grouped by family. */
 export function speciesByFamily(regionId) {
   const groups = new Map();
   for (const s of allSpecies(regionId)) {
@@ -142,12 +121,12 @@ export function speciesByFamily(regionId) {
   return [...groups.values()].sort((a, b) => b.species.length - a.species.length);
 }
 
-/** Every zone across a region in which this species is a possible catch. */
+/** Zones in a region where this species occurs. */
 export function zonesForSpecies(regionId, speciesId) {
   return (getRegion(regionId).zones || []).filter((z) => (z.species || []).includes(speciesId));
 }
 
-/** FishBase summary URL, derived from the scientific name. */
+/** FishBase summary URL for a species. */
 export function fishbaseUrl(species) {
   const [genus, ...rest] = (species.scientific || '').trim().split(/\s+/);
   if (!genus || !rest.length) return 'https://www.fishbase.se/search.php';
@@ -155,9 +134,8 @@ export function fishbaseUrl(species) {
 }
 
 /**
- * Local names flattened for display. The same word is often used in both
- * Waray and Cebuano ("sap-sap", "maya-maya"), so identical names are merged
- * and their languages joined rather than listed twice.
+ * Local names for display. Names shared by Waray and Cebuano (e.g. "sap-sap")
+ * are merged, with both languages listed.
  */
 export function localNames(species) {
   const byName = new Map();
@@ -174,17 +152,9 @@ export function localNames(species) {
 }
 
 /**
- * The name to lead a card with, and what it is.
- *
- * Local first. Somebody here is far more likely to recognise "maya-maya" than
- * "mangrove red snapper", and a guide that leads with the English is a guide
- * written for a visitor. Falls back to the common name when there is no local
- * one at all, rather than leading with a blank.
- *
- * Note the caveat at the top of the species catalogue: the names on the 28
- * species added with the island expansion come from FishBase and have not
- * been checked locally. Promoting them to the headline makes getting them
- * right matter more, not less.
+ * The name to lead a card with: the first local name if there is one,
+ * otherwise the common name. (Local names on the species added from FishBase
+ * haven't been checked locally yet; see the note in the catalogue.)
  */
 export function primaryName(species) {
   const locals = localNames(species);

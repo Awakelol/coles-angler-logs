@@ -1,13 +1,8 @@
-// ---------------------------------------------------------------------------
-// GENERAL FISHING TIPS — shown in every region.
-// Region-specific tips live in that region's file (js/data/regions/*.js).
+// General fishing tips, shown in every region. Region-specific tips live in
+// the region file.
 //
-// `tags`     free-form keywords, searchable on the Info screen.
-// `category` which Info tab the tip is filed under — 'fishes', 'gear' or
-//            'zones'. Each tab shows its own tips as a "Trivia" section, so a
-//            tip about drag settings turns up beside the reels rather than in
-//            a separate list nobody opens.
-// ---------------------------------------------------------------------------
+// `tags`     searchable keywords
+// `category` Info tab it shows under: 'fishes', 'gear' or 'zones'
 
 export const GENERAL_TIPS = [
   {

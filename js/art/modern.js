@@ -1,36 +1,14 @@
-// ---------------------------------------------------------------------------
-// MODERN ICON SET
+// Modern icon set (the default; the pixel set is behind the retro toggle).
 //
-// The default look. Clean flat/line marks of the kind any weather app uses —
-// deliberately generic, because an icon for "rain" earns nothing by being
-// distinctive. The pixel set is still there and still complete; it moved
-// behind the retro toggle (js/art-mode.js).
+// Icons take the same palette argument as the pixel ones so call sites don't
+// change and both sets share one colour system. Palette slots used:
+//   p[0] outline   p[3] body   p[5] belly (light fill)   p[8] accent
 //
-// WHY THESE TAKE A PALETTE. The pixel engine renders a character grid through
-// a nine-slot palette, and every call site already passes a palette name —
-// `icon('rain', { palette: 'weather' })`. Keeping that signature means the
-// swap is a swap and not a rewrite of eleven modules, and it keeps the two
-// sets tied to one colour system, so nothing looks imported from another app.
-//
-// Slots used here, from the nine:
-//   p[0] outline   the stroke
-//   p[3] body      the main fill
-//   p[5] belly     the light fill
-//   p[8] accent    the one thing that should catch the eye
-//
-// Authored on a 24x24 grid with a 2px round stroke. Both are deliberate: 24
-// is the size every icon set agrees on, so shapes borrowed from muscle memory
-// read correctly, and a round join survives being drawn at 26px on a map pin
-// as well as 120px in an empty state.
-// ---------------------------------------------------------------------------
+// Drawn on a 24x24 grid with a 2px round stroke.
 
 import { PALETTES } from '../pixel.js';
 
-/**
- * Each entry is a function of the palette, returning the inside of an SVG.
- * Written as data rather than markup so the palette is applied once, here,
- * instead of every icon repeating the lookup.
- */
+/** name -> (palette) => SVG inner markup. */
 const ICONS = {
   // --- weather -------------------------------------------------------------
 
@@ -41,8 +19,7 @@ const ICONS = {
       <path d="M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>
     </g>`,
 
-  // A crescent cut from a disc rather than drawn as a lune: the cut edge stays
-  // a true circle at every size, which a hand-drawn curve does not.
+  // Crescent = disc minus an offset disc, so the edge stays circular.
   moon: (p) => `
     <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1Z"
           fill="${p[8]}"/>`,
@@ -73,8 +50,7 @@ const ICONS = {
       <path d="M8.4 18v2.6M12 18.4v3M15.6 18v2.6"/>
     </g>`,
 
-  // Slanted and longer than `rain` — the difference has to be legible at 28px
-  // in the forecast strip, where the two sit side by side.
+  // Longer and more slanted than `rain` so they differ at small sizes.
   showers: (p) => `
     <path d="M7.4 14.6h9.4a3.9 3.9 0 0 0 .4-7.8 5.6 5.6 0 0 0-10.6-1.1 3.7 3.7 0 0 0 .8 7.3Z"
           fill="${p[5]}" stroke="${p[0]}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -187,14 +163,9 @@ const ICONS = {
     <path d="M2.8 14.6h18.4l-2.6 5.2a1.6 1.6 0 0 1-1.4.8H6.8a1.6 1.6 0 0 1-1.4-.8Z"
           fill="${p[3]}" stroke="${p[0]}" stroke-width="1.8" stroke-linejoin="round"/>`,
 
-  // Faces left, like every species photograph and every sprite in the app.
-  // A fish icon pointing the other way to the fish beside it is the kind of
-  // thing nobody names but everybody feels.
+  // Faces left, like the photos and sprites.
   fish: (p) => `
-    <!-- p[4], not the p[5] the other icons use for their body. At 34px in a
-         white map pin a near-white fill leaves only the outline and the tail,
-         and the pin reads as a gold arrow. A mid tone also makes the zone
-         colourway legible at pin size, which is the point of tinting it. -->
+    <!-- mid-tone body (p[4]) so it stays visible on a white pin -->
     <path d="M15.6 12c0 4-3.6 6.6-7 6.6S2 16 2 12s3.2-6.6 6.6-6.6 7 2.6 7 6.6Z"
           fill="${p[4]}" stroke="${p[0]}" stroke-width="1.7" stroke-linejoin="round"/>
     <path d="M15 8.2 21.6 4.8a.8.8 0 0 1 1.2.8L21.4 12l1.4 6.4a.8.8 0 0 1-1.2.8L15 15.8Z"
@@ -211,18 +182,9 @@ const ICONS = {
           fill="none" stroke="${p[3]}" stroke-width="1.5" stroke-linecap="round"/>`,
 };
 
-/**
- * The app mark.
- *
- * Still a hook, still gold, because that is what the app has always been —
- * but drawn as one continuous rounded stroke instead of a stair-stepped grid,
- * with the line and the eye at the top reading as a "J" the way the pixel
- * version did. Kept as its own export rather than an ICONS entry: it has a
- * different aspect and is never asked for at icon sizes.
- */
+/** The app logo: a hook drawn as one rounded stroke. */
 export function modernBrandMark({ size = 40 } = {}) {
-  // Reads the palette off the page rather than hardcoding, so the mark follows
-  // the theme instead of being the one gold thing left on a blue app.
+  // Colours come from CSS variables so the mark follows the theme.
   const css = typeof getComputedStyle === 'function'
     ? getComputedStyle(document.documentElement) : null;
   const gold = css?.getPropertyValue('--blue').trim() || PALETTES.ocean[3];
@@ -243,7 +205,7 @@ export function modernBrandMark({ size = 40 } = {}) {
 
 export const MODERN_ICON_NAMES = Object.keys(ICONS);
 
-/** Same call signature as the pixel `icon()`, so no call site changes. */
+/** Same signature as the pixel `icon()`. */
 export function modernIcon(name, { size = 64, palette = 'ocean', className = '' } = {}) {
   const draw = ICONS[name];
   if (!draw) return '';

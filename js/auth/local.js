@@ -1,27 +1,13 @@
-// ---------------------------------------------------------------------------
-// LOCAL PROFILES  (provider: 'local')
+// Local profiles (provider 'local').
 //
-// ⚠ THIS IS NOT AUTHENTICATION. There is no server behind it, so nothing is
-// verified anywhere. Accounts live in this browser's localStorage and anyone
-// with devtools can read or edit them.
+// Not real authentication: accounts live in localStorage and anyone with
+// devtools can edit them. They exist so people sharing a phone can keep
+// separate logs with no setup and no network.
 //
-// It exists for a specific reason: the app must work with zero setup and no
-// internet. A local profile keeps each person's catch log separate on a shared
-// phone without requiring a Firebase project, a network, or an account with
-// anybody. Cloud sign-in (js/auth/cloud.js) sits alongside it, not instead of
-// it — see js/auth.js for how the two are chosen between.
+// A local record is also the offline mirror of a synced username account
+// (see adopt()). Those use the Firebase uid as their id.
 //
-// A local record is ALSO the offline mirror of a synced username account —
-// see adopt(). In that case the id is the Firebase uid rather than a random
-// one, so catches written with no signal are already keyed correctly and need
-// no rewriting when the connection comes back. The stored hash is then a lock
-// on this device, not the credential; the real one is derived at sign-in time
-// by js/auth/credentials.js.
-//
-// Passwords are salted and hashed with SHA-256 rather than stored in plain
-// text. That doesn't make this secure, but people reuse passwords and leaving
-// them readable would be careless for no reason.
-// ---------------------------------------------------------------------------
+// Passwords are still salted and hashed so they aren't sitting in plain text.
 
 import { findProfanity } from '../moderation.js';
 
@@ -70,7 +56,6 @@ export function validateUsername(name) {
   if (n.length < USERNAME_RULES.min) return `Username needs at least ${USERNAME_RULES.min} characters.`;
   if (n.length > USERNAME_RULES.max) return `Username can be at most ${USERNAME_RULES.max} characters.`;
   if (!USERNAME_RULES.pattern.test(n)) return USERNAME_RULES.describe;
-  // Light-touch: see js/moderation.js for why the list is short.
   if (findProfanity(n)) return 'Please choose a different username.';
   return null;
 }
@@ -92,9 +77,7 @@ export function validatePassword(pw) {
 
 export function usernameTaken(name) {
   const k = key(name);
-  // History counts. A released handle could be claimed by someone else and
-  // then be mistaken for the person who used to hold it, which is the one
-  // outcome keeping a rename trail is supposed to prevent.
+  // Old handles stay reserved so nobody can take over a previous name.
   return readUsers().some(
     (u) => u.key === k || (u.handleHistory || []).some((h) => key(h.username) === k)
   );
@@ -126,8 +109,7 @@ export async function signUp(name, password, email = '') {
     salt,
     hash: await hash(password, salt),
     provider: 'local',
-    // Optional for now: nothing is sent to it, but it gives a way to link a
-    // device-only account to a real one later.
+    // Optional, unused for now.
     email: String(email || '').trim() || null,
     createdAt: new Date().toISOString(),
   };
@@ -140,10 +122,7 @@ export async function signUp(name, password, email = '') {
 
 export async function signIn(name, password) {
   const user = readUsers().find((u) => u.key === key(name));
-  // Deliberately the same MESSAGE for both cases — there's no reason to
-  // confirm which usernames exist on a shared device. The `code` is for the
-  // facade, which must tell "not on this device, try the cloud" apart from
-  // "wrong password, stop here"; it is never shown.
+  // Same message either way; the code tells auth.js whether to try the cloud.
   if (!user) {
     const missing = new Error('Wrong username or password.');
     missing.code = 'no-such-user';
@@ -159,12 +138,8 @@ export async function signIn(name, password) {
 }
 
 /**
- * Write a local record with an id chosen by the caller.
- *
- * Used to mirror a cloud username account so it can still sign in with no
- * signal. Replaces any existing record with the same id or username, because
- * the cloud is authoritative for a synced account and a stale local copy with
- * an old password would lock someone out of their own phone.
+ * Store a local mirror of a cloud account under the given id. Replaces any
+ * record with the same id or username (the cloud copy wins).
  */
 export async function adopt({ id, username, password, provider = 'username' }) {
   if (!id) throw new Error('adopt() needs the account id.');
@@ -186,7 +161,7 @@ export async function adopt({ id, username, password, provider = 'username' }) {
   return { id: record.id, username: record.username, provider };
 }
 
-/** Look up a stored local account by id. Used by the facade to resolve a session. */
+/** Look up a local account by id. */
 export function getById(id) {
   const user = readUsers().find((u) => u.id === id);
   if (!user) return null;
@@ -196,38 +171,19 @@ export function getById(id) {
     provider: user.provider || 'local',
     createdAt: user.createdAt,
     handleChangedAt: user.handleChangedAt || null,
-    // Oldest first. Read-only to callers — renameHandle owns the writing.
+    // Oldest first.
     handleHistory: [...(user.handleHistory || [])],
   };
 }
 
 // --- changing the handle -----------------------------------------------------
 //
-// The handle is what you sign in with, so renaming it is not the same kind of
-// edit as a display name. Three rules, and each one exists for a reason:
-//
-//   ONE CHANGE PER 30 DAYS. A handle other people use to know you is not worth
-//   much if it can change hourly, and the cooldown is what makes it worth
-//   something. It is checked against the stored timestamp rather than a
-//   counter, so clearing app data does not hand out a free change.
-//
-//   OLD HANDLES ARE KEPT, not discarded. Someone who renames still has a trail
-//   back to who they were — which matters for anything that ever refers to an
-//   angler by name (shared catches, a leaderboard, a report someone filed).
-//   Keeping the trail costs a few bytes; reconstructing it later is impossible.
-//
-//   AN OLD HANDLE STAYS YOURS. usernameTaken() looks at history as well as
-//   current names, so renaming does not release your old handle for someone
-//   else to claim and then be mistaken for you.
+// One change per 30 days (checked against the stored timestamp). Previous
+// handles are kept in handleHistory and stay reserved (see usernameTaken).
 
-/** 30 days, in ms. */
 export const HANDLE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
-/**
- * When this account may next change its handle, or null if it may now.
- * A never-renamed account may rename immediately — the clock starts at the
- * first change, not at sign-up.
- */
+/** When the handle can next be changed, or null if it can be now. */
 export function handleAvailableAt(userId) {
   const user = readUsers().find((u) => u.id === userId);
   if (!user?.handleChangedAt) return null;
@@ -235,12 +191,7 @@ export function handleAvailableAt(userId) {
   return next > Date.now() ? new Date(next) : null;
 }
 
-/**
- * Rename an account. Returns the updated public record.
- *
- * Throws with a sentence fit to show the user — every failure here is
- * something they can act on.
- */
+/** Rename an account. Errors are user-facing messages. */
 export async function renameHandle(userId, next) {
   const users = readUsers();
   const target = users.find((u) => u.id === userId);
@@ -250,8 +201,7 @@ export async function renameHandle(userId, next) {
   const nameError = validateUsername(name);
   if (nameError) throw new Error(nameError);
 
-  // Changing case or nothing at all is not a change, and must not spend the
-  // 30 days. Storing the new spelling is still worth doing.
+  // A case-only change doesn't count against the cooldown.
   if (key(name) === target.key) {
     if (name !== target.username) {
       target.username = name;

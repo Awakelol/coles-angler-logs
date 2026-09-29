@@ -1,19 +1,11 @@
-// ---------------------------------------------------------------------------
 // Service worker.
 //
-//   Code (JS/CSS/HTML)  network-first, falling back to cache when offline.
-//   Assets (png/svg)    cache-first — they change rarely and are big.
-//   API calls           never cached; stale weather and tides are worse
-//                       than none.
+//   Code (JS/CSS/HTML)  network-first, cache as offline fallback
+//   Assets (png/svg)    cache-first
+//   API calls           never cached
 //
-// Code is deliberately network-first. Cache-first meant every edit to a JS or
-// CSS file kept serving the old copy until CACHE_VERSION was bumped by hand,
-// which is easy to forget and silently shows stale UI — it hid a whole round
-// of sprite changes. The cost is one network round-trip per file on a warm
-// connection; offline still works, because cache is the fallback.
-//
-// CACHE_VERSION now only needs bumping to force-evict old assets.
-// ---------------------------------------------------------------------------
+// Code is network-first so deploys show up on the next load without bumping
+// CACHE_VERSION. Bump it only when an image changes in place.
 
 const CACHE_VERSION = 'v52';
 const CACHE_NAME = `angler-log-${CACHE_VERSION}`;
@@ -80,7 +72,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      // addAll is all-or-nothing; cache individually so one 404 can't fail install.
+      // Cache one at a time so a single 404 doesn't fail the install.
       .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
@@ -95,15 +87,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Settings' refresh button can ask a waiting worker to take over now rather
-// than after every tab has closed. install() already calls skipWaiting(), so
-// this is a second door to the same room — cheap, and it means the button
-// still works if that ever changes.
+// Lets Settings' refresh button activate a waiting worker immediately.
+// (install already calls skipWaiting; this is a fallback.)
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// Big, rarely-changing binaries are worth serving straight from cache.
 const CACHE_FIRST = /\.(png|jpg|jpeg|gif|svg|webp|woff2?)$/i;
 
 function save(request, response) {
@@ -120,7 +109,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Never touch provider responses (weather, tides, map tiles).
+  // Don't touch third-party responses (weather, tides, map tiles).
   if (url.origin !== self.location.origin) return;
 
   if (CACHE_FIRST.test(url.pathname)) {
@@ -130,14 +119,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Code: network-first so edits land immediately, cache as the offline net.
+  // Code: network-first, cache as offline fallback.
   event.respondWith(
     fetch(request)
       .then((res) => save(request, res))
       .catch(() =>
         caches.match(request).then((hit) => {
           if (hit) return hit;
-          // An offline navigation still gets the shell; the hash router handles the route.
+          // Offline navigation gets the app shell; the hash router does the rest.
           if (request.mode === 'navigate') return caches.match('./index.html');
           return new Response('', { status: 504, statusText: 'Offline' });
         })

@@ -7,10 +7,7 @@
 <meta name="description" content="A personal fishing companion — species guide, tides, weather and catch log.">
 
 <meta name="theme-color" content="#F6F4EA">
-<!-- Both, deliberately. iOS reads the apple- prefixed one and always has;
-     the unprefixed one is the standard, and Chrome warns about a page
-     that only carries Apple's. Add to Home Screen works on iPhone from
-     Safari with these plus the apple-touch-icon below. -->
+<!-- iOS reads the apple- prefixed tag; Chrome wants the standard one -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -21,8 +18,7 @@
 <link rel="stylesheet" href="css/style.css">
 
 <script>
-  // Blocking on purpose, and before the stylesheet has painted: applying the
-  // theme after module load would render cream first and then snap to dark.
+  // Apply the theme before first paint to avoid a light-to-dark flash.
   (function () {
     try {
       var saved = localStorage.getItem('angler.theme');
@@ -65,8 +61,7 @@
 
 <main id="main" tabindex="-1"></main>
 
-<!-- The quick-action stack the + opens. Above the nav, so the button that
-     opened it stays under your thumb while you choose. -->
+<!-- quick actions opened by the + button -->
 <div class="quick" id="quickMenu" hidden>
   <a class="quick__item" href="#/log?new=1" data-quick>
     <span class="quick__ico" aria-hidden="true">
@@ -89,13 +84,9 @@
 </div>
 <div class="quick-veil" id="quickVeil" hidden></div>
 
-<!-- ONE nav for both layouts. A phone bar and a desktop rail built as two
-     elements would mean two sets of links, two active states, and a route that
-     highlights in one and not the other the first time someone adds a page.
-     What differs is which children show and how they flow — see the rail block
-     in the stylesheet. -->
+<!-- one nav element: bottom bar on phones, side rail on desktop -->
 <nav class="tabbar" id="primaryNav" aria-label="Primary">
-  <!-- Rail only. On a phone the brand is in the top bar. -->
+  <!-- rail only -->
   <a class="rail__head" href="#/">
     <span class="rail__mark" id="railMark"></span>
     <span class="rail__name">Cole&rsquo;s Angler Log</span>
@@ -110,19 +101,14 @@
     <span>Map</span>
   </a>
 
-  <!-- The middle slot on a phone, where the Log tab used to be. The log is not
-       lost there — it is the first thing the + offers, and it keeps its own
-       route. On the rail there is room for both, so the Log link below comes
-       back and this is hoisted to the top as the primary action. The bars are
-       two halves of one shape, rotated, which is what makes + BECOME x rather
-       than swap for it. -->
+  <!-- the + button: middle slot on phones, top of the rail on desktop -->
   <button type="button" class="fab" id="quickBtn"
           aria-expanded="false" aria-controls="quickMenu" aria-label="Add">
     <span class="fab__x" aria-hidden="true"><i></i><i></i></span>
     <span class="fab__label">New entry</span>
   </button>
 
-  <!-- Rail only: the phone bar has five slots and the + took this one. -->
+  <!-- rail only -->
   <a class="rail-only" href="#/log" data-tab="/log" aria-label="Log">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h11l4 4v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 5v3H9v2h3v3h2v-3h3v-2h-3V8Z"/></svg>
     <span>Log</span>
@@ -136,15 +122,13 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/></svg>
     <span>Account</span>
   </a>
-  <!-- Rail only: on a phone this is the gear in the top bar. -->
+  <!-- rail only -->
   <a class="rail-only" href="#/settings" data-tab="/settings" aria-label="Settings">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7 7 0 0 0-.1-1.1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L16.2 3h-4l-.4 2.8a7 7 0 0 0-1.9 1.1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.8h4l.4-2.8a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.6c.06-.36.1-.73.1-1.1Z"/></svg>
     <span>Settings</span>
   </a>
 
-  <!-- Foot of the rail. The reference hangs this off the panel's edge; the rail
-       scrolls, so anything drawn outside its padding box is clipped — and down
-       here it also fills the empty bottom the rail otherwise had. -->
+  <!-- collapse toggle at the foot of the rail -->
   <button type="button" class="rail__toggle rail-only" id="railToggle"
           aria-expanded="true" aria-controls="primaryNav" aria-label="Collapse navigation">
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -158,8 +142,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-  // Surface uncaught errors on <body> so they're visible in headless test runs
-  // and in devtools without scrolling the console.
+  // Show uncaught errors on the page (handy in headless test runs).
   const flagError = (msg) => document.body.setAttribute('data-js-error', String(msg).slice(0, 300));
   window.addEventListener('error', (e) => flagError(e.message || e.error));
   window.addEventListener('unhandledrejection', (e) => flagError(e.reason?.message || e.reason));

@@ -1,14 +1,7 @@
 {
-  // Cloudflare Workers with static assets.
-  //
-  // WHY THIS FILE EXISTS: a Worker that serves ONLY static assets has no code,
-  // so Cloudflare refuses to attach environment variables to it — "Variables
-  // cannot be added to a Worker that only has static assets." Declaring `main`
-  // gives it a script, which is what the API keys get attached to.
-  //
-  // Note this is the Workers model, not Pages. Pages uses a `functions/`
-  // directory convention; Workers uses one entry script. They are not
-  // interchangeable — a functions/ folder here would simply be ignored.
+  // Cloudflare Worker with static assets. `main` is needed because
+  // Cloudflare won't attach environment variables to an assets-only Worker.
+  // (This is Workers, not Pages; a functions/ folder would be ignored.)
   "name": "coles-angler-logs",
   "main": "worker/index.js",
   "compatibility_date": "2026-07-29",
@@ -20,8 +13,7 @@
     "binding": "ASSETS",
     // Hash routing means every real URL is index.html.
     "not_found_handling": "single-page-application",
-    // Without this the asset server answers first and /api/* would 404
-    // against a file that doesn't exist instead of reaching the Worker.
+    // Otherwise the asset server would 404 /api/* before the Worker sees it.
     "run_worker_first": ["/api/*"]
   }
 }

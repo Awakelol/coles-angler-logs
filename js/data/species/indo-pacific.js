@@ -1,59 +1,39 @@
-// ---------------------------------------------------------------------------
-// SPECIES CATALOGUE — Indo-Pacific
+// Species catalogue: Indo-Pacific.
 //
-// A shared, region-independent list of fish. Regions and map zones reference
-// these by `id`, so the same species can appear in as many places as it
-// actually occurs — a great barracuda is a possible catch in a Tacloban
-// harbour, off a reef, and in a channel, without being duplicated.
+// Region-independent. Regions and zones reference species by `id`.
 //
-// TO ADD A SPECIES: append an entry here, then list its id under whichever
-// regions and zones it turns up in. Only `id`, `common` and `scientific` are
-// required; everything else degrades gracefully in the UI.
-//   sprite  — key from SPRITES in js/pixel.js
-//   palette — key from PALETTES in js/pixel.js
-//   target  — true if it is a species people deliberately fish for
-// FishBase links are derived from the scientific name, so there is no URL to
-// maintain.
+// Only `id`, `common` and `scientific` are required.
+//   sprite   key from SPRITES in js/pixel.js
+//   palette  key from PALETTES in js/pixel.js
+//   target   true if people fish for it on purpose
+// FishBase links are built from the scientific name.
 //
-// LOCAL NAMES: `local.war` = Waray, `local.ceb` = Cebuano-Bisaya,
-// `local.tl` = Tagalog. Names vary town to town — treat these as a starting
-// point and correct them against what fishers around you actually say.
+// Local names: `local.war` Waray, `local.ceb` Cebuano, `local.tl` Tagalog.
+// They vary from town to town, so treat them as a starting point.
 //
-// ORDER IS PROVENANCE, AND IT MATTERS. Where a BFAR Region VIII name exists it
-// comes first — regional data for these exact waters, and therefore the
-// authority. Names after it come from FishBase's COMNAMES table, which is
-// national in scope: broader coverage, but it does not know that a fish is
-// called something particular around Leyte. Never reorder a list so that a
-// FishBase name displaces a BFAR one; the species card shows only the first
-// two, so that order is what most people will ever read.
+// Name order matters: BFAR Region VIII names (local data) come first, then
+// FishBase COMNAMES (national). Cards only show the first two, so don't let a
+// FishBase name push a BFAR one down. Species marked `art: 'placeholder'` have
+// no BFAR names at all, so their names are all FishBase's and unchecked
+// locally; a corrected local name should go first.
 //
-// CAVEAT ON THE SPECIES ADDED WITH THE ISLAND EXPANSION (those marked
-// `art: 'placeholder'`): they have NO BFAR names, so every name on them is
-// FishBase's and none has been checked against what fishers here actually say.
-// Correcting one means putting the local name FIRST, not appending it.
+// FishBase "Visayan" names aren't imported since Visayan covers several
+// languages.
 //
-// FishBase's own 'Visayan' rows are deliberately NOT imported. Visayan is a
-// language GROUP covering Waray, Cebuano and Hiligaynon — filing those under
-// any one of them would invent precision the source doesn't have.
+// FishBase data via tools/fetch_fishbase.py (fishbase.org, CC BY-NC 4.0).
 //
-// FishBase names via tools/fetch_fishbase.py. Data: FishBase (fishbase.org),
-// CC BY-NC 4.0 — free for personal use, not for commercial reuse.
-//
-// SOURCES (see README "Data sources" for the full list and caveats):
-//   - Demersal stock assessment in Leyte Gulf (The Palawan Scientist, 2020
-//     bottom-trawl survey, 19 stations): 230 species / 74 families; catch was
-//     39.45% Leiognathidae, 8.05% Lutjanidae, 7.07% Gerreidae, with
-//     Photopectoralis bindus alone at 25.49%. That is why those families are
-//     weighted the way they are here.
-//   - BFAR Region VIII (region8.bfar.da.gov.ph) regional fisheries profile and
-//     provincial fishery office pages.
-//   - FishBase for scientific names, families, habitat and size ranges.
-// Estuary, seagrass and harbour species are included on habitat grounds — a
-// trawl survey of the open gulf under-samples them by design.
-// ---------------------------------------------------------------------------
+// Sources (full list in the README):
+//   - Leyte Gulf demersal stock assessment (The Palawan Scientist, 2020
+//     trawl survey, 19 stations): 230 species / 74 families. Catch was 39.45%
+//     Leiognathidae, 8.05% Lutjanidae, 7.07% Gerreidae; Photopectoralis bindus
+//     alone was 25.49%. Hence the weighting of those families.
+//   - BFAR Region VIII regional fisheries profile and provincial pages.
+//   - FishBase for names, families, habitat and sizes.
+// Estuary, seagrass and harbour species are included on habitat grounds, since
+// a trawl survey of the open gulf under-samples them.
 
 export const INDO_PACIFIC_SPECIES = [
-  // --- Leiognathidae — ponyfish / "sap-sap" ------------------------------
+  // --- Leiognathidae: ponyfish / "sap-sap" -------------------------------
   {
     id: 'photopectoralis-bindus',
     common: 'Orangefin ponyfish',
@@ -111,7 +91,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Very deep-bodied and small; an upward-pointing mouth gives it the "pugnose" look.',
   },
 
-  // --- Lutjanidae — snappers / "maya-maya" -------------------------------
+  // --- Lutjanidae: snappers / "maya-maya" --------------------------------
   {
     id: 'lutjanus-argentimaculatus',
     common: 'Mangrove red snapper',
@@ -183,7 +163,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'A deep-water snapper — a bottom-fishing target off the gulf edge rather than an inshore catch.',
   },
 
-  // --- Gerreidae — mojarras / silver-biddies -----------------------------
+  // --- Gerreidae: mojarras / silver-biddies ------------------------------
   {
     id: 'pentaprion-longimanus',
     common: 'Longfin mojarra',
@@ -227,7 +207,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'The second dorsal spine extends into a long filament — the easiest field mark in the family.',
   },
 
-  // --- Small pelagics — the volume of municipal landings -----------------
+  // --- Small pelagics ------------------------------------------------------
   {
     id: 'rastrelliger-kanagurta',
     common: 'Indian mackerel',
@@ -625,21 +605,16 @@ export const INDO_PACIFIC_SPECIES = [
   },
 
   // =========================================================================
-  // WATERS BEYOND LEYTE GULF
+  // Waters beyond Leyte Gulf
   //
-  // Added when the app grew from the gulf to the whole island. Provenance is
-  // in each entry's `notes`; `docs/leyte-waters-research.md` has the full
-  // citations and marks what is sourced vs. what still needs checking.
-  //
-  // Every species here carries `art: 'placeholder'` — the sprite is the
-  // closest of the existing ten archetypes, not art drawn for the fish. That
-  // flag is counted by a test with a ceiling that may only ever go DOWN.
+  // Added when the app expanded to the whole island. Sources are in each
+  // entry's `notes` and in docs/leyte-waters-research.md. All use placeholder
+  // art (the closest existing sprite).
   // =========================================================================
 
-  // --- Scombridae — the tuna and mackerel that make the Bohol Sea side ----
-  // Composition from the small-scale tuna fishery study sampled at Tolosa,
-  // Dulag and Mayorga on the Leyte Gulf coast (Marine Science and Technology
-  // Bulletin). Percentages are that study's landings share.
+  // --- Scombridae: tuna and mackerel ---------------------------------------
+  // Percentages are landings shares from the small-scale tuna fishery study
+  // at Tolosa, Dulag and Mayorga (Marine Science and Technology Bulletin).
   {
     id: 'thunnus-tonggol',
     common: 'Longtail tuna',
@@ -731,7 +706,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Deeper-bodied than the island mackerel already in this guide and more tied to sheltered water — Ormoc Bay and Carigara Bay rather than the open gulf. Taken in numbers on small hooks or ring nets.',
   },
 
-  // --- Carangidae — scads and trevally -------------------------------------
+  // --- Carangidae: scads and trevally --------------------------------------
   {
     id: 'megalaspis-cordyla',
     common: 'Torpedo scad',
@@ -838,7 +813,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Long, slim and marked with two blue stripes down a yellow flank. Found where the reef meets deep water, so the Sogod Bay and Surigao Strait edges. Fast, and better eating than its looks suggest.',
   },
 
-  // --- Clupeidae & Engraulidae — the bait that feeds all of it -------------
+  // --- Clupeidae & Engraulidae: baitfish ------------------------------------
   {
     id: 'sardinella-lemuru',
     common: 'Bali sardinella',
@@ -936,7 +911,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Green and gold, blunt-headed, and the fastest-growing fish you will ever hook. Found around anything floating — a log, a raft, a fish aggregating device. Deeper water off Sogod Bay and the strait.',
   },
 
-  // --- Lethrinidae & Caesionidae — reef fish for the Camotes side ----------
+  // --- Lethrinidae & Caesionidae: reef fish (Camotes side) ------------------
   {
     id: 'lethrinus-harak',
     common: 'Thumbprint emperor',
@@ -1013,7 +988,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Pufferfish are recorded among the reef families of the Camotes Sea. DO NOT EAT — tetrodotoxin, and cooking does nothing to it. Steals bait constantly and crushes hooks with a beak built for coral. Unhook it in the water and let it go.',
   },
 
-  // --- Epinephelidae & Lutjanidae — the deeper structure fish -------------
+  // --- Epinephelidae & Lutjanidae: deeper structure ------------------------
   {
     id: 'epinephelus-malabaricus',
     common: 'Malabar grouper',
@@ -1045,7 +1020,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'A deep-water snapper for the drop-offs on the Bohol Sea side rather than anything you will reach from shore. Dropped bait or heavy jigs, straight down. Excellent eating and priced accordingly.',
   },
 
-  // --- Portunidae — the mangrove crab -------------------------------------
+  // --- Portunidae: mangrove crab --------------------------------------------
   {
     id: 'scylla-serrata',
     common: 'Mud crab',
@@ -1062,7 +1037,7 @@ export const INDO_PACIFIC_SPECIES = [
     notes: 'Alimango — the mangrove crab, and the most valuable thing in a creek. Taken in baited pots and lift nets rather than on a line. Claws that will genuinely break a finger; tie them before you pick it up.',
   },
 
-  // --- Loliginidae — the other squid ---------------------------------------
+  // --- Loliginidae ----------------------------------------------------------
   {
     id: 'sepioteuthis-lessoniana',
     common: 'Bigfin reef squid',
@@ -1080,24 +1055,14 @@ export const INDO_PACIFIC_SPECIES = [
   },
 
   // =========================================================================
-  // FISHBASE ECOSYSTEM EXPANSION
+  // FishBase ecosystem checklists
   //
-  // Every species below is on FishBase's checklist for at least one of the six
-  // named waters around Leyte: Leyte Gulf, San Pedro Bay, Carigara Bay, Ormoc
-  // Bay, Camotes Sea, Sogod Bay. Those are ecosystem records against a named
-  // body of water, not a guess from "occurs in the Philippines" — which is why
-  // they are here and the other ~480 species on those lists are not. The cut
-  // was: recorded as commercially or subsistence fished, and big enough
-  // (>=15 cm) to be a fish someone means to catch.
+  // Each species below is on FishBase's list for at least one of Leyte Gulf,
+  // San Pedro Bay, Carigara Bay, Ormoc Bay, the Camotes Sea or Sogod Bay, is
+  // commercially or subsistence fished, and reaches at least 15 cm.
   //
-  // NOT VERIFIED AGAINST LOCAL KNOWLEDGE. No BFAR Region VIII name exists for
-  // any of these, so the local names are FishBase's national COMNAMES and the
-  // notes are general biology, not "this is how it is fished off Tolosa".
-  // Correcting one means putting the local name FIRST.
-  //
-  // Each carries `art: 'placeholder'` — see the note at the head of the island
-  // expansion. Nineteen families here are new to the catalogue, and reuse the
-  // closest of the existing archetypes.
+  // Not checked against local knowledge: local names are FishBase's national
+  // ones and the notes are general biology. All use placeholder art.
   // =========================================================================
   {
     id: 'abalistes-stellatus',
@@ -1686,17 +1651,13 @@ export const INDO_PACIFIC_SPECIES = [
   },
 
   // =========================================================================
-  // SOUTHERN LEYTE PROVINCIAL RECORD
+  // Southern Leyte provincial record
   //
-  // From the Province of Southern Leyte's own Marine and Coastal Resources
-  // page, which names what is caught in Sogod, Cabalian and Hinunangan bays.
-  // It gives no scientific names, so each of these is the provincial claim
-  // matched to a SeaLifeBase or FishBase record for the same water — two
-  // sources agreeing, rather than one source guessed at.
-  //
-  // Lobsters and mussels are on that provincial list too and are NOT here:
-  // neither has a species-level record for any of these six waters, and
-  // "lobsters are caught in limited quantities" does not name a lobster.
+  // From the province's Marine and Coastal Resources page (Sogod, Cabalian and
+  // Hinunangan bays). That page has no scientific names, so each entry is
+  // matched to a SeaLifeBase/FishBase record for the same water. Lobsters and
+  // mussels are also listed there but have no species-level record, so they're
+  // left out.
   // =========================================================================
   {
     id: 'rhincodon-typus',
@@ -1707,8 +1668,7 @@ export const INDO_PACIFIC_SPECIES = [
     local: { tl: ['tuko', 'isdang tuku'] },
     habitat: 'Open water, coming to the surface where plankton is thick; recorded in Sogod Bay.',
     size: { typicalCm: 1000, maxCm: 1700 },
-    // NOT a catch, and the flag is the app saying so. It is here because it is
-    // in this water and you need to know what it is, not because you fish it.
+    // Not a catch; listed so people know what it is.
     target: false,
     sprite: 'torpedo',
     palette: 'ocean',

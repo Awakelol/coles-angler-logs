@@ -1,11 +1,5 @@
-// ---------------------------------------------------------------------------
-// SHARED WEATHER UI
-//
-// The current-conditions card, the five-day strip, and the logic for deciding
-// WHICH coordinates to show them for. Extracted so the Map and Conditions
-// screens render identical weather from one implementation — two copies would
-// drift the moment either changed.
-// ---------------------------------------------------------------------------
+// Weather card, 5-day strip and location resolution, shared by the Map and
+// Conditions pages.
 
 import { describeCode, compass, windAdvice, isNight } from './api/weather.js';
 import {
@@ -46,9 +40,7 @@ export function weatherHtml(w, tz) {
 
 /**
  * Five-day strip.
- * @param {boolean} compact drops the condition label and wind row and shrinks
- *        the icon — the map screen splits the viewport with the map itself and
- *        cannot afford the full-height version.
+ * @param {boolean} compact smaller version for the map screen (no label/wind row)
  */
 export function forecastHtml(w, tz, { compact = false } = {}) {
   if (!w.daily?.length) return '<p class="card__sub">No forecast available.</p>';
@@ -77,14 +69,11 @@ export function forecastHtml(w, tz, { compact = false } = {}) {
 }
 
 /**
- * Which coordinates to use, and a human label for them.
- * Falls back to the region whenever the device can't or won't report a fix —
- * the screen must never end up with nothing to show.
+ * Coordinates to show weather for, plus a label. Falls back to the region's
+ * centre if location is off, refused or unavailable.
  */
 export async function resolveCoords(ctx) {
-  // Tri-state on purpose. null means "never asked", so the first visit
-  // prompts automatically, matching the map. Once the user has chosen — or
-  // been refused — the stored true/false is respected and we stop asking.
+  // null = never asked (so prompt on first visit); true/false = remembered answer.
   const choice = prefs.get('useMyLocation', null);
   if (choice === false || (choice === null && !geolocationSupported())) {
     return { coords: ctx.region.coords, label: ctx.region.name, source: 'region' };
@@ -92,13 +81,7 @@ export async function resolveCoords(ctx) {
   try {
     const fix = await getLocation();
 
-    // A fix from outside the country this region belongs to is a real
-    // location and still the wrong one to show. Someone opening the app from
-    // abroad wants to know what it's doing at home, not the weather where
-    // they are standing — and a five-day forecast for another hemisphere is
-    // worse than useless next to a map of Leyte. Being merely far from the
-    // zones is fine: Manila is 600 km away and still somewhere this app can
-    // sensibly answer for.
+    // Outside the country: show the region instead of the user's location.
     if (!withinBounds(fix, ctx.region.map?.panBounds)) {
       return {
         coords: ctx.region.coords,
@@ -108,8 +91,7 @@ export async function resolveCoords(ctx) {
       };
     }
 
-    // Snapped to a ~5 km grid so the tide API's monthly quota isn't spent on
-    // GPS jitter. See js/api/geo.js.
+    // Snap to a ~5 km grid so GPS jitter doesn't burn tide API quota.
     const coords = roundCoords(fix);
     prefs.set('useMyLocation', true);
     const near = nearestPlace(ctx.region, fix);
@@ -124,8 +106,7 @@ export async function resolveCoords(ctx) {
       coords: ctx.region.coords,
       label: ctx.region.name,
       source: 'region',
-      // Only nag when the user actively asked for location. On the automatic
-      // first-visit attempt a refusal is an answer, not an error.
+      // Only show an error if the user explicitly turned location on.
       warning: choice === true ? err.message : null,
     };
   }

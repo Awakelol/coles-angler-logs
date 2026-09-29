@@ -21,7 +21,7 @@ function thumbFor(entry) {
     return `<img src="${url}" alt="" data-objurl="${url}">`;
   }
   if (entry.video) {
-    // Poster frame, not a <video> — a list of decoding clips is brutal on a phone.
+    // Poster image rather than <video> for performance.
     if (entry.poster) {
       const url = URL.createObjectURL(entry.poster);
       return `<img src="${url}" alt="" data-objurl="${url}" class="is-video">`;
@@ -161,8 +161,7 @@ function openCatchForm(ctx, entry, onDone) {
       preview.innerHTML = '';
       if (!media) return;
 
-      // Video shows its poster frame rather than a live <video>, which keeps
-      // the form light; the clip itself plays from the saved entry.
+      // Show the poster frame in the form rather than a <video>.
       const shown = media.kind === 'video' ? media.poster : media.blob;
       const url = shown ? URL.createObjectURL(shown) : null;
 
@@ -215,7 +214,6 @@ function openCatchForm(ctx, entry, onDone) {
 
       const record = {
         ...(entry || {}),
-        // Stamped on write so a catch always belongs to whoever logged it.
         userId: entry?.userId || currentUser()?.id || null,
         regionId: entry?.regionId || ctx.regionId,
         speciesId,
@@ -268,11 +266,6 @@ function openCatchForm(ctx, entry, onDone) {
 }
 
 // --- sign-in / sign-up gate --------------------------------------------------
-//
-// Two screens rather than tabs: signing in is the common case and should be
-// the shortest path, while creating an account asks more and deserves its own
-// page. Which one is showing lives here rather than in the router, so the
-// browser Back button still means "leave the log", not "go back a form step".
 
 function gateHtml() {
   const { eyebrow, title, blurb } = authHeading();
@@ -342,15 +335,13 @@ export function render(ctx) {
 }
 
 export async function mount(root, ctx) {
-  // The heading lives in the band above the card, so a swap between sign in
-  // and sign up has to re-render the route rather than just the card.
+  // The heading is outside the card, so swapping views re-renders the route.
   if (mountAuthCard(root, {
     onDone: () => ctx.navigate('/log'),
     onSwap: () => ctx.navigate('/log'),
   })) return;
 
-  // Signing in is what ends guest mode — the flag would otherwise keep the
-  // gate hidden after a sign-out, which is the one time it must come back.
+  // Signing in ends guest mode.
   root.querySelector('#leaveGuest')?.addEventListener('click', () => {
     setGuest(false);
     ctx.navigate('/log');
@@ -363,11 +354,7 @@ export async function mount(root, ctx) {
   const countLabel = root.querySelector('#catchCount');
   const syncLine = root.querySelector('#syncLine');
 
-  /**
-   * Say what sync is doing, in words about the log rather than the network.
-   * Silence is the wrong answer here: a person who signed in expecting their
-   * catches to follow them deserves to know when they haven't.
-   */
+  /** Sync status line under the log. */
   function showSync(state, text) {
     if (!syncLine) return;
     syncLine.dataset.state = state;
@@ -392,7 +379,7 @@ export async function mount(root, ctx) {
 
   async function refresh() {
     releaseUrls();
-    const catches = await store.allCatches(user ? user.id : null);
+    const catches = await store.catchesFor(user?.id);
     const stats = computeStats(catches);
 
     statsPane.innerHTML = `
@@ -484,8 +471,7 @@ export async function mount(root, ctx) {
   // Deep link from a species card: #/log?species=<id>&new=1
   if (ctx.params.get('species')) openCatchForm(ctx, null, refresh);
 
-  // Pull anything logged on another device. After the first render, so the
-  // catches already here appear immediately rather than behind a round trip.
+  // Pull from other devices after the first render.
   if (user?.syncs) {
     showSync('busy', 'Checking for catches from your other devices…');
     const result = await syncNow();

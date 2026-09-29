@@ -1,73 +1,61 @@
-# Leyte waters — research notes
+# Leyte waters: research notes
 
-Working document for expanding the app from Leyte Gulf to all waters around
-Leyte island. **Everything here is sourced or flagged.** Nothing goes into
-`js/data/regions/leyte.js` from memory.
+Notes behind the expansion from Leyte Gulf to all the waters around Leyte, and
+the later species additions. Everything in `js/data/regions/leyte.js` should
+trace back to something here.
 
-Three confidence levels are used throughout:
+Each fact is tagged:
 
-- **✅ Sourced** — a citation is given. Take it as read unless you know better.
-- **⚠️ Verify** — plausible and probably right, but I could not find a source
-  I'd stake the data on. These are the lines to check first.
-- **❌ Gap** — I could not find it at all. Needs local knowledge or a document
-  I don't have access to.
-
-> **`southernleyte.gov.ph/marine-resources` is readable now** — it answers to a
-> normal browser user-agent, and §6 below is what it gave. `sharkrayareas.org`
-> still does not resolve to a Philippines page; that one is outstanding.
+- **[sourced]** citation given
+- **[verify]** probably right, but no source good enough to rely on
+- **[gap]** nothing found; needs local knowledge
 
 ---
 
-## 1. The waters, and how they divide
+## 1. How the waters divide
 
-Leyte is not surrounded by one sea. It sits on a **boundary between two
-fishery management regimes**, and that division is real rather than
-administrative tidiness — the water either side behaves differently.
+Leyte sits between two fishery management areas, and the water on each side
+behaves differently.
 
 | | Pacific side | Bohol Sea side |
 |---|---|---|
-| **Waters** | Leyte Gulf, San Pedro Bay, Carigara Bay, San Juanico Strait | Sogod Bay, Surigao Strait, Camotes Sea, Ormoc Bay, Canigao Channel |
-| **Management** | **FMA 8** (Eastern Visayas) ✅ | **FMA 9** (Sogod Bay confirmed) ✅ |
-| **Character** | Pacific swell, broad shallow shelf, mud and seagrass | Deeper, current-driven, reef and drop-off |
+| Waters | Leyte Gulf, San Pedro Bay, Carigara Bay, San Juanico Strait | Sogod Bay, Surigao Strait, Camotes Sea, Ormoc Bay, Canigao Channel |
+| Management | FMA 8 (Eastern Visayas) [sourced] | FMA 9 (Sogod Bay confirmed) [sourced] |
+| Character | Pacific swell, broad shallow shelf, mud and seagrass | Deeper, current-driven, reef and drop-off |
 
-- **FMA 8** covers the western coastline of Calicoan Island, north-western
-  Suluan, Siargao, Lanuza Bay, Panaon Island coastline and the Samar Island
-  coastline — 51 coastal municipalities across Eastern Visayas and Caraga.
-  Highly valued targets: **anchovies, rabbitfishes, blue swimming crabs,
-  parrotfishes**. ✅
+- **FMA 8** covers the western coast of Calicoan Island, north-western Suluan,
+  Siargao, Lanuza Bay, the Panaon Island coast and the Samar coast: 51 coastal
+  municipalities across Eastern Visayas and Caraga. Main targets: anchovies,
+  rabbitfish, blue swimming crab, parrotfish. [sourced]
   [EDF](https://fisherysolutionscenter.edf.org/fisheries-management-area-planning-philippines) ·
   [FMA 8 site](https://fisheriesmanagementarea8ph.com/) ·
   [Oceana briefer](https://ph.oceana.org/wp-content/uploads/sites/16/oceana_-_fisheries_management_area_briefer.pdf)
-- **FMA 9** includes Sogod Bay — 11 LGUs around the bay, incl. Macrohon and
-  Maasin City. ✅
-  [PNA](https://www.pna.gov.ph/articles/1215403)
+- **FMA 9** includes Sogod Bay: 11 LGUs around the bay, including Macrohon and
+  Maasin City. [sourced] [PNA](https://www.pna.gov.ph/articles/1215403)
 
-⚠️ **Verify:** which FMA covers Camotes Sea, Ormoc Bay and Canigao Channel.
-Those are Central-Visayas-facing and may fall under a different FMA again.
-BFAR publishes [FMA shapefiles](https://www.foi.gov.ph/agencies/bfar/fisheries-management-areas-shapefiles/)
-and [FMA maps](https://www.bfar.da.gov.ph/fisheries-management-area-maps/) —
-that would settle it exactly.
+[verify] Which FMA covers the Camotes Sea, Ormoc Bay and Canigao Channel. They
+face Central Visayas and may be in a different FMA. BFAR's
+[FMA shapefiles](https://www.foi.gov.ph/agencies/bfar/fisheries-management-areas-shapefiles/)
+and [FMA maps](https://www.bfar.da.gov.ph/fisheries-management-area-maps/)
+would settle it.
 
 ---
 
-## 2. Per-water facts
+## 2. Per-water notes
 
-### Leyte Gulf — already in the app
+### Leyte Gulf
 
-The existing seed data **checks out against a primary source**, which is worth
-recording because it raises confidence in everything already shipped.
-
-BFAR/NFRDI demersal trawl survey, 24 Apr – 8 May 2020, 19 stations, bottom
-otter trawl (71 m, 43 m head rope): ✅
+BFAR/NFRDI demersal trawl survey, 24 Apr to 8 May 2020, 19 stations, bottom
+otter trawl (71 m, 43 m head rope): [sourced]
 
 | Measure | Value |
 |---|---|
 | Total catch | 4.22 t |
 | Diversity | 230 species / 74 families |
-| Leiognathidae (ponyfish) | **39.45%** |
-| Lutjanidae (snappers) | **8.05%** |
-| Gerreidae (mojarras) | **7.07%** |
-| *Photopectoralis bindus* | **25.49%** — single most abundant |
+| Leiognathidae (ponyfish) | 39.45% |
+| Lutjanidae (snappers) | 8.05% |
+| Gerreidae (mojarras) | 7.07% |
+| *Photopectoralis bindus* | 25.49% (most abundant species) |
 | *Gazza minuta* | 7.42% |
 | *Pentaprion longimanus* | 5.80% |
 | Mean CPUE | ~222.08 kg/hr |
@@ -76,206 +64,174 @@ otter trawl (71 m, 43 m head rope): ✅
 Source: *Demersal stock assessment in Leyte Gulf, Philippines*,
 [The Palawan Scientist](https://palawanscientist.org/tps/article/view/112)
 
-The app's three flagship ponyfish/mojarra are the survey's top three species,
-in the same order. The paper also notes a shift toward **"low-valued,
-non-targeted, and small-sized species"** — which is a genuinely useful thing
-for the app to say out loud somewhere.
+The original catalogue's three main ponyfish/mojarra species match the survey's
+top three, in the same order. The paper also notes a shift toward "low-valued,
+non-targeted, and small-sized species".
 
-### Carigara Bay — north coast
+### Carigara Bay (north coast)
 
 | | |
 |---|---|
-| Coordinates | 11°22′53″N 124°39′49″E ✅ |
-| Average depth | **54 m** ✅ |
-| Maximum depth | **63 m** ✅ |
-| Part of | Samar Sea ✅ |
-| Bordering LGUs | Babatngon, Barugo, Capoocan, Carigara, Leyte, San Miguel ✅ |
+| Coordinates | 11°22′53″N 124°39′49″E [sourced] |
+| Average depth | 54 m [sourced] |
+| Maximum depth | 63 m [sourced] |
+| Part of | Samar Sea [sourced] |
+| Bordering LGUs | Babatngon, Barugo, Capoocan, Carigara, Leyte, San Miguel [sourced] |
 
-- **Commercial jellyfish harvest.** Rhizostome jellyfish are harvested
-  commercially here, and juvenile *Alepes djedaba* (shrimp scad) and
-  *Carangoides equula* (whitefin trevally) shelter among them. ✅
+- Rhizostome jellyfish are harvested commercially here, and juvenile *Alepes
+  djedaba* (shrimp scad) and *Carangoides equula* (whitefin trevally) shelter
+  among them. [sourced]
   [ResearchGate](https://www.researchgate.net/publication/260871487_Associations_of_fish_juveniles_with_rhizostome_jellyfishes_in_the_Philippines_with_taxonomic_remarks_on_a_commercially_harvested_species_in_Carigara_Bay_Leyte_Island)
-  — *this is a good app detail: where there are jellyfish, there are juvenile scad.*
-- **Mangroves:** 22 species across 12 families along the bay. ✅
+- Mangroves: 22 species across 12 families along the bay. [sourced]
   [ResearchGate](https://www.researchgate.net/publication/371322495_Diversity_and_Assemblage_of_Mangroves_Along_the_Carigara_Bay_in_Leyte_Philippines)
-- **⚠️ Harmful algal blooms.** Carigara Bay is named among five HAB-affected
-  bays in Eastern Visayas. Worth a safety note if confirmed — red tide closures
-  affect shellfish, not finfish, but they do close waters.
+- [verify] Named among five bays in Eastern Visayas affected by harmful algal
+  blooms. Red tide closures affect shellfish rather than finfish, but they do
+  close waters.
   [Frontiers in Marine Science](https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2022.730518/full)
-- Deeper management context: [FAO — Resource management strategies for Carigara Bay](https://openknowledge.fao.org/server/api/core/bitstreams/d7f5e418-0b2f-48a8-ac52-c3af8d82ff69/content)
+- Management background: [FAO, resource management strategies for Carigara Bay](https://openknowledge.fao.org/server/api/core/bitstreams/d7f5e418-0b2f-48a8-ac52-c3af8d82ff69/content)
 
-### San Juanico Strait — between Leyte and Samar
-
-| | |
-|---|---|
-| Coordinates | 11°20′25″N 124°58′42″E ✅ |
-| Length | ~38 km ✅ |
-| Narrowest | **2 km** ✅ |
-| Connects | Carigara Bay (Samar Sea) ↔ San Pedro Bay (Leyte Gulf) ✅ |
-| Depth | ❌ Gap |
-| Currents | ❌ Gap — but a 2 km constriction between two basins implies strong reversing tidal flow |
-
-Tacloban's harbour sits on Cancabato Bay at the **southern entrance** ✅ — so
-this connects directly to the zone the app already has. Crossed by the San
-Juanico Bridge and an HVDC power line; heavy ferry traffic.
-
-⚠️ The structure alone (2 km gap, two basins, tidal) argues for treating this
-as a current-driven fishery. That's an inference, not a source.
-
-### Ormoc Bay — west coast
+### San Juanico Strait (between Leyte and Samar)
 
 | | |
 |---|---|
-| Coordinates | 10°57′N 124°36′E ✅ |
-| Part of | Extension of the Camotes Sea ✅ |
-| Bordering LGUs | Albuera, Merida, Ormoc ✅ |
-| Depth / dimensions | ❌ Gap |
-| Fisheries | ❌ Gap — Wikipedia covers Ormoc's rice/copra/sugar exports and says nothing about fishing |
+| Coordinates | 11°20′25″N 124°58′42″E [sourced] |
+| Length | ~38 km [sourced] |
+| Narrowest | 2 km [sourced] |
+| Connects | Carigara Bay (Samar Sea) and San Pedro Bay (Leyte Gulf) [sourced] |
+| Depth | [gap] |
+| Currents | [gap] |
 
-**This is the thinnest water in the whole set.** If you know Ormoc Bay, your
-knowledge beats anything I found.
+Tacloban's harbour is on Cancabato Bay at the southern entrance [sourced].
+Crossed by the San Juanico Bridge and an HVDC line; heavy ferry traffic.
 
-### Camotes Sea — west and northwest
+[verify] A 2 km gap between two tidal basins suggests strong reversing
+currents, so it's treated as a current-driven fishery. That's an inference.
+
+### Ormoc Bay (west coast)
 
 | | |
 |---|---|
-| Coordinates | 10°30′N 124°20′E ✅ |
-| Bounded by | Cebu (W), Leyte (E and N), Bohol (S) ✅ |
-| Connects | Visayan Sea (N); Bohol Sea (S) via Cebu Strait and Canigao Channel ✅ |
-| Maximum depth | ❌ Gap |
+| Coordinates | 10°57′N 124°36′E [sourced] |
+| Part of | Extension of the Camotes Sea [sourced] |
+| Bordering LGUs | Albuera, Merida, Ormoc [sourced] |
+| Depth / dimensions | [gap] |
+| Fisheries | [gap] |
 
-- **BFAR classifies it as heavily exploited** in the national stock assessment
-  programme, alongside Lingayen Gulf, the Visayan Sea and Davao Gulf. ✅
+The least documented water in the set.
+
+### Camotes Sea (west and northwest)
+
+| | |
+|---|---|
+| Coordinates | 10°30′N 124°20′E [sourced] |
+| Bounded by | Cebu (W), Leyte (E and N), Bohol (S) [sourced] |
+| Connects | Visayan Sea (N); Bohol Sea (S) via Cebu Strait and Canigao Channel [sourced] |
+| Maximum depth | [gap] |
+
+- Classified by BFAR as heavily exploited, alongside Lingayen Gulf, the
+  Visayan Sea and Davao Gulf. [sourced]
   [Inquirer](https://newsinfo.inquirer.net/57797/no-more-big-fish-overfishing-blamed)
-- Small pelagics declining — **sardines, matambaka (ox-eye scad),
-  galunggong**. National Sardines Management Plan approved 15 May 2020. ✅
-- Species named: **sulu skate, ocean sunfish, mackerel, great barracuda**;
-  reef fish of Acanthuridae and Tetraodontidae; white-tip shark. ✅
-- **Danajon Bank** lies in these waters — the only double barrier reef in the
-  Philippines. ✅ (Bohol side, but it shapes the sea's productivity.)
+- Small pelagics declining: sardines, matambaka (ox-eye scad), galunggong.
+  National Sardines Management Plan approved 15 May 2020. [sourced]
+- Species mentioned: sulu skate, ocean sunfish, mackerel, great barracuda;
+  surgeonfish and pufferfish on the reefs; whitetip shark. [sourced]
+- Danajon Bank, the only double barrier reef in the Philippines, is on the
+  Bohol side. [sourced]
 
-### Canigao Channel — southwest, between Leyte and Bohol
-
-| | |
-|---|---|
-| Coordinates | 10°15′N 124°42′E ✅ |
-| Separates | Bohol and Leyte ✅ |
-| Connects | Camotes Sea ↔ Bohol Sea ✅ |
-| Features | Adam, Abel, Cain and Eve Reefs; Tood Islets; **Canigao Island** ✅ |
-| Width / depth / currents | ❌ Gap |
-
-Four named reefs plus an island in one channel is a strong argument for a reef
-zone here rather than an open-water one.
-
-### Sogod Bay — south, Southern Leyte
+### Canigao Channel (between Leyte and Bohol)
 
 | | |
 |---|---|
-| Coordinates | 10°10′N 125°03′E ✅ |
-| Maximum length | 45 km ✅ |
-| Maximum width | 10 km ✅ |
-| Extension of | **Bohol Sea** ✅ |
-| Depth (ISRA delineation) | **0–200 m** ✅ |
-| Bordering LGUs | Bontoc, Libagon, Liloan, Limasawa, Malitbog, Padre Burgos, Pintuyan, San Francisco, Sogod, Tomas Oppus ✅ |
+| Coordinates | 10°15′N 124°42′E [sourced] |
+| Separates | Bohol and Leyte [sourced] |
+| Connects | Camotes Sea and Bohol Sea [sourced] |
+| Features | Adam, Abel, Cain and Eve Reefs; Tood Islets; Canigao Island [sourced] |
+| Width / depth / currents | [gap] |
 
-- **Major fishery resource: mangko, *Euthynnus affinis*** (kawakawa / eastern
-  little tuna), with a seasonal influx. ✅ A 1994 Silliman University study
-  documented seven pelagic finfish species entering the bay.
-- Species caught in the province: **skipjack tuna, striped mackerel, Spanish
-  mackerel, round scads, anchovies, sardines, flying fish**. ✅
-- **Seasonal upwelling drives plankton productivity November–April.** ✅ That
-  is directly actionable for an angler and pairs with the app's existing
-  amihan/habagat tip.
-- **Whale sharks (*Rhincodon typus*)** — feeding area, threatened. ✅
-  Not a catch; if it appears in the app at all it should be as a "do not
-  target" note.
-- Environmental: Subangdaku River watershed degraded by quarrying and sand
-  mining → rapid siltation. ✅
-- FishCORE project runs 2023–2029 across 11 LGUs. ✅
+With four named reefs and an island, it's modelled as a reef zone.
 
-> **I owe you a correction.** Earlier I said Sogod Bay "drops past 500 m" and
-> the plan agent said past 1,500 m. **Neither is sourced.** The only depth
-> figure I can cite is the ISRA delineation of **0–200 m**, and that describes
-> the *assessed area*, not the seabed. Sogod Bay is an arm of the Bohol Sea,
-> which is genuinely deep, and the bay is known for shore drop-offs — but I am
-> not going to put a number in the data I can't defend. ⚠️ **Verify.**
-
-### Surigao Strait — south, between Leyte/Panaon and Mindanao/Dinagat
+### Sogod Bay (Southern Leyte)
 
 | | |
 |---|---|
-| Coordinates | 10°10′N 125°23′E ✅ |
-| Maximum width | 25 km ✅ |
-| Depth | "deep" — no figure given ✅/❌ |
-| **Currents** | **up to 8 knots (15 km/h)** ✅ |
-| Connects | Bohol Sea ↔ Leyte Gulf ✅ |
-| Separates | Northern Mindanao / Panaon Island; Dinagat Islands / Leyte ✅ |
+| Coordinates | 10°10′N 125°03′E [sourced] |
+| Maximum length | 45 km [sourced] |
+| Maximum width | 10 km [sourced] |
+| Extension of | Bohol Sea [sourced] |
+| Depth (ISRA delineation) | 0–200 m [sourced] |
+| Bordering LGUs | Bontoc, Libagon, Liloan, Limasawa, Malitbog, Padre Burgos, Pintuyan, San Francisco, Sogod, Tomas Oppus [sourced] |
 
-**8 knots is the single most important number in this document.** That is
-faster than most bancas can make way against. Any zone here needs a genuine
-safety framing, and it justifies a distinct `strait` habitat type rather than
-reusing `channel`.
+- Main fishery: mangko, *Euthynnus affinis* (kawakawa), with a seasonal
+  influx. A 1994 Silliman University study recorded seven pelagic species
+  entering the bay. [sourced]
+- Provincial catch: skipjack, striped mackerel, Spanish mackerel, round scads,
+  anchovies, sardines, flying fish. [sourced]
+- Seasonal upwelling drives plankton productivity November to April. [sourced]
+- Whale shark (*Rhincodon typus*) feeding area. [sourced]
+- Subangdaku River watershed degraded by quarrying and sand mining, causing
+  siltation. [sourced]
+- FishCORE project runs 2023–2029 across 11 LGUs. [sourced]
 
-Panaon Island's coastline falls under FMA 8. ✅
+[verify] Depth. The only citable figure is the ISRA delineation of 0–200 m,
+which describes the assessed area rather than the seabed. The bay is known for
+drop-offs close to shore, but no depth figure is used in the data.
+
+### Surigao Strait (between Leyte/Panaon and Mindanao/Dinagat)
+
+| | |
+|---|---|
+| Coordinates | 10°10′N 125°23′E [sourced] |
+| Maximum width | 25 km [sourced] |
+| Depth | described as deep, no figure |
+| Currents | up to 8 knots (15 km/h) [sourced] |
+| Connects | Bohol Sea and Leyte Gulf [sourced] |
+| Separates | Northern Mindanao / Panaon Island; Dinagat Islands / Leyte [sourced] |
+
+8 knots is faster than many bancas can make headway against, so zones here
+carry safety advice and use their own `strait` habitat type.
+
+Panaon Island's coastline falls under FMA 8. [sourced]
 
 ---
 
-## 3. What this implies for the data model
+## 3. Effect on the data model
 
-- **Two new habitat types are justified by sources, not taste:**
-  `strait` (San Juanico's 2 km constriction; Surigao's 8 kn) and `deep`
-  (Sogod's drop-off into the Bohol Sea). Both need advice that the existing
-  `channel` and `offshore` entries get wrong.
-- **Zone count:** roughly 12–15 across seven new waters, weighted toward
-  Sogod Bay and the Camotes/Ormoc side. Carigara and San Juanico support 2–3
-  each; Ormoc Bay is currently too thin to justify more than one until you
-  fill the gap.
-- **New species suggested by the sources**, all needing catalogue entries:
-  *Euthynnus affinis* (mangko), *Alepes djedaba* (shrimp scad),
-  *Carangoides equula* (whitefin trevally), flying fish, anchovies
-  (Engraulidae), Spanish mackerel (*Scomberomorus* spp.), parrotfish and
-  rabbitfish beyond what's already listed, blue swimming crab (already
-  present as *Portunus pelagicus*).
-- **The upwelling window (Nov–April) and the amihan/habagat tip already in the
-  app are the same seasonal story from two directions.** Worth cross-linking
-  rather than duplicating.
+- Two new habitat types: `strait` (San Juanico, Surigao) and `deep` (Sogod's
+  drop-offs). The `channel` and `offshore` advice doesn't fit them.
+- Zones weighted toward Sogod Bay and the Camotes/Ormoc side; two or three each
+  for Carigara and San Juanico; one for Ormoc Bay until more is known.
+- New species suggested by the sources: *Euthynnus affinis* (mangko), *Alepes
+  djedaba*, *Carangoides equula*, flying fish, anchovies, Spanish mackerel,
+  more parrotfish and rabbitfish. Blue swimming crab was already in as
+  *Portunus pelagicus*.
+- The Nov–April upwelling lines up with the existing amihan/habagat tip.
 
-## 4. Where I most need you
+## 4. Open questions
 
-1. **Ormoc Bay** — almost nothing found. Depth, grounds, what's actually caught.
-2. **Sogod Bay depth** — is the shore drop-off real, and how deep?
-3. **Canigao Channel currents** — reef fishing there is current-dependent.
-4. **Which FMA** covers Camotes/Ormoc/Canigao.
-5. **The Southern Leyte provincial species list** at
-   `southernleyte.gov.ph/marine-resources` — blocked to me, open to you.
-6. Anything from the **BFAR Region VIII provincial fishery offices** for
+1. Ormoc Bay: depth, fishing grounds, what's caught.
+2. Sogod Bay depth near shore.
+3. Canigao Channel currents.
+4. Which FMA covers Camotes / Ormoc / Canigao.
+5. BFAR Region VIII provincial fishery office data for
    [Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-leyte/) and
    [Southern Leyte](https://region8.bfar.da.gov.ph/provincial-fishery-office-southern-leyte/).
-7. **San Pedro Bay's pin, now at 11.18 / 125.06.** ⚠️ **Verify.** It was at
-   11.10 / 125.02, which is 1.1 km off Tanauan — a pin for the whole bay
-   sitting on one town's shallows, and close enough to the Tanauan zone that
-   the two overlapped on the map. I moved it to what looks like mid-basin from
-   the surrounding coastline. That is **inference, not a source**: worth
-   confirming it is open water and is what people mean by San Pedro Bay.
-8. **Zone pin placement, now that the map zooms to 19.** ⚠️ **Verify.** The
-   old ceiling of 15 was too coarse to see whether a pin sat on water. At 17
-   the Cancabato Bay pin (11.238 / 125.004) is clearly over Tacloban's
-   rooftops rather than the bay itself — it is the town's coordinate, not the
-   water's. San Pedro Bay has already been moved for a related reason. The
-   other nineteen have not been checked at all; the zoom now makes it possible.
-9. **The local names on the 28 new species.** Every one is FishBase's, none
-   checked against Leyte usage — the least trustworthy data in the app. A
-   correction means putting the local name **first**, not appending it.
+6. San Pedro Bay pin (11.18 / 125.06). [verify] Moved from 11.10 / 125.02,
+   which was just off Tanauan and overlapped the Tanauan zone. The new spot is
+   mid-bay judging from the coastline, not from a source.
+7. Pin placement in general. [verify] At high zoom the Cancabato Bay pin
+   (11.238 / 125.004) sits over Tacloban itself rather than the bay. The other
+   zones haven't been checked at that zoom yet.
+8. Local names on the species added from FishBase. None have been checked
+   against Leyte usage. A corrected local name should go first in the list.
 
 ---
 
-## 5. The FishBase ecosystem expansion (68 → 107 species)
+## 5. FishBase ecosystem expansion (68 → 107 species)
 
-**✅ Sourced.** FishBase keeps an `ecosystem` table mapping species to *named
-bodies of water*, and it happens to carry a row for every water this app cares
-about:
+[sourced] FishBase's `ecosystem` table maps species to named bodies of water,
+and it has entries for all six waters around Leyte:
 
-| E_CODE | water |
+| E_CODE | Water |
 | --- | --- |
 | 288 | Leyte Gulf |
 | 289 | Sogod Bay |
@@ -284,91 +240,62 @@ about:
 | 338 | Carigara Bay |
 | 765 | Camotes Sea |
 
-572 distinct species are listed across the six. That is a checklist, not a
-guide, so it was cut down: **recorded as highly commercial, commercial, minor
-commercial or subsistence-fished, and reaching at least 15 cm** — a fish
-someone means to catch rather than one that turns up in a net. 39 were added,
-19 of them from families the catalogue had never carried at all (sweetlips,
-flathead, tripletail, moonfish, bigeye, sicklefish, tonguesole, wolf-herring,
-lizardfish, croaker, halfbeak, conger, sea chub, triggerfish, filefish,
-stingray, requiem shark, billfish, spiny turbot).
+That's 572 species across the six. The cut: listed as highly commercial,
+commercial, minor commercial or subsistence, and reaching at least 15 cm. That
+gave 39 additions, 19 of them from families that weren't in the catalogue yet
+(sweetlips, flathead, tripletail, moonfish, bigeye, sicklefish, tonguesole,
+wolf-herring, lizardfish, croaker, halfbeak, conger, sea chub, triggerfish,
+filefish, stingray, requiem shark, billfish, spiny turbot).
 
-Query it with the same `duckdb` + Parquet route `tools/fetch_fishbase.py` uses:
-`ecosystem.parquet` joined to `species.parquet` on `SpecCode`, filtered on
-`E_CODE`.
+Query: `ecosystem.parquet` joined to `species.parquet` on `SpecCode`, filtered
+on `E_CODE`, using the same duckdb + Parquet setup as `tools/fetch_fishbase.py`.
 
-### How they were placed in zones
+### Placing them in zones
 
-Not by guesswork. FishBase says which of the six waters a species is recorded
-in; that maps onto the app's zones, and the zone's **bottom type** then filters
-it, so an oceanic billfish never lands in a mangrove creek and a mud-bottom
-tonguesole never lands on a reef edge.
+A species goes into the zones for the waters it's recorded in, filtered by the
+zone's bottom type (so no billfish in a mangrove creek). Two limits on top:
 
-Two limits were needed on top of that, both learned by getting it wrong:
+- At most 2–3 zones per species. Without it most of the 39 landed in the
+  western gulf shelf, since the gulf has ten zones.
+- A cap per zone, so small bays don't end up with huge lists. When a zone is
+  full, species recorded in more of the six waters win. Every species still
+  ends up somewhere.
 
-- **At most 2–3 zones per species.** The first pass put 34 of the 39 into the
-  western gulf shelf, because most are recorded in "Leyte Gulf" and the gulf
-  covers ten zones.
-- **A ceiling per zone.** Carigara and Sogod have three zones each, so
-  everything recorded in those waters piled into the same short lists — 28
-  species in a bay that held 10. A zone list is *what is worth trying here*,
-  not everything the water contains.
-- The cap is scored by **how many of the six waters record the fish**, so a
-  five-water species wins a contested slot. Without that the cap threw out the
-  most widespread species first, which is exactly backwards. Nothing is left
-  unplaced.
+### Not verified
 
-### ⚠️ What is NOT verified
-
-- **No BFAR Region VIII names exist for any of these 39.** Every local name on
-  them is FishBase's national COMNAMES list. It does not know that a fish is
-  called something particular around Tacloban. Correcting one means putting the
-  local name **first** — see the ordering rule at the head of the catalogue.
-- **The notes are general biology**, not local practice. "Takes a trolled lure"
-  is true of the species; it is not a report of how it is fished off Tolosa.
-- **Presence is not abundance.** An ecosystem record says a species has been
-  recorded in that water, not that you will meet it, nor when.
-- **All 39 carry `art: 'placeholder'`** — a borrowed silhouette from the
-  nearest of the existing archetypes. Nineteen of these families have no drawn
-  art at all.
+- None of the 39 have BFAR Region VIII names; the local names are FishBase's
+  national list.
+- The notes are general biology, not local practice.
+- A record means the species has been seen in that water, not that it's common.
+- All 39 use placeholder art.
 
 ---
 
-## 6. The Southern Leyte provincial record (§5 + 4 = 111 species)
+## 6. Southern Leyte provincial record (111 species)
 
-**✅ Sourced.** The Province of Southern Leyte's own *Marine and Coastal
-Resources* page names what is caught in its fishing grounds — Sogod Bay,
-Cabalian Bay and Hinunangan Bay:
+[sourced] The Province of Southern Leyte's *Marine and Coastal Resources* page
+lists what's caught in Sogod, Cabalian and Hinunangan bays:
 
 > skip jack tuna, striped mackerel, Spanish mackerel, round scads, anchovies,
 > sardines, and flying fish. Lobsters, shrimps, prawns, crabs, shellfish, and
 > mussels are also caught in limited quantities.
 
-Every fish on that list was already in the catalogue. The gaps were the
-invertebrates and one very large omission.
+All the fish on that list were already in the catalogue. The page has no
+scientific names, so each addition was matched to a SeaLifeBase or FishBase
+ecosystem record for the same water:
 
-**The page gives no scientific names**, so nothing was taken from it alone.
-Each addition is the provincial claim matched to a **SeaLifeBase or FishBase
-ecosystem record for the same water** — two sources agreeing rather than one
-source guessed at:
-
-| added | why |
+| Added | Basis |
 | --- | --- |
-| *Rhincodon typus* — whale shark | The province calls Sogod Bay "the haven of the world's biggest fish"; FishBase records it in Sogod Bay (E_CODE 289). |
-| *Penaeus monodon* — giant tiger prawn | SeaLifeBase, commercial, these waters |
-| *Metapenaeus ensis* — greasyback shrimp | SeaLifeBase, highly commercial, these waters |
-| *Sepia pharaonis* — pharaoh cuttlefish | SeaLifeBase, commercial, these waters |
+| *Rhincodon typus*, whale shark | Province calls Sogod Bay "the haven of the world's biggest fish"; FishBase records it in Sogod Bay (E_CODE 289). |
+| *Penaeus monodon*, giant tiger prawn | SeaLifeBase, commercial, these waters |
+| *Metapenaeus ensis*, greasyback shrimp | SeaLifeBase, highly commercial, these waters |
+| *Sepia pharaonis*, pharaoh cuttlefish | SeaLifeBase, commercial, these waters |
 
-The whale shark is the reason this pass was worth doing. It is `target: false`
-— the only sensible value — and its note says plainly that it is **protected
-under Philippine law**, that it is a harmless filter-feeder, and that a hooked
-one means cutting the line. A guide to these waters that does not name the
-animal Sogod Bay is famous for is a guide with a hole in it.
+The whale shark is `target: false`, and its note says it's protected under
+Philippine law, harmless, and that a hooked one means cutting the line.
 
-### ❌ Deliberately NOT added
+### Not added
 
-**Lobsters and mussels**, both on the provincial list. Neither has a
-species-level record for any of the six waters in SeaLifeBase, and *"lobsters
-are caught in limited quantities"* does not name a lobster. Someone with local
-knowledge could close this in a sentence: the likely candidates are *Panulirus
-ornatus* / *P. versicolor* and *Perna viridis*, but likely is not sourced.
+Lobsters and mussels, also on the provincial list, have no species-level record
+for these waters in SeaLifeBase. Likely candidates are *Panulirus ornatus* /
+*P. versicolor* and *Perna viridis*, but that needs confirming.

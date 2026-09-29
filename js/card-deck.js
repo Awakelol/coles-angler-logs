@@ -1,71 +1,25 @@
-// ---------------------------------------------------------------------------
-// THE CARD DECK
+// Folder deck for the Info page.
 //
-// A line of folders you swipe through. Nothing is ever dismissed: swiping moves
-// you ALONG the line, one card per swipe, and every card is still there when you
-// come back. Tap the front one to open it.
-//
-// TWO THINGS MAKE IT FEEL SMOOTH, and they are both about not fighting the
-// browser.
-//
-//   1. A REAL SCROLLER DOES THE SCROLLING. An invisible rail with one
-//      viewport-height spacer per card and `scroll-snap-type: y mandatory`.
-//      Momentum, rubber-banding at the ends, snap-to-card and the exact feel of
-//      the platform come free. Hand-rolling that on touch means reimplementing
-//      a physics engine you cannot test from a desktop, and getting it 90%
-//      right reads as broken.
-//
-//   2. THE CARDS FOLLOW THE SCROLL CONTINUOUSLY, not on release. `--d` is a
-//      card's distance from the front and it is FRACTIONAL — 2.37, not 2. Every
-//      frame of the drag repositions the whole stack, so the card under your
-//      thumb tracks it exactly and the one behind is already rising to meet you.
-//      Snapping to an index and animating between them is what makes a carousel
-//      feel like a slideshow.
-//
-// AND ONE THAT MAKES IT FEEL ALIVE: the idle float. A card sitting still looks
-// printed on the screen. A card breathing looks like an object. The float lives
-// on an INNER element so it composes with the stack transform instead of
-// fighting it — two transforms on one element is a fight one of them loses.
-//
-// WHY NO FRAMER MOTION. It was the right suggestion for a React app and this is
-// not one: no build step, no bundler, no framework. And the physics that
-// matters here is the platform's own scroller — its momentum, its rubber-band,
-// its snap. No library beats that, because no library IS that: they all
-// reimplement it and land somewhere close. An earlier version of this file did
-// carry a hand-rolled spring solver for a swipe-to-dismiss gesture; the gesture
-// went, and the solver went with it rather than sitting here unused.
-// ---------------------------------------------------------------------------
+// Swipe through a line of folders; tap the front one to open it. The swiping
+// is a real scroller underneath (an invisible rail of viewport-high spacers
+// with scroll snapping), so momentum and snapping come from the browser. Cards
+// are positioned from the fractional scroll position on every frame, so they
+// follow the finger rather than jumping between indices. The idle float
+// animation is on an inner element so it doesn't fight the stack transform.
 
 import { esc } from './ui.js';
 
-/**
- * How far each upcoming card sits ABOVE the one in front, in px.
- *
- * A little more than the bill's height (38px), so every upcoming folder shows
- * its whole tab and nothing else. The few pixels of slack are for the idle
- * float: the front card drifts up to 4px, and at exactly one bill per step it
- * would clip the name of the one above it at the top of every drift.
- */
+// Vertical offset per upcoming card (px). Slightly more than the 38px tab so
+// the idle float doesn't clip the label above.
 const STEP = 42;
-/** How much narrower each card behind is, per step. Barely — labels must stay legible. */
+// Width reduction per step back.
 const SHRINK = 0.022;
-/** How far a card that has gone past the front travels — downward, out of the way. */
+// How far a passed card slides down.
 const EXIT = 170;
-/**
- * How many upcoming bills to show.
- *
- * Three rather than four: the fourth bill was 42px the front folder's body did
- * not have, and its four photographs were the thing being squeezed for it.
- */
+// Number of upcoming tabs shown.
 const DEPTH = 3;
 
-/**
- * One folder.
- *
- * The bill is cut from the card by clip-path, so the title sits ON the tab the
- * way a hanging folder's does. `image` is html the page supplies — a photograph
- * where there is one, an icon where there is not.
- */
+/** One folder. `images` are HTML strings (photos or icons) from the page. */
 function cardHtml(item, i) {
   const shots = (item.images || []).slice(0, 4);
   return `
@@ -127,24 +81,15 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
 
   const step = () => rail.clientHeight || 1;
 
-  /**
-   * Place every card from the scroll position.
-   *
-   * Called on every scroll frame, so it does no layout reads beyond one
-   * scrollTop and writes only transform/opacity/z-index — the three things the
-   * compositor can do without touching the main thread again.
-   */
-  /** How far along the line we are, 0..n-1. */
+  /** Position along the line, 0..n-1. */
   function progress() {
-    // INVERTED. The folders come from above, so the gesture that brings the
-    // next one down is a downward drag — which is a scroll UP. The rail starts
-    // at its end and works back, so pulling down advances the line. Mapping it
-    // the other way round meant swiping up to fetch something from above, and
-    // the hand and the eye disagreed about which way the stack was moving.
+    // Inverted: cards come from above, so dragging down (scrolling up)
+    // advances. The rail starts scrolled to the end.
     const max = Math.max(1, rail.scrollHeight - rail.clientHeight);
     return (max - rail.scrollTop) / step();
   }
 
+  // Runs every scroll frame: one scrollTop read, then only transform/opacity/z-index writes.
   function paint() {
     queued = 0;
     const p = progress();
@@ -153,30 +98,22 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
       const card = cards[i];
       const d = i - p;
 
-      // Behind the last visible layer, or already gone past the top.
       if (d > DEPTH || d < -1.15) {
         if (!card.hidden) card.hidden = true;
         continue;
       }
       card.hidden = false;
 
-      // THE LINE COMES FROM THE TOP. Cards still to come stack UPWARD, each
-      // showing its bill above the one in front, so you can read what is
-      // coming. A card you have passed drops away downward.
+      // Upcoming cards stack upward; passed cards drop away downward.
       const y = d >= 0 ? -d * STEP : -d * EXIT;
       const sx = d >= 0 ? 1 - d * SHRINK : 1;
-      // A card you have passed goes fully invisible almost at once rather than
-      // fading across the whole step. Half-transparent, it sat over the folder
-      // arriving behind it and you read both at the same time, which is worse
-      // than either — the point of the swipe is to look at ONE thing.
+      // Passed cards fade out quickly so they don't overlap the next one.
       const fade = d >= 0 ? 1 : Math.max(0, 1 + d / 0.16);
 
       card.style.transform = `translate3d(0,${y.toFixed(2)}px,0) scaleX(${sx.toFixed(4)})`;
       card.style.opacity = fade.toFixed(3);
-      // Fractional depth, so the order never flips mid-drag the way rounding
-      // to an integer index would.
+      // Based on fractional depth so the order never flips mid-drag.
       card.style.zIndex = String(Math.round(1000 - d * 10));
-      // Only the card at the front is worth reading aloud; the rest are edges.
       card.classList.toggle('is-live', d > -0.5 && d < 0.5);
     }
 
@@ -191,33 +128,16 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     if (!queued) queued = requestAnimationFrame(paint);
   }, { passive: true });
 
-  // The rail is on top and transparent, so a touch starting anywhere in the
-  // deck reaches the scroller. That makes the cards pointer-events: none, so
-  // the tap is handled here and reported by calling back — not by firing a
-  // click at a card that cannot receive one.
+  // The transparent rail sits on top and receives all taps (cards are
+  // pointer-events: none), so opening is handled here.
+
   /**
-   * Open the front folder by FLIPPING it.
-   *
-   * A card turning over is the one gesture that makes a card-sized thing
-   * becoming a page-sized thing feel like one object rather than two. It also
-   * solves the problem the plain grow had: stretching a card to fill a screen
-   * distorts everything printed on it, and here the stretch happens while the
-   * BACK is facing you — a flat panel of one colour, which cannot look
-   * distorted. By the time it is full-screen you are looking at the back of the
-   * card, and the content fades in onto it.
-   *
-   * Standard CSS 3D: two faces, one rotated 180deg behind the other, both with
-   * backface-visibility hidden so only the one facing you paints.
-   *
-   * The perspective is written INTO the inner element's own transform rather
-   * than set on a parent, because the parent is being scaled by six and a
-   * scaled perspective is not the perspective you asked for.
+   * Open the front folder with a flip: a clone grows to cover the screen while
+   * rotating to its plain-coloured back, then the page content fades in.
+   * Perspective is part of the inner transform because the wrapper is scaled.
    */
   function openFront() {
-    // Recomputed, not read off the last paint. paint() runs on a rAF, so a tap
-    // that lands between a scroll and its frame would open whichever folder was
-    // in front one frame ago — which on a fast flick is not the one you are
-    // looking at.
+    // Recompute rather than trust the last rAF paint.
     front = Math.max(0, Math.min(cards.length - 1, Math.round(progress())));
     const card = cards[front];
     const key = card?.dataset.key || '';
@@ -233,11 +153,8 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     const bill = card.querySelector('.dcard__bill');
     const colour = bill ? getComputedStyle(bill).backgroundColor : '';
 
-    // The clone goes INSIDE a face rather than being one. A .dcard carries its
-    // own absolute positioning and height from the deck, which beat anything
-    // the face needed — the front stayed pinned to the bottom of the box and
-    // never turned, while the back grew over the page on its own. A plain
-    // wrapper is a face this file fully controls.
+    // Put the clone inside a face element; .dcard's own positioning would
+    // otherwise override the face styles.
     const clone = card.cloneNode(true);
     clone.removeAttribute('style');
     clone.setAttribute('aria-hidden', 'true');
@@ -263,27 +180,10 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     wrap.appendChild(inner);
     document.body.appendChild(wrap);
 
-    /*
-     * ONE SCALE FACTOR, NOT TWO.
-     *
-     * Fitting a card to a viewport exactly means scaling x and y by different
-     * amounts — a 360x270 card into a 390x844 screen is 1.08 across and 3.1
-     * down. That is not a zoom, it is a rubber sheet: every photograph on the
-     * card is pulled into a smear on the way, and no easing rescues it.
-     *
-     * So it zooms UNIFORMLY, by whichever factor covers the screen, and simply
-     * overflows on the other axis. Nothing distorts because nothing has to —
-     * and the overflow costs nothing, because what is overflowing by the end
-     * is the back of the card, which is one flat colour.
-     */
-    //
-     // The 1.35 is coverage, not taste. rotateY under perspective foreshortens
-     // the panel as it turns, so a factor that exactly covers the screen at 0
-     // degrees leaves wedges of page showing at the top and bottom at 140 —
-     // and the back is a flat colour, so over-covering costs nothing at all.
+    // Uniform scale (no stretching) big enough to cover the screen. The extra
+    // 1.35 covers the foreshortening from rotateY mid-flip.
     const k = Math.max(innerWidth / r.width, innerHeight / r.height) * 1.35;
-    // Card centre to screen centre. The scale is about the centre too, so the
-    // two compose without either having to correct for the other.
+    // Card centre to screen centre.
     const dx = innerWidth / 2 - (r.left + r.width / 2);
     const dy = innerHeight / 2 - (r.top + r.height / 2);
 
@@ -303,21 +203,15 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
       { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' }
     );
 
-    // THE REST OF THE DECK GOES WITH IT. The flip is a fixed clone over the
-    // live deck, so without this the card you tapped turns while its twin and
-    // the whole line sit there behind it — the growing panel then covers a
-    // scene that is still moving, which is the part that read as a mess. Timed
-    // to be gone by the halfway point, where the card is edge-on and there is
-    // nothing to see through anyway.
+    // Fade the real deck out behind the clone by the halfway point.
     root.animate([{ opacity: 1 }, { opacity: 0 }],
       { duration: 240, easing: 'ease-in', fill: 'forwards' });
 
     grow.finished.catch(() => {}).then(() => {
-      // Built underneath the back of the card, so the swap is never on screen.
+      // Content renders underneath the card's back.
       onOpen(key);
       requestAnimationFrame(() => {
-        // fill: 'forwards' above left it at 0; this both clears that and is the
-        // fade-in the content arrives on.
+        // Also overrides the fill: 'forwards' opacity 0 from above.
         root.animate([{ opacity: 0 }, { opacity: 1 }],
           { duration: 280, easing: 'ease-out', fill: 'forwards' });
         const out = wrap.animate([{ opacity: 1 }, { opacity: 0 }],
@@ -335,19 +229,15 @@ export function mountDeck(root, { onOpen = () => {}, startKey = '' } = {}) {
     }
   });
 
-  // Where the line opens. Card 0 lives at the BOTTOM of the rail now, so the
-  // resting position is the end of the scroller, not the start.
+  // Card 0 is at the bottom of the rail.
   const restFor = (i) => Math.max(0, (cards.length - 1 - i) * step());
   const startAt = cards.findIndex((c) => c.dataset.key === startKey);
   if (startAt >= 0) front = startAt;
-  // Instant: this is a restore, not a journey. Animating it would look like
-  // the deck scrolling away from you the moment you closed a folder.
   rail.scrollTop = restFor(front);
   if (dots) dots.textContent = `${front + 1} / ${cards.length}`;
   paint();
 
-  // A late layout pass — fonts, images — changes clientHeight and with it the
-  // meaning of every scroll offset.
+  // Repaint if the rail's height changes (fonts/images loading late).
   const ro = typeof ResizeObserver === 'function'
     ? new ResizeObserver(() => paint())
     : null;

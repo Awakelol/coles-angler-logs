@@ -1,10 +1,4 @@
-// ---------------------------------------------------------------------------
-// SHARED ZONE UI
-//
-// A zone is described in two places now — as a pin on the map, and as a card
-// in Info › Zones — so the markup lives here rather than in either page. Same
-// arrangement as weather-ui.js.
-// ---------------------------------------------------------------------------
+// Zone markup, shared by the map pins and Info › Zones.
 
 import { resolveSpecies, getSpecies, zonesFor } from './data/index.js';
 import { tacticsFor, lureSummary, habitatTactics } from './data/tactics.js';
@@ -21,25 +15,19 @@ export const ZONE_PALETTE = {
   bay: 'ocean',
   shallows: 'silver',
   offshore: 'violet',
-  // The last two unused palettes, so two new water types cost no art.
   strait: 'sunset',
   deep: 'slate',
 };
 
 export const zonePalette = (zone) => ZONE_PALETTE[zone.type] || 'ocean';
 
-/** A fish in a bordered pill, used as the map marker.
- *
- * Through the façade, so the pin follows the art mode like everything else.
- * It called renderSprite directly and stayed pixel while the rest of the app
- * went modern — a row of retro fish on a modern map, which is the one place
- * you cannot miss them. */
+/** Map marker for a zone. */
 export function zoneMarkerHtml(zone) {
   const fish = icon('fish', { size: 34, palette: zonePalette(zone) });
   return `<div class="zone-pin" title="${esc(zone.name)}">${fish}</div>`;
 }
 
-/** The full zone write-up: habitat, possible catches, tactics, what to bring. */
+/** Zone write-up: habitat, possible catches, tactics, what to bring. */
 export function zoneSheetHtml(zone) {
   const list = resolveSpecies(zone.species);
   const habitat = habitatTactics(zone.type);
@@ -105,21 +93,11 @@ export function zoneSheetHtml(zone) {
 }
 
 /**
- * Wire a zone write-up so its species open in place instead of navigating.
+ * Wire up a zone write-up so tapping a species (or another zone) swaps the
+ * contents of the same sheet instead of navigating away. Stacking a second
+ * sheet would break openSheet's scroll lock.
  *
- * Reading a zone and reading a fish in it is one task, and it used to cost the
- * whole screen: "Species detail" was a link to #/info?open=<id>, which threw
- * away the map, the zone and your place in the list to show a card that fits
- * in the sheet already open. Getting back meant the Map tab, the pin, and
- * scrolling to where you were.
- *
- * A second sheet on top would have been the obvious fix and is a trap —
- * openSheet stores the scroll position and locks the body, so closing the
- * inner one restores the wrong offset and unlocks the page behind the outer
- * one. This swaps the contents of the sheet that is already open instead.
- *
- * Works unchanged in all three places a zone is shown: the phone sheet, the
- * desktop sidebar panel, and Info › Zones.
+ * Used by the phone sheet, the desktop sidebar panel and Info › Zones.
  *
  * @param {Element}  root the sheet backdrop or the sidebar panel
  * @param {object}   zone the zone to open on
@@ -131,11 +109,10 @@ export function zoneSheetHtml(zone) {
 export function mountZoneSheet(root, zone, regionId, { onZone } = {}) {
   const body = root.querySelector('[data-sheet-body], [data-zone-body]') || root;
   const heading = root.querySelector('.sheet__head h2, .zone-panel__head h2');
-  // The sheet scrolls on .sheet, not on the body div it contains.
+  // The scroll container is .sheet, not the body div.
   const scroller = body.closest('.sheet') || body;
 
-  // The sheet can walk from zone to fish to another zone, so which zone we are
-  // "in" is not fixed for its lifetime — it is what Back returns you to.
+  // The zone that Back returns to; changes as the user moves between zones.
   let current = zone;
 
   const show = (html, title) => {
@@ -158,9 +135,7 @@ export function mountZoneSheet(root, zone, regionId, { onZone } = {}) {
   const showSpecies = (id) => {
     const s = getSpecies(id);
     if (!s) return;
-    // Back first, so it's under your thumb before the card you have to scroll.
-    // It names the zone rather than saying "Back": by the time you have read
-    // a fish, which of twenty-one waters you came from is not obvious.
+    // Back button labelled with the zone name.
     show(
       `<button class="btn btn--sm" data-back-to-zone style="margin-bottom:14px">
          &larr; ${esc(current.name)}
@@ -169,12 +144,7 @@ export function mountZoneSheet(root, zone, regionId, { onZone } = {}) {
     );
     body.querySelector('[data-back-to-zone]').addEventListener('click', () => showZone());
 
-    // "Possible in these waters" lists the other zones this fish turns up in,
-    // as links to Info › Zones. That is right from Info, and from here it is
-    // the same redirect we just removed one level up — you would tap a fish on
-    // the map and be thrown off the map by the card that opened. Inside a zone
-    // sheet they move the sheet instead. Only for zones of this region: a link
-    // to anywhere else still has to navigate.
+    // Zone links on the species card move this sheet instead of navigating.
     for (const a of body.querySelectorAll('a[href*="tab=zones&zone="]')) {
       const id2 = new URLSearchParams(a.getAttribute('href').split('?')[1]).get('zone');
       const z = zonesFor(regionId).find((x) => x.id === id2);

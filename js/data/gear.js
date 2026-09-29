@@ -1,22 +1,12 @@
-// ---------------------------------------------------------------------------
-// GEAR CATALOGUE
+// Gear catalogue (region-independent).
 //
-// Region-independent, exactly like the species catalogue: a rod is a rod in
-// Leyte or anywhere else. Nothing here is tied to a region, so adding one
-// never means touching this file.
+// Each entry answers:
+//   what   what it is
+//   when   when to use it
+//   where  where it goes (water type, or part of the rig)
 //
-// Every entry answers the same three questions, which is the whole point:
-//
-//   what   what the thing actually is, in plain language
-//   when   the conditions or situations that call for it
-//   where  the water or the part of the setup it belongs in
-//
-// `group` drives the section headings and must match a GEAR_GROUPS id.
-// `icon` is a pixel icon name from js/pixel.js.
-// `palette` recolours that icon — see PALETTES.
-//
-// TO ADD GEAR: append an entry with a unique id and an existing group.
-// ---------------------------------------------------------------------------
+// `group` must match a GEAR_GROUPS id. `icon` is an icon name from js/pixel.js,
+// recoloured with `palette`.
 
 export const GEAR_GROUPS = [
   { id: 'rods', name: 'Rods', blurb: 'The lever. Length buys distance, action buys feel.' },
@@ -341,14 +331,14 @@ export const GEAR = [
   },
 ];
 
-/** Gear grouped for display, in GEAR_GROUPS order, empty groups dropped. */
+/** Gear grouped for display in GEAR_GROUPS order, skipping empty groups. */
 export function gearByGroup(items = GEAR) {
   return GEAR_GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id) })).filter(
     (g) => g.items.length
   );
 }
 
-/** Look up one item by id. */
+/** Gear item by id. */
 export function getGear(id) {
   return GEAR.find((g) => g.id === id) || null;
 }

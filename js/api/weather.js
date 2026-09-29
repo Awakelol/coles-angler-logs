@@ -1,19 +1,14 @@
-// ---------------------------------------------------------------------------
-// WEATHER
+// Weather. Two providers returning the same normalised shape:
 //
-// Two interchangeable providers, both returning the same normalised shape so
-// the dashboard never needs to know which one ran:
+//   open-meteo   default, no key
+//   openweather  needs a free key (Settings or js/config.js)
 //
-//   open-meteo  (default) — no API key, no signup, no rate limit for this use
-//   openweather           — needs a free key; set it in Settings or js/config.js
-//
-// Add a provider by writing a fetch<Name>() that returns { current, hourly,
-// daily } in the shape below and registering it in fetchWeather().
-// ---------------------------------------------------------------------------
+// To add one, write a fetch<Name>() returning { current, hourly, daily } and
+// register it in fetchWeather().
 
 import { CONFIG } from '../config.js';
 
-// WMO weather code -> [label, sprite key in ICONS (js/pixel.js)]
+// WMO weather code -> [label, icon key]
 const WMO = {
   0: ['Clear', 'sunny'], 1: ['Mainly clear', 'sunny'], 2: ['Partly cloudy', 'partly'],
   3: ['Overcast', 'cloudy'],
@@ -40,7 +35,7 @@ export function describeCode(code, night = false) {
   return [label, iconKey];
 }
 
-/** Is `iso` outside the sunrise/sunset window for that day? */
+/** Is `iso` outside that day's sunrise-sunset window? */
 export function isNight(iso, daily) {
   if (!iso || !daily?.length) return false;
   const t = new Date(iso).getTime();
@@ -54,7 +49,7 @@ export function compass(deg) {
   return points[Math.round((deg % 360) / 22.5) % 16];
 }
 
-/** Rough Beaufort-style read on whether it's fishable from a small boat. */
+/** Rough small-boat call based on wind speed. */
 export function windAdvice(kph) {
   if (kph < 12) return { level: 'good', label: 'Calm — good for small boats' };
   if (kph < 25) return { level: 'ok', label: 'Moderate — workable inshore' };
@@ -111,8 +106,7 @@ async function fetchOpenMeteo({ lat, lon, timezone }) {
   };
 }
 
-// OpenWeather's free tier has no hourly endpoint, so the 3-hourly forecast is
-// collapsed into daily buckets to match the Open-Meteo shape.
+// OpenWeather's free tier is 3-hourly only, so bucket it into days.
 const OW_TO_WMO = { Clear: 0, Clouds: 3, Rain: 63, Drizzle: 53, Thunderstorm: 95, Snow: 73, Mist: 45, Fog: 45, Haze: 45 };
 
 async function fetchOpenWeather({ lat, lon }) {
@@ -175,22 +169,15 @@ async function fetchOpenWeather({ lat, lon }) {
   };
 }
 
-// In-memory only, cleared by a reload. Tapping around the map asks for the
-// weather at a different zone every time, and neighbouring zones are minutes
-// apart in a forecast that updates hourly — so refetching each tap would spend
-// requests to redraw the same card. Ten minutes is short enough that the panel
-// is never visibly stale and long enough to cover a browse through the zones.
-//
-// Deliberately not localStorage, unlike tides. Tides are astronomical, valid
-// for hours, and metered against a 100-a-month quota worth protecting across
-// sessions. Weather is none of those things, and a forecast that survived a
-// restart would be the wrong trade.
+// In-memory forecast cache (10 min). Browsing zones on the map would otherwise
+// refetch nearly identical forecasts on every tap. Unlike tides this isn't
+// persisted; weather changes too often for that to be useful.
 const CACHE_MS = 10 * 60 * 1000;
 const weatherCache = new Map();
 
 export async function fetchWeather(coords, timezone) {
   const provider = CONFIG.weather.provider;
-  // ~1 km of precision. Finer would miss on GPS jitter alone and cache nothing.
+  // Key at ~1 km precision.
   const key = `${provider}:${coords.lat.toFixed(2)},${coords.lon.toFixed(2)}:${timezone}`;
   const hit = weatherCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
@@ -198,13 +185,12 @@ export async function fetchWeather(coords, timezone) {
   const args = { ...coords, timezone };
   const data = await (provider === 'openweather' ? fetchOpenWeather(args) : fetchOpenMeteo(args));
 
-  // Only cache success — a rejected promise must not be replayed for ten
-  // minutes, or one dropped connection makes the panel look permanently broken.
+  // Don't cache failures.
   weatherCache.set(key, { at: Date.now(), data });
   return data;
 }
 
-/** Drop the cached forecasts. Exported for the test suite. */
+/** Clear the forecast cache (used by tests). */
 export function clearWeatherCache() {
   weatherCache.clear();
 }

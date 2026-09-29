@@ -1,29 +1,14 @@
-// ---------------------------------------------------------------------------
-// CATCH MEDIA — photos and short clips
+// Catch photos and short clips.
 //
-// Images are downscaled before storage: a modern phone photo is 3–8 MB and a
-// couple of dozen would fill the origin's quota.
-//
-// Video is the awkward one. There is no practical way to transcode in the
-// browser — no ffmpeg, and MediaRecorder can't re-encode an existing file
-// without playing it through in real time — so clips can only be ACCEPTED OR
-// REJECTED, never shrunk. That makes the limits below the only defence
-// against one holiday video eating the whole log's storage.
-//
-//   15 seconds, 20 MB. A phone clip runs roughly 1.5–3 MB/second at 1080p,
-//   so 15s lands near the cap from both directions. Twenty catches with clips
-//   is then ~400 MB, which is already close to what browsers grant a single
-//   origin on mobile — hence also the quota check in `checkStorage`.
-//
-// A poster frame is grabbed from every clip so lists can show a still without
-// decoding video, which matters on the log screen where dozens render at once.
-// ---------------------------------------------------------------------------
+// Images are downscaled before storing (phone photos are 3-8 MB). Video can't
+// realistically be transcoded in the browser, so clips are only accepted or
+// rejected: max 15 s / 20 MB. A poster frame is saved with each clip so lists
+// don't have to decode video.
 
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
 export const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v', 'video/3gpp'];
 
-/** What the file picker offers. Extensions included because iOS reports
- *  HEIC/MOV inconsistently by MIME type alone. */
+/** File picker accept list. Extensions too, since iOS MIME types for HEIC/MOV are unreliable. */
 export const ACCEPT_ATTR = [
   ...IMAGE_TYPES, ...VIDEO_TYPES,
   '.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif',
@@ -76,7 +61,7 @@ function resizeImage(file) {
   });
 }
 
-/** Read duration and grab a poster frame without keeping the whole clip decoded. */
+/** Read a clip's duration and grab a poster frame. */
 function inspectVideo(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -123,8 +108,7 @@ function inspectVideo(file) {
           0.7
         );
       } catch {
-        // Tainted canvas or an odd codec — the clip is still usable, just
-        // without a still, so don't fail the whole upload over it.
+        // No poster (tainted canvas or odd codec), but the clip is still fine.
         URL.revokeObjectURL(url);
         resolve({ duration: video.duration, poster: null });
       }
@@ -147,20 +131,8 @@ export async function checkStorage(incomingBytes) {
 }
 
 /**
- * Validate and prepare a picked file.
- * @returns {Promise<{kind:'image'|'video', blob:Blob, poster:Blob|null, duration:number|null}>}
- * @throws {Error} with a message written for the user, not the console.
- */
-/**
- * An avatar: centre-cropped to a square and shrunk hard.
- *
- * Square at the source rather than in CSS, because the same blob is shown at
- * 96px on the account screen and 34px in a row, and `object-fit` on a portrait
- * photo crops differently at each aspect. Cropping once means every place it
- * appears shows the same face.
- *
- * 256px covers a 96px slot on a 2x screen with room to spare, and puts a
- * finished avatar around 15-25 KB.
+ * Centre-crop an image to a 256px square JPEG for use as an avatar
+ * (~15-25 KB, enough for a 96px slot at 2x).
  */
 export async function prepareAvatar(file) {
   if (kindOf(file) !== 'image') {
@@ -196,6 +168,11 @@ export async function prepareAvatar(file) {
   });
 }
 
+/**
+ * Validate and prepare a picked file.
+ * @returns {Promise<{kind:'image'|'video', blob:Blob, poster:Blob|null, duration:number|null}>}
+ * @throws {Error} with a user-facing message
+ */
 export async function prepareMedia(file) {
   const kind = kindOf(file);
   if (!kind) {
@@ -212,8 +189,7 @@ export async function prepareMedia(file) {
     return { kind: 'image', blob, poster: null, duration: null };
   }
 
-  // Size first — it's free to check, and rejects the common case without
-  // asking the browser to decode a huge file.
+  // Check size before decoding anything.
   if (file.size > LIMITS.videoBytes) {
     throw new Error(
       `That clip is ${fmtMB(file.size)}; the limit is ${fmtMB(LIMITS.videoBytes)}. ` +

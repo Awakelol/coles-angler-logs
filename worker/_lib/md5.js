@@ -1,15 +1,6 @@
-// ---------------------------------------------------------------------------
-// MD5, because Fishial's upload step demands it.
-//
-// Fishial registers an image by its Base64-encoded MD5 checksum (Rails
-// ActiveStorage direct upload). WebCrypto in Workers only does SHA-1/256/384/
-// 512 — MD5 was dropped on purpose, being unfit for anything security-related.
-// This is not security: it is a content checksum an upstream API requires, so
-// a small implementation is the right answer rather than pulling in a
-// dependency and a build step.
-//
-// DO NOT use this for anything that needs to resist an attacker.
-// ---------------------------------------------------------------------------
+// MD5, needed because Fishial's direct upload wants a Base64 MD5 checksum and
+// WebCrypto has no MD5. It's a content checksum here, not a security feature;
+// don't use it for anything security-related.
 
 const S = [
   7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,

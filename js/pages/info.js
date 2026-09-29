@@ -1,20 +1,13 @@
-// ---------------------------------------------------------------------------
-// INFO — the reference half of the app, in one place.
+// Info: the reference section. Three tabs sharing one search box:
 //
-// Three tabs over one search box:
+//   Fishes  species guide
+//   Gear    rods, reels, line etc.
+//   Zones   the region's waters (same write-up as the map pins)
 //
-//   FISHES  the species guide (families, local names, sprites, photos)
-//   GEAR    rods, reels, line and the rest, each answering what / when / where
-//   ZONES   the region's waters, the same write-up the map pins open
+// Tips show up as a "Trivia" section at the bottom of the tab they belong to.
 //
-// Tips are not a tab. Each one is filed under a category and surfaces as a
-// "Trivia" section at the foot of the tab it belongs to, so advice about drag
-// settings sits with the reels instead of in a list nobody opens.
-//
-// The active tab is mirrored into the hash with replaceState rather than by
-// assigning location.hash: assigning it would fire hashchange, remount the
-// page and wipe whatever is in the search box.
-// ---------------------------------------------------------------------------
+// The active tab goes into the hash via replaceState; assigning location.hash
+// would fire hashchange, remount the page and clear the search box.
 
 import {
   allSpecies, speciesByFamily, localNames, getSpecies, primaryName,
@@ -31,9 +24,7 @@ import { zoneSheetHtml, zonePalette, mountZoneSheet } from '../zone-ui.js';
 import { habitatTactics } from '../data/tactics.js';
 import { esc, openSheet } from '../ui.js';
 
-// Each tab gets its own art and palette. A shared palette made the three read
-// as one grey smear at 30px, which is exactly the size where an icon has
-// to work hardest.
+// Separate icon and palette per tab so they're distinguishable at small sizes.
 const TABS = [
   {
     id: 'fishes', label: 'Fishes',
@@ -52,25 +43,16 @@ const TABS = [
   },
 ];
 
-// Photo is a MODE, not a tab. It sits beside the search box rather than in
-// the segmented control because it answers the same question the search box
-// does — which fish is this — just from a picture instead of a name. Putting
-// it in the row of reference categories would have implied it was a fourth
-// body of content to browse, which it isn't.
-//
-// It still travels in the hash as `tab=photo`, so it can be linked to and so
-// the old /identify route has somewhere to redirect.
+// Photo ID is a mode toggled from beside the search box rather than a tab.
+// It's still `tab=photo` in the hash so it can be linked (and /identify
+// redirects there).
 const PHOTO = 'photo';
 const isTab = (v) => v === PHOTO || TABS.some((t) => t.id === v);
 
-// ---------------------------------------------------------------------------
-// Fishes
-// ---------------------------------------------------------------------------
+// --- Fishes ------------------------------------------------------------------
 
 function speciesCard(s) {
-  // Local name leads. Someone here knows "maya-maya"; "mangrove red snapper"
-  // is the name in the book. The English and the Latin stay, smaller, because
-  // they are what you need to look it up — just not what you need to know it.
+  // Local name first, then English and scientific names smaller.
   const lead = primaryName(s);
   const alsoLocal = localNames(s).slice(1, 2);
   return `
@@ -97,9 +79,7 @@ function speciesCard(s) {
     </button>`;
 }
 
-// ---------------------------------------------------------------------------
-// Gear
-// ---------------------------------------------------------------------------
+// --- Gear --------------------------------------------------------------------
 
 function gearCard(g) {
   return `
@@ -133,9 +113,7 @@ function gearDetailHtml(g) {
     <a class="btn btn--primary btn--block" style="margin-top:18px" href="#/log">Log a catch with it</a>`;
 }
 
-// ---------------------------------------------------------------------------
-// Zones
-// ---------------------------------------------------------------------------
+// --- Zones -------------------------------------------------------------------
 
 function zoneCard(z) {
   return `
@@ -154,9 +132,7 @@ function zoneCard(z) {
     </button>`;
 }
 
-// ---------------------------------------------------------------------------
-// Trivia (tips, filed by category)
-// ---------------------------------------------------------------------------
+// --- Trivia (tips filed by category) -----------------------------------------
 
 function triviaHtml(tips) {
   if (!tips.length) return '';
@@ -183,8 +159,6 @@ function triviaHtml(tips) {
         .join('')}
     </div>`;
 }
-
-// ---------------------------------------------------------------------------
 
 const norm = (v) => String(v || '').toLowerCase();
 
@@ -221,10 +195,6 @@ export function render(ctx) {
     <section class="band band--yellow">
       <div class="wrap">
         <div class="card card--tight" style="gap:12px">
-          <!-- The title lives in the same widget as the search box: they are
-               both "what am I looking at and how do I narrow it", and a heading
-               floating above an unrelated card was two things pretending to be
-               separate. -->
           <div class="info-head">
             <h1 class="display">Info</h1>
             <p class="eyebrow">${esc(ctx.region.name)} &middot; ${species.length} fish &middot; ${GEAR.length} gear &middot; ${zones.length} zones</p>
@@ -274,11 +244,7 @@ export function render(ctx) {
 }
 
 /**
- * The subcategories of a tab, as folders.
- *
- * Fishes are filed by family, gear by the group it already declares, and
- * waters by the body of water they sit in — all three already exist in the
- * data, so this names them rather than inventing a taxonomy.
+ * Folders for a tab: fishes by family, gear by group, zones by body of water.
  */
 function foldersFor(tab, ctx, species, zones) {
   if (tab === 'gear') {
@@ -306,30 +272,20 @@ function foldersFor(tab, ctx, species, zones) {
     key: g.family,
     label: g.familyCommon || g.family,
     count: g.species.length,
-    // The scientific family, which is the thing the common name is a nickname
-    // for and the only extra fact worth the line.
+    // Scientific family name.
     blurb: g.family,
   }));
 }
 
-// Six tints, cycled. Colour is the only thing telling one folder from another
-// once they are piled and all you can see is a strip, so it has to be a real
-// difference rather than a shade — but tints rather than the reference's
-// saturated blocks, because dark text has to stay readable on all six.
+// Folder tints, cycled. Light enough for dark text on all of them.
 const FOLDER_TINTS = 6;
 
-/** The pile, opened onto everything rather than onto one folder. */
+/** Key for the "everything" folder. */
 const ALL = '*';
 
 /**
- * Four example pictures for a folder's body.
- *
- * Real photographs wherever the data has them — a family's own fish, and for a
- * body of water the fish that are actually caught in it. Gear has no
- * photographs, so it gets its own icons rather than a stand-in image, which
- * would be a picture of nothing pretending to be a picture of something.
- *
- * Fewer than four is fine and common; the grid closes up around what it has.
+ * Up to four preview pictures for a folder: photos of the family's fish, or
+ * of fish caught in that water. Gear uses icons.
  */
 function folderArts(tab, key, species, zones) {
   const shot = (sp) => speciesArt(sp, { size: 150 });
@@ -342,8 +298,7 @@ function folderArts(tab, key, species, zones) {
   }
 
   if (tab === 'zones') {
-    // A water's fish, via the zones in it. Several zones share species, so the
-    // ids are deduplicated before any of them is drawn.
+    // Species from all zones in this water, deduplicated.
     const inWater = key ? zones.filter((z) => z.water === key) : zones;
     const ids = [];
     for (const z of inWater) {
@@ -360,22 +315,7 @@ function folderArts(tab, key, species, zones) {
   return pool.slice(0, 4).map(() => icon('fish', { size: 46, palette: 'ocean' }));
 }
 
-/**
- * One card's picture.
- *
- * Fishes get a real photograph — the first species in the family that has one.
- * Gear gets its group's icon; there are no gear photographs and inventing a
- * stand-in would be worse than an honest symbol. Zones get a fish tinted to the
- * water, for the same reason.
- */
-/**
- * The open folder's header.
- *
- * Its bill has grown to carry the name and the way out — the same silhouette
- * and the same colour as the card you tapped, so what you opened and what you
- * are reading are visibly the same thing. The x sits ON the bill rather than
- * parked in a corner, where it reads as "close THIS".
- */
+/** Header for an open folder, matching the tapped card, with a close button. */
 function folderHeadHtml(label, count, tint) {
   return `
     <div class="folder-head" ${tint == null ? '' : `data-tint="${tint}"`}>
@@ -403,13 +343,8 @@ export function mount(root, ctx) {
 
   let tab = isTab(ctx.params.get('tab')) ? ctx.params.get('tab') : 'fishes';
   let query = '';
-  // One open folder PER TAB, not one shared. Switching to Gear and back should
-  // return you to the family you were reading, not to everything.
-  //
-  // THREE STATES, not two. '' is the pile with nothing open; ALL is the pile
-  // opened onto everything; anything else is one folder. Using '' for both
-  // "nothing open" and "browsing everything" meant pressing Everything set the
-  // state it was already in and simply redrew the pile.
+  // Open folder per tab, so switching tabs and back keeps your place.
+  // '' = folder pile, ALL = everything, anything else = one folder.
   const open = { fishes: ctx.params.get('family') || '', gear: '', zones: '' };
 
   if (open.fishes) {
@@ -419,15 +354,15 @@ export function mount(root, ctx) {
   }
 
   const photoBtn = root.querySelector('#infoPhoto');
-  // Leaving photo mode has to revoke the blob URL of whatever was shot, and
-  // mode changes use replaceState, so no hashchange comes to do it for us.
+  // Revoke the photo's blob URL when leaving photo mode (replaceState means
+  // no hashchange will do it).
   let releasePhoto = null;
-  // Where the camera returns you to. Photo is a detour, not a destination.
+  // Tab to return to when leaving photo mode.
   let lastTab = tab === PHOTO ? 'fishes' : tab;
 
   const openSpecies = (s) => openSheet(s.common, () => speciesDetailHtml(s, ctx.regionId), mountSheetPhoto(s));
 
-  /** Keep the hash honest without remounting the page. */
+  /** Update the hash without remounting. */
   function syncHash() {
     const params = new URLSearchParams();
     params.set('tab', tab);
@@ -436,7 +371,7 @@ export function mount(root, ctx) {
     if (location.hash !== next) history.replaceState(null, '', next);
   }
 
-  /** How many results the other two tabs hold, so a search never dead-ends. */
+  /** Result counts for the other tabs, to point at when a search is empty. */
   function crossTabCounts() {
     return {
       fishes: species.filter((s) => matchesSpecies(s, query)).length,
@@ -482,10 +417,9 @@ export function mount(root, ctx) {
     releasePhoto = mountIdentifyPanel(results);
   }
 
-  /** The open folder's header, or nothing when browsing everything. */
   const noun = () => (tab === 'gear' ? 'items' : tab === 'zones' ? 'waters' : 'species');
 
-  /** Exactly one folder open, as opposed to Everything or the pile. */
+  /** True when a single folder (not the pile or Everything) is open. */
   const soloFolder = () => phone() && open[tab] && open[tab] !== ALL;
 
   function drawFishes() {
@@ -493,8 +427,7 @@ export function mount(root, ctx) {
     const trivia = triviaFor(ctx.regionId, 'fishes').filter((t) => matchesTip(t, query));
 
     if (!shown.length) {
-      // Local names get spelled by ear, so an empty result is usually a
-      // near-miss rather than a species we don't have.
+      // Empty result: probably a misspelled local name.
       const guesses = query ? suggestSpecies(query, species, localNames) : [];
       results.innerHTML =
         emptyHtml(
@@ -541,7 +474,7 @@ export function mount(root, ctx) {
       return;
     }
 
-    // Group the visible set by family so headings reflect the filter.
+    // Group by family.
     const groups = new Map();
     for (const s of shown) {
       const key = s.family || 'Other';
@@ -619,10 +552,7 @@ export function mount(root, ctx) {
       return;
     }
 
-    // Grouped by body of water. Leyte is not surrounded by one sea, and a flat
-    // list of twenty spots reads as noise — the headings restore the shape of
-    // the place. Filtered zones keep their groups, so searching narrows within
-    // each water rather than collapsing them together.
+    // Group by body of water; filtering narrows within each group.
     const visible = new Set(shown.map((z) => z.id));
     const groups = zonesByWater(ctx.regionId)
       .map((g) => ({ ...g, zones: g.zones.filter((z) => visible.has(z.id)) }))
@@ -658,13 +588,10 @@ export function mount(root, ctx) {
   const phone = () => matchMedia('(max-width: 899px)').matches;
 
   let deckApi = null;
-  // Which card the deck should open on. Closing a folder comes back to the one
-  // you were reading rather than to the start of the line.
+  // Card to open the deck on, so closing a folder returns to it.
   let lastOpened = '';
 
-  /**
-   * The label and colour of whatever is open, so its header can match its card.
-   */
+  /** Label and tint of the open folder. */
   function openFolderMeta() {
     if (open[tab] === ALL) return { label: 'Everything', tint: null };
     const items = foldersFor(tab, ctx, species, zones);
@@ -673,20 +600,17 @@ export function mount(root, ctx) {
     return { label: items[i].label, tint: i % FOLDER_TINTS };
   }
 
-  /** The open folder's header: which one you are in, and the way out. */
   function headHtml(count) {
     if (!phone() || !open[tab]) return '';
     const meta = openFolderMeta();
     return meta ? folderHeadHtml(meta.label, `${count} ${noun()}`, meta.tint) : '';
   }
 
-  /** The line of folders, with nothing open. */
   function drawDeck() {
     const items = foldersFor(tab, ctx, species, zones);
     const all = tab === 'gear' ? GEAR.length : tab === 'zones' ? zones.length : species.length;
 
-    // "Everything" leads the line, so the first card is the one that does not
-    // ask you to choose.
+    // "Everything" comes first.
     const cards = [
       { key: ALL, label: 'Everything', blurb: `All ${all} ${noun()}, ungrouped`,
         count: all, noun: noun(), tint: null,
@@ -707,7 +631,6 @@ export function mount(root, ctx) {
     deckApi = mountDeck(results, { onOpen: openFolder, startKey: lastOpened });
   }
 
-  /** One place decides what opening a folder means. */
   function openFolder(key) {
     if (!key) return;
     lastOpened = key;
@@ -722,7 +645,6 @@ export function mount(root, ctx) {
     draw();
   }
 
-  /** Whatever the current tab draws. */
   function fill() {
     if (tab === 'gear') drawGear();
     else if (tab === 'zones') drawZones();
@@ -732,10 +654,8 @@ export function mount(root, ctx) {
   function draw() {
     const photo = tab === PHOTO;
 
-    // The family chips filter fishes, so they go while the camera is up. The
-    // SEARCH BOX STAYS. Hiding it left the camera as an orphaned lozenge in an
-    // empty row, and worse, took away the obvious way out — typing a name is
-    // how you leave photo mode, which only works if the box is still there.
+    // Hide family chips in photo mode but keep the search box: typing a name
+    // is how you leave photo mode.
     filterBar.hidden = photo || tab !== 'fishes';
     for (const b of tabBar.querySelectorAll('[data-tab]')) {
       b.setAttribute('aria-selected', String(!photo && b.dataset.tab === tab));
@@ -743,19 +663,13 @@ export function mount(root, ctx) {
     if (photoBtn) photoBtn.setAttribute('aria-pressed', String(photo));
     results.setAttribute('aria-labelledby', photo ? 'infoPhoto' : `infotab-${tab}`);
 
-    // Whatever was photographed is gone the moment we render over it.
     if (!photo && releasePhoto) {
       releasePhoto();
       releasePhoto = null;
     }
 
-    // The deck is one screen with nothing below it, and the page is pinned
-    // while it is up: a page that scrolls under a swipe steals the gesture,
-    // which is the fastest way to make a carousel feel broken.
-    //
-    // Searching bypasses it. A query is a request to see matches, and hiding
-    // them behind a card you must open first would make the search box a
-    // decoration.
+    // The deck locks page scroll while shown so the page doesn't steal the
+    // swipe. A search skips the deck and lists matches directly.
     const deckShowing = !photo && phone() && !open[tab] && !query;
     document.body.classList.toggle('deck-locked', deckShowing);
     document.documentElement.classList.toggle('deck-locked', deckShowing);
@@ -804,8 +718,7 @@ export function mount(root, ctx) {
     draw();
   });
 
-  // A toggle, not a one-way door: pressing it again puts you back where you
-  // were rather than dumping you on the default tab.
+  // Toggle: pressing again returns to the previous tab.
   photoBtn?.addEventListener('click', () => {
     clearTimeout(typing);
     tab = tab === PHOTO ? lastTab : PHOTO;
@@ -813,16 +726,13 @@ export function mount(root, ctx) {
     draw();
   });
 
-  // Redrawing on every keystroke means a typist outruns the render and the
-  // characters visibly queue. One frame's grace is below the threshold where
-  // a pause reads as lag, and it collapses a whole typed word into one draw.
+  // Debounce to one frame so fast typing doesn't queue renders.
   let typing = 0;
   search.addEventListener('input', () => {
     clearTimeout(typing);
     typing = setTimeout(() => {
       query = norm(search.value.trim());
-      // Typing is a request to browse, which photo mode can't answer — so it
-      // hands you back to the tab you came from rather than swallowing it.
+      // Typing leaves photo mode and returns to the previous tab.
       if (tab === PHOTO) {
         tab = lastTab;
         syncHash();
@@ -842,7 +752,7 @@ export function mount(root, ctx) {
     draw();
   });
 
-  /** Put the open folder away and go back to the line. */
+  /** Close the open folder and return to the deck. */
   function closeFolder() {
     open[tab] = '';
     if (tab === 'fishes') {
@@ -854,19 +764,12 @@ export function mount(root, ctx) {
     draw();
   }
 
-  // The x on an open folder's bill. Delegated on the results pane, because the
-  // header is redrawn with the content every time.
+  // Close button on the folder header (delegated; the header is re-rendered).
   results.addEventListener('click', (e) => {
     if (e.target.closest('[data-close-folder]')) closeFolder();
   });
 
-  // DRAG THE HEADER DOWN TO PUT THE FOLDER BACK. The bill is the top edge of
-  // what is, in effect, a window over the deck — every other panel in this app
-  // that covers something can be pushed back down, and a folder that could only
-  // be closed by finding a small x was the odd one out.
-  //
-  // Delegated the same way, and it moves the WHOLE results pane so the content
-  // travels with its header rather than sliding out from under it.
+  // Drag the folder header down to close it. Moves the whole results pane.
   let drag = null;
   results.addEventListener('pointerdown', (e) => {
     const head = e.target.closest('.folder-head');
@@ -878,8 +781,7 @@ export function mount(root, ctx) {
     const dy = e.clientY - drag.y0;
     if (!drag.moved && Math.abs(dy) < 8) return;
     drag.moved = true;
-    // Upward is resisted: there is nowhere for it to go, and rubber-banding
-    // says so more clearly than refusing to move.
+    // Rubber-band upward drags.
     const y = dy > 0 ? dy : dy * 0.2;
     results.style.transition = '';
     results.style.transform = `translate3d(0,${y.toFixed(1)}px,0)`;
@@ -892,7 +794,6 @@ export function mount(root, ctx) {
     results.style.transition = 'transform .32s cubic-bezier(.2,.7,.3,1)';
     results.style.transform = '';
     if (moved && dy > 110) {
-      // Let it fall the rest of the way before the deck replaces it.
       results.style.transform = 'translate3d(0,100%,0)';
       setTimeout(() => {
         results.style.transition = '';
@@ -906,8 +807,7 @@ export function mount(root, ctx) {
 
   draw();
 
-  // Deep links. #/info?open=<id> is what the map's zone sheets link to, and
-  // the old #/species?open=<id> redirects onto it, so it has to keep working.
+  // Deep links: #/info?open=<id> (old #/species?open=<id> redirects here).
   const openSpeciesId = ctx.params.get('open');
   if (openSpeciesId) {
     const s = getSpecies(openSpeciesId);

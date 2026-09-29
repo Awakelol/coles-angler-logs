@@ -1,18 +1,9 @@
-// ---------------------------------------------------------------------------
-// FUZZY SPECIES SEARCH
-//
-// Powers the "did you mean?" prompt when a search finds nothing. Local fish
-// names are exactly the sort of thing people half-remember or spell by ear —
-// "sapsap", "maya maya", "lapu lapu", "barakuda" — so an empty result is far
-// more often a near-miss than a genuine absence.
-//
-// Matching runs over common, scientific, family and local names. The whole
-// catalogue is ~40 species with a handful of names each, so a plain
-// Levenshtein pass is a few hundred short string comparisons — not worth
-// indexing or pulling in a library for.
-// ---------------------------------------------------------------------------
+// Fuzzy species search for the "did you mean?" prompt. Local names often get
+// spelled by ear (sapsap, maya maya, barakuda), so this matches against common,
+// scientific, family and local names with plain Levenshtein distance. The
+// catalogue is small enough that no index is needed.
 
-/** Fold case, strip accents, and treat hyphens/spaces as the same thing. */
+/** Lowercase, strip accents and punctuation. */
 export function normalise(s) {
   return String(s || '')
     .toLowerCase()
@@ -41,10 +32,7 @@ export function editDistance(a, b) {
   return prev[b.length];
 }
 
-/**
- * 0..1, where 1 is identical. A prefix match scores high even when the rest
- * differs, so typing "barra" still surfaces "Barramundi" and "Barracuda".
- */
+/** 0..1. Prefix matches score high so "barra" finds Barramundi and Barracuda. */
 export function similarity(query, candidate) {
   const q = normalise(query);
   const c = normalise(candidate);
@@ -57,7 +45,7 @@ export function similarity(query, candidate) {
   return 1 - dist / Math.max(q.length, c.length);
 }
 
-/** Every searchable label for a species, tagged with what kind of name it is. */
+/** All searchable names for a species, tagged by kind. */
 function termsFor(species, localNames) {
   const out = [
     { text: species.common, kind: 'name' },
@@ -72,9 +60,8 @@ function termsFor(species, localNames) {
 /**
  * Closest species to a query that matched nothing.
  *
- * @param {number} threshold minimum similarity to bother suggesting. 0.45 is
- *        tuned to catch "sapsap"/"sap-sap" and "barakuda"/"barracuda" without
- *        proposing something unrelated for genuine gibberish.
+ * @param {number} threshold minimum similarity. 0.45 catches "sapsap"/"sap-sap"
+ *        and "barakuda"/"barracuda" without matching gibberish.
  * @returns {Array<{species, term, kind, label, score}>}
  */
 export function suggestSpecies(query, speciesList, localNames, { limit = 3, threshold = 0.45 } = {}) {

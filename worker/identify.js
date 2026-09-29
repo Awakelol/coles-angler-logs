@@ -1,31 +1,21 @@
-// ---------------------------------------------------------------------------
-// POST /api/identify — what fish is this?
+// POST /api/identify
 //
-// FISHIAL DOES THE LOOKING. A model trained specifically on fish, free for
-// non-commercial use on its developer tier.
+// Fishial identifies the fish (fish-specific model, free developer tier).
+// Its top answer can be wrong for Indo-Pacific fish, so the result is checked
+// against the local catalogue (js/identify-verdict.js).
 //
-// THE CATALOGUE DOES THE CHECKING, and it does it for free. Fishial is trained
-// mostly on North American and European sportfish, so on an Indo-Pacific fish
-// its top answer can be confidently wrong. Catching that needs no
-// intelligence, only a lookup: does this species actually occur around Leyte?
-// js/identify-verdict.js answers that from data already in the app.
+// An LLM vision model is optional and helps separate lookalikes (mostly the
+// ponyfish). With no key configured the free path runs alone. The response
+// says which path was used.
 //
-// A VISION MODEL IS OPTIONAL. It adds the one thing the pair above cannot do:
-// reading markings and body shape to separate lookalikes — the ponyfish,
-// mostly. Set a key and the two get arbitrated; set none and the free path
-// runs alone. Either way the response says which path ran, so a cheaper answer
-// is never mistaken for a better one.
+// Keys stay in the Worker environment and never reach the browser.
 //
-// Keys live in the Worker's environment and never reach the browser: this is a
-// static site, so anything it ships is readable in devtools.
-//
-// ENVIRONMENT VARIABLES (Cloudflare dashboard → Settings → Variables):
+// Environment variables (Cloudflare dashboard → Settings → Variables):
 //   FISHIAL_API_KEY      recognition
 //   FISHIAL_API_SECRET   recognition
-//   GEMINI_API_KEY       optional second opinion — has a free tier
+//   GEMINI_API_KEY       optional second opinion (has a free tier)
 //   GEMINI_MODEL         optional, defaults to gemini-2.5-flash
-//   ANTHROPIC_API_KEY    optional second opinion — metered per call
-// ---------------------------------------------------------------------------
+//   ANTHROPIC_API_KEY    optional second opinion (paid per call)
 
 import { INDO_PACIFIC_SPECIES } from '../js/data/species/indo-pacific.js';
 import { arbitrate, reconcileLocal, normalise } from '../js/identify-verdict.js';
@@ -46,8 +36,7 @@ const json = (body, status = 200) =>
 
 // --- Fishial ---------------------------------------------------------------
 
-// Tokens last 10 minutes. Cached per isolate — best effort; a miss costs one
-// extra round trip and nothing else.
+// Tokens last 10 minutes; cached per isolate (best effort).
 let tokenCache = { value: null, expires: 0 };
 
 async function fishialToken(env) {
@@ -66,14 +55,14 @@ async function fishialToken(env) {
   const data = await res.json();
   if (!data.access_token) throw new Error('fishial auth returned no token');
 
-  // Expire a minute early rather than mid-upload.
+  // Refresh a minute early.
   tokenCache = { value: data.access_token, expires: Date.now() + 9 * 60 * 1000 };
   return data.access_token;
 }
 
 /**
- * Fishial's three-step dance: register the image, PUT it to the signed URL
- * they hand back, then ask for the recognition by signed id.
+ * Fishial upload flow: register the image, PUT it to the signed URL, then
+ * request recognition by signed id.
  */
 async function fishialIdentify(env, bytes, mime) {
   const token = await fishialToken(env);
@@ -98,7 +87,7 @@ async function fishialIdentify(env, bytes, mime) {
   const signedId = slot['signed-id'] || slot.signed_id;
   if (!direct?.url || !signedId) throw new Error('fishial upload: unexpected response');
 
-  // Only the headers they specify — adding our own breaks the signature.
+  // Only the headers they specify, or the signature breaks.
   const put = await fetch(direct.url, {
     method: 'PUT',
     headers: direct.headers || {},
@@ -179,8 +168,7 @@ export async function identify(request, env) {
     try {
       llm = await secondOpinion(env, { b64, mime, guesses: fishial, catalogue });
     } catch (err) {
-      // A dead or rate-limited model must not take the feature down — the
-      // free path below is a complete answer on its own.
+      // Model failures are non-fatal; the free path still gives an answer.
       llmError = String(err.message || err);
     }
   }
@@ -196,13 +184,9 @@ export async function identify(request, env) {
     );
   }
 
-  // With a usable model answer, cross-check the two. Otherwise the catalogue
-  // does the checking on its own — same idea, no cost, no second network call.
-  //
-  // "unknown" counts as no answer: arbitrating against it would report a bare
-  // one-sided Fishial result, when reconcileLocal can still demote a foreign
-  // top pick to a local one further down the ranking. The cheaper path is
-  // genuinely the better one here.
+  // With a usable model answer, arbitrate between the two. Otherwise (no
+  // model, or it said "unknown") let reconcileLocal check Fishial's ranking
+  // against the catalogue, which can still promote a local lower-ranked pick.
   const usableLLM = llm && llm.speciesId !== 'unknown' && llm.scientific;
 
   const verdict = usableLLM
@@ -215,10 +199,7 @@ export async function identify(request, env) {
     ...verdict,
     reasoning: llm?.reasoning || null,
     alternatives: llm?.alternatives || [],
-    // Named so the UI can say how the answer was reached — a free answer
-    // should never be presented as though it had a second opinion behind it.
-    // Named so the screen can show how the answer was reached. An "unknown"
-    // from the model means the catalogue decided, and it must say so.
+    // Tells the UI how the answer was reached.
     checkedBy: usableLLM ? `fishial + ${llm.provider}` : 'fishial + local catalogue',
     sources: {
       fishial: fishial.length ? { candidates: fishial } : { error: fishialError },

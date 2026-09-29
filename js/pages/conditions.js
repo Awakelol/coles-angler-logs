@@ -173,7 +173,7 @@ export async function mount(root, ctx) {
     }
   }
 
-  // Weather and tides are independent — a failure in one must not blank the other.
+  // Load weather and tides independently so one failing doesn't blank the other.
   fetchWeather(coords, tz)
     .then((w) => {
       weatherPane.innerHTML = weatherHtml(w, tz);

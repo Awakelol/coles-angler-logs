@@ -1,18 +1,12 @@
-// ---------------------------------------------------------------------------
-// TIDES
+// Tides. There's no free keyless tide API, so the default provider is 'none'
+// and the dashboard shows a setup card.
 //
-// Unlike weather, there is no genuinely free global tide API — every option
-// wants a key. So the default provider is 'none': the dashboard shows a clear
-// setup card instead of silently failing or faking numbers.
+//   worldtides  worldtides.info, free tier ~100 requests/month
+//   stormglass  stormglass.io, free tier ~10 requests/day
+//   none        default
 //
-//   worldtides — worldtides.info, free tier ~100 requests/month
-//   stormglass — stormglass.io, free tier ~10 requests/day
-//   none       — default; shows setup instructions
-//
-// Responses are cached for 6 hours in localStorage. Tide predictions are
-// astronomical and barely change within a day, and the free tiers are small
-// enough that an uncached reload would burn through the quota quickly.
-// ---------------------------------------------------------------------------
+// Responses are cached in localStorage for 6 hours; predictions barely change
+// within a day and the free quotas are small.
 
 import { CONFIG } from '../config.js';
 
@@ -52,9 +46,8 @@ export function tidesConfigured() {
   return false;
 }
 
-// Start the window in the recent past, not at "now". Without a preceding
-// extreme there is nothing to interpolate the current tide state between, and
-// the dashboard can only say "next high at…" rather than rising or falling.
+// Start the window a bit in the past so there's an extreme before "now" to
+// interpolate from (otherwise we can't say rising/falling).
 const LOOKBACK_MS = 8 * 60 * 60 * 1000;
 
 async function fetchWorldTides({ lat, lon }) {
@@ -66,10 +59,8 @@ async function fetchWorldTides({ lat, lon }) {
   const res = await fetch(url);
   if (res.status === 401 || res.status === 403) throw new Error('WorldTides rejected the key — check it in Settings.');
 
-  // Read the body before deciding: WorldTides puts the real reason in JSON
-  // even on a 400, and "Not enough credits" needs a different answer from a
-  // malformed request. Reporting it as a generic 400 sends you looking for a
-  // bug that isn't there.
+  // WorldTides returns the real error as JSON even on a 400 (e.g. "Not enough
+  // credits"), so read the body first.
   let d = null;
   try {
     d = await res.json();
@@ -125,8 +116,7 @@ export async function fetchTides(coords) {
     return { unconfigured: true, provider: CONFIG.tides.provider, extremes: [] };
   }
 
-  // The v2 prefix invalidates anything cached before the lookback window was
-  // added — those responses have no extreme preceding "now".
+  // v2: entries from before the lookback window was added are unusable.
   const cacheKey = `v2:${CONFIG.tides.provider}:${coords.lat},${coords.lon}`;
   const cached = readCache(cacheKey);
   if (cached) return { ...cached, cached: true };
@@ -141,7 +131,7 @@ export async function fetchTides(coords) {
 }
 
 /**
- * Where the tide is right now, derived from the surrounding extremes.
+ * Current tide state, interpolated from the surrounding extremes.
  * Returns null when the window doesn't bracket the current time.
  */
 export function currentTideState(extremes, now = new Date()) {
@@ -164,15 +154,14 @@ export function currentTideState(extremes, now = new Date()) {
         from: a,
         to: b,
         minutesToNext: Math.round((tb - t) / 60000),
-        // Mid-tide is when water moves fastest — usually the best bite window.
+        // Mid-tide has the strongest flow, often the best bite.
         movingFast: progress > 0.25 && progress < 0.75,
       };
     }
   }
 
-  // No bracketing pair — the window starts in the future (stale cache, or a
-  // provider that only returns forward extremes). Direction is still knowable
-  // from what comes next; progress is not.
+  // No bracketing pair (stale cache, or forward-only data): the direction is
+  // known from the next extreme, the progress isn't.
   const next = sorted.find((e) => new Date(e.time).getTime() > t);
   if (next) {
     const rising = next.type === 'high';

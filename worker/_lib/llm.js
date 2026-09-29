@@ -1,23 +1,14 @@
-// ---------------------------------------------------------------------------
-// THE OPTIONAL SECOND OPINION
+// Optional LLM second opinion for photo ID.
 //
-// Fishial names the fish and the local catalogue checks whether that species
-// occurs here — that pair is free and does most of the work. What a vision
-// model adds on top is the thing neither can do: read markings, body shape and
-// fin placement to separate species that look alike. Around Leyte that
-// mostly means the ponyfish, which are genuinely hard.
+// Fishial plus the catalogue check does most of the work; a vision model helps
+// tell apart species that look alike (mostly ponyfish around Leyte).
 //
-// Two providers, one shape. Whichever key is set gets used:
+// Whichever key is set is used:
+//   GEMINI_API_KEY     has a free tier, so it's preferred
+//   ANTHROPIC_API_KEY  Claude, paid per call
 //
-//   GEMINI_API_KEY     Google. Has a free tier, so this is the default.
-//   ANTHROPIC_API_KEY  Claude. Metered per call.
-//
-// Neither set is a perfectly good state — the caller falls back to the free
-// catalogue check and says so.
-//
-// Both are asked the same question with the same catalogue and both return the
-// same object, so worker/identify.js never has to care which answered.
-// ---------------------------------------------------------------------------
+// With neither set, the caller falls back to the catalogue check. Both
+// providers get the same prompt and return the same shape.
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -25,7 +16,7 @@ const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-opus-5';
 
-/** Which provider will answer, or null. Lets the caller label the result. */
+/** Which provider will answer, or null. */
 export function providerFor(env) {
   if (env.GEMINI_API_KEY) return 'gemini';
   if (env.ANTHROPIC_API_KEY) return 'claude';
@@ -38,9 +29,8 @@ function systemPrompt(catalogue) {
     .join('\n');
 
   return (
-    // Naming the individual waters is an accuracy change, not decoration:
-    // Leyte sits between the Pacific and the Bohol Sea, and which coast a
-    // photo came from changes which lookalikes are plausible.
+    // List the individual waters: which coast a photo came from changes
+    // which lookalikes are plausible.
     `You identify fish from photographs for an angler fishing the waters ` +
     `around Leyte island, Philippines — Leyte Gulf and San Pedro Bay on the ` +
     `Pacific side, Carigara Bay and San Juanico Strait to the north, and ` +
@@ -70,9 +60,8 @@ function userPrompt(guesses) {
   );
 }
 
-// Gemini's responseSchema is an OpenAPI 3.0 subset: no additionalProperties,
-// no $ref. Claude's json_schema accepts a stricter shape. Same fields, so the
-// two are written out separately rather than contorting one into both.
+// Gemini's responseSchema is an OpenAPI 3.0 subset (no additionalProperties,
+// no $ref), so the two schemas are written separately.
 const FIELDS = ['speciesId', 'scientific', 'confidence', 'reasoning', 'alternatives'];
 
 const GEMINI_SCHEMA = {
@@ -119,7 +108,7 @@ async function askGemini(env, { b64, mime, guesses, catalogue }) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      // In the header rather than ?key= so it stays out of request logs.
+      // Header rather than ?key= so it stays out of request logs.
       'x-goog-api-key': env.GEMINI_API_KEY,
     },
     body: JSON.stringify({
@@ -145,8 +134,8 @@ async function askGemini(env, { b64, mime, guesses, catalogue }) {
 
   const data = await res.json();
   const candidate = data.candidates?.[0];
-  // SAFETY / RECITATION / MAX_TOKENS all mean there is no usable answer, and
-  // some of them still return a 200 with an empty parts array.
+  // SAFETY / RECITATION / MAX_TOKENS mean no usable answer (sometimes with a
+  // 200 and empty parts).
   if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
     throw new Error(`gemini stopped: ${candidate.finishReason}`);
   }
@@ -166,8 +155,7 @@ async function askClaude(env, { b64, mime, guesses, catalogue }) {
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: 4096,
-      // A constrained pick from a supplied list — it does not need max effort,
-      // and lower effort keeps this quick enough to wait on.
+      // Picking from a list doesn't need much effort; keep it fast.
       output_config: {
         effort: 'medium',
         format: { type: 'json_schema', schema: ANTHROPIC_SCHEMA },
@@ -188,7 +176,7 @@ async function askClaude(env, { b64, mime, guesses, catalogue }) {
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
 
   const data = await res.json();
-  // Safety classifiers can decline with a 200 — check before reading content.
+  // Refusals can come back as a 200.
   if (data.stop_reason === 'refusal') throw new Error('anthropic declined this image');
 
   const text = (data.content || []).find((b) => b.type === 'text')?.text;
@@ -198,7 +186,7 @@ async function askClaude(env, { b64, mime, guesses, catalogue }) {
 
 /**
  * Ask whichever provider is configured.
- * @returns {Promise<object|null>} null when none is set — not an error.
+ * @returns {Promise<object|null>} null when none is configured
  */
 export async function secondOpinion(env, input) {
   const provider = providerFor(env);
@@ -206,7 +194,7 @@ export async function secondOpinion(env, input) {
 
   const answer = provider === 'gemini' ? await askGemini(env, input) : await askClaude(env, input);
 
-  // Trust the shape as far as the schema guarantees it and no further.
+  // Only trust what the schema guarantees.
   return {
     speciesId: String(answer.speciesId || 'unknown'),
     scientific: String(answer.scientific || ''),

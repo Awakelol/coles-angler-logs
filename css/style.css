@@ -1,35 +1,24 @@
 /* ==========================================================================
    Cole's Angler Log
-   Bright colour-blocked sections, big rounded type, pixel-art accents.
-   Mobile-first; the layout widens into a grid at 720px+.
+   Mobile-first; widens into a grid at 720px+.
    ========================================================================== */
 
 :root {
-  /* Blue and off-white, from the reference Gabriel picked.
-     NOTE the reference's own labels are crossed over — the cream swatch is
-     captioned #2B4593 and the blue one #E6E2C5. Those are the text colours on
-     each card, not the fills. The fills are the other way round and that is
-     what is used here. */
+  /* Blue and off-white palette. */
   --blue:    #2B4593;   /* the one strong colour */
   --blue-dk: #1E3169;   /* pressed states, and text on cream where blue is too light */
   --blue-lt: #E8ECF7;   /* washes and selected chips */
   --sand:    #E6E2C5;   /* the off-white */
   --sand-lt: #F2F0E2;   /* cards on sand */
 
-  --cream:   #F6F4EA;   /* page canvas — sand, lifted so cards can sit on it */
+  --cream:   #F6F4EA;   /* page background */
   --paper:   #FFFFFF;
   --ink:     #16181D;
-  /* THESE CARRY HEADROOM FOR THE BLOOM, and the old --ink-30 did not carry
-     any: #9AA0AF was 2.37:1 on plain cream, failing WCAG AA before a gradient
-     was anywhere near it. Muted is a rank in the hierarchy, not permission to
-     be unreadable — and every one of these sits on a ground that the page's
-     light shifts underneath it. */
-  --ink-60:  #3A3F50;   /* 9.5:1 on cream, so it survives the brightest bloom */
-  --ink-30:  #646A7A;   /* was #9AA0AF, which failed on the bare background */
+  /* Muted text colours, chosen to stay above 4.5:1 over the background glow. */
+  --ink-60:  #3A3F50;   /* 9.5:1 on cream */
+  --ink-30:  #646A7A;
 
-  /* Kept as names the rest of the sheet already uses, remapped onto the new
-     palette rather than renamed — 1,900 lines reference these, and a rename
-     would be a thousand-line diff that changes nothing you can see. */
+  /* Older token names, mapped onto the current palette. */
   --yellow:  #E6C34A;
   --sky:     var(--blue-lt);
   --sky-deep:var(--blue);
@@ -37,17 +26,9 @@
   --green:   #4C9A6A;
   --violet:  #6B5BA8;
 
-  /* Colour-blocked section backgrounds. Separate from the accent colours
-     above so dark mode can deepen the bands while buttons and chips stay
-     bright — a dark-yellow button would be unreadable. */
-  /* The bands were five loud colour blocks. On this palette they are near-white
-     tints instead: the references get their rhythm from cards floating on one
-     calm ground, not from the page changing colour under you. */
-  /* TRANSPARENT, IN BOTH THEMES. The bands used to be near-white tints, and
-     an opaque band — however faint — paints over the bloom behind it, which
-     meant the light theme had a gradient it could never show. One calm ground
-     with light on it, cards floating over it, and the hairline between bands
-     doing the separating. */
+  /* Section backgrounds, separate from the accents so dark mode can change
+     them independently. */
+  /* Transparent so the background glow shows through. */
   --band-cream:  transparent;
   --band-sky:    transparent;
   --band-yellow: transparent;
@@ -59,9 +40,8 @@
   --art-bg:      var(--blue-lt);
   --art-bg-2:    #D6DDF0;
 
-  /* Deliberately inverted surfaces: the "now" weather card, dark buttons,
-     the toast. Named separately from --ink so flipping the text colour in
-     dark mode doesn't silently turn these into light slabs. */
+  /* Inverted surfaces (now-card, dark buttons, toast). Separate from --ink so
+     they don't turn light in dark mode. */
   --invert-bg:   var(--blue);
   --invert-fg:   #FFFFFF;
 
@@ -71,13 +51,10 @@
   --skeleton-b:   #F6F4EA;
   --attribution:  rgba(246, 244, 234, .88);
 
-  /* Text on always-bright accent fills. Fixed dark in BOTH themes: the
-     accents don't invert, so --ink would put near-white on yellow. */
-  --on-accent: #FFFFFF;   /* the accents are dark blue now, so text on them is white */
+  /* Text on accent fills; dark in both themes since accents don't invert. */
+  --on-accent: #FFFFFF;
 
-  /* Soft, not neo-brutalist. The references have no hard outlines and no
-     offset shadows — depth comes from a hairline and a diffuse drop. Keeping
-     the token NAMES means every existing rule inherits the new look. */
+  /* Hairline borders and soft shadows. */
   --line:    #E2DFD2;
   --border-w:    1px;
   --border-w-sm: 1px;
@@ -86,32 +63,15 @@
   --shadow:    0 2px 10px rgb(22 24 29 / .06);
   --shadow-lg: 0 10px 30px rgb(22 24 29 / .10);
 
-  /* THE BLOOM. Coloured light rising from below the fold and falling off
-     before it reaches the top — the shape every one of the references uses.
-     Light mode keeps it faint: on cream it is a warmth in the corner of the
-     eye, not a light show. Dark mode is where it does the work. */
-  /* Five lights rather than three, and warmer. The first pass was two washes
-     at a tenth opacity and it read as a smudge on the cream rather than as
-     colour — on a light ground a gradient has to commit or it may as well not
-     be there. */
-  /*
-     THE BLOOM IS BUILT FROM TWO THINGS THAT DO NOT KNOW ABOUT EACH OTHER:
-     the PAGE picks three hues, the THEME picks how strongly they burn. Keeping
-     them orthogonal is what stops this being a combinatorial mess — seven
-     pages times two themes is fourteen palettes to hand-tune and keep in sync,
-     against seven hue triples and two sets of alphas here.
-
-     Raw channel triples, not colours: an alpha has to be composed in per
-     layer, and `rgb(var(--glow-1) / .3)` only works if the hue carries no
-     alpha of its own. --glow-o* is re-read at use time, so a theme changing
-     one number restyles every layer.
-  */
-  --glow-1: 88 84 255;      /* home, the default: dawn over the island */
+  /* Background glow ("bloom"): coloured light rising from the bottom of the
+     screen. Subtle in light mode, stronger in dark. */
+  /* Each page sets three hues (--glow-1..3) and each theme sets the strengths
+     (--glow-o*). Hues are raw RGB triples so alpha can be applied per layer:
+     rgb(var(--glow-1) / .3). */
+  --glow-1: 88 84 255;      /* home (default) */
   --glow-2: 255 176 66;
   --glow-3: 255 106 136;
 
-  /* Light: strong enough to be colour rather than a smudge on the cream, shy
-     of the point where body text starts fighting the ground it sits on. */
   --glow-o1: .44;
   --glow-o2: .40;
   --glow-o3: .30;
@@ -121,23 +81,18 @@
   --bloom-a: rgb(var(--glow-1) / var(--glow-o1));
   --bloom-b: rgb(var(--glow-2) / var(--glow-o2));
   --bloom-c: rgb(var(--glow-3) / var(--glow-o3));
-  /* d and e re-use hues 2 and 1 rather than adding a fourth and fifth colour.
-     Five unrelated hues in one frame is a smear; the same light seen twice
-     from different angles is a composition. */
+  /* Layers d and e reuse hues 2 and 1. */
   --bloom-d: rgb(var(--glow-2) / var(--glow-o4));
   --bloom-e: rgb(var(--glow-1) / var(--glow-o5));
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
 
-  /* The rail is the app's one dark surface and stays dark in BOTH themes.
-     Bound to --ink it inverted with the text and turned white on a black
-     page, which is the one thing a rail must never do. */
+  /* The desktop rail stays dark in both themes. */
   --rail-bg: var(--ink);
   --drawer-bg: #EDEFF7;
   --now-bg: var(--invert-bg);
   --now-fg: var(--invert-fg);
 
-  /* Folder tints, as tokens rather than hexes buried in the deck rules, so
-     dark can supply its own set without duplicating the layout. */
+  /* Folder tints (dark mode overrides these). */
   --tint-0: #A9C6F2;
   --tint-1: #EDD98A;
   --tint-2: #9BD9B4;
@@ -148,52 +103,39 @@
   --tint-plain: var(--paper);
 
   --tab-h: 62px;
-  --fab-d: 58px;           /* the + , in the middle slot of the bar */
-  --fab-rise: 14px;        /* how far its centre sits above the bar's */
-  --fab-ring: 5px;         /* the page-coloured cut-out around it */
-  /* The highest point of the nav: the top of the +, ring included. Everything
-     that has to clear the bar clears the bulge too, which is the whole reason
-     this is a token and not five hand-added numbers. */
+  --fab-d: 58px;           /* + button size */
+  --fab-rise: 14px;
+  --fab-ring: 5px;
+  /* Height of the nav including the raised + button; anything that has to
+     clear the nav uses this. */
   --fab-crown: calc(12px + var(--tab-h) / 2 + var(--fab-rise)
                     + var(--fab-d) / 2 + var(--fab-ring));
-  /* The pill, its bulge, and the air above and below. */
   --tab-space: calc(var(--fab-crown) + 12px);
   --font: "Nunito", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
   --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
 }
 
 /* --- dark ------------------------------------------------------------------
-   Applied via <html data-theme="dark">, set by an inline script in index.html
-   before first paint. `system` is resolved in JS rather than with a media
-   query here, so an explicit light choice still wins on a dark phone.
+   <html data-theme="dark">, set before first paint by index.html. 'system' is
+   resolved in JS so an explicit light choice wins on a dark-mode phone.
 
-   NOT AN INVERSION. Light is cream paper with one strong blue on it. Dark is a
-   deep blue-black room with light coming from somewhere below — the references
-   Gabriel picked are all glow on near-black, so dark mode is where the bloom
-   actually earns its place and the accents get to be luminous rather than
-   solid.
-
-   The blue has to change direction. #2B4593 is a strong colour on cream and
-   nearly invisible on #0B0E17, so dark uses a light blue with dark text on it
-   — the same relationship, upside down.
+   Not an inversion: a blue-black background with the glow doing more work,
+   and a lighter blue accent (the light theme's #2B4593 disappears on dark).
 --------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  --blue:    #8FB0FF;   /* the one strong colour, now the light one */
-  --blue-dk: #B7CBFF;   /* "stronger" means lighter here — hover, pressed */
-  --blue-lt: #1E2748;   /* tinted fills, a wash of the accent over canvas */
+  --blue:    #8FB0FF;
+  --blue-dk: #B7CBFF;   /* hover/pressed (lighter in dark mode) */
+  --blue-lt: #1E2748;
   --sand:    #2C2B21;
   --sand-lt: #1C1D17;
 
-  /* THREE STEPS, CLEARLY APART. The first pass had canvas #0B0E17 and paper
-     #141926 — nine points of lightness between the page and a card, which is
-     nothing once the bloom is behind them. Surfaces are the only depth cue a
-     flat dark theme has, so they have to be legible steps rather than shades
-     of the same idea. */
-  --cream:   #080B14;   /* canvas: blue-black, not neutral black */
+  /* Canvas, paper and raised surfaces kept clearly apart; surface lightness is
+     the main depth cue in dark mode. */
+  --cream:   #080B14;
   --paper:   #161C2C;   /* raised surface */
   --ink:     #EEF0F6;
-  --ink-60:  #C6CCDC;   /* headroom for the bloom, which lifts the ground */
-  --ink-30:  #8D95AC;   /* was #737B92 — 4.66:1 bare, nothing left for a glow */
+  --ink-60:  #C6CCDC;
+  --ink-30:  #8D95AC;
 
   --yellow:  #E8C55C;
   --sky:     var(--blue-lt);
@@ -202,8 +144,6 @@
   --green:   #5FC98C;
   --violet:  #A78BFA;
 
-  /* Bands are a whisper over canvas. Colour blocks are the light theme's idea;
-     here the rhythm comes from the bloom behind everything. */
   --band-cream:  transparent;
   --band-sky:    transparent;
   --band-yellow: transparent;
@@ -223,29 +163,23 @@
   --skeleton-b:   #1E2537;
   --attribution:  rgba(11, 14, 23, .85);
 
-  /* The accent is light now, so what sits on it is dark. */
+  /* Dark text on the light accent. */
   --on-accent: #0B0E17;
 
   --line:        #29314A;
   --border-w:    1px;
   --border-w-sm: 1px;
-  /* Shadows do nothing on near-black. Depth comes from surface lightness and
-     from the bloom, the way it does in every one of the references. */
+  /* No shadows in dark mode. */
   --shadow:      none;
   --shadow-lg:   0 10px 30px rgb(0 0 0 / .45);
 
-  /* The rail stays dark in both themes — see the token's note in :root. */
+  /* The rail stays dark in both themes. */
   --rail-bg: #121724;
   --drawer-bg: #141A29;
   --now-bg: #1A2338;
   --now-fg: var(--ink);
 
-  /* THE BLOOM. Three soft lights low on the screen. This is the whole look of
-     the references: not a linear gradient across a panel, but coloured light
-     rising from below the fold and falling off before it reaches the top. */
-  /* Dark is where these references live: the light is the subject, not a tint
-     on a surface, so every layer roughly doubles. The hues come from the page
-     — only the burn changes here. */
+  /* Stronger glow in dark mode; hues still come from the page. */
   --glow-o1: .40;
   --glow-o2: .32;
   --glow-o3: .26;
@@ -253,15 +187,7 @@
   --glow-o5: .21;
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
 
-  /*
-     FOLDER TINTS. The first set were the light pastels darkened, and darkening
-     a pastel does not give you a dark colour — it gives you mud. Six of them
-     side by side read as six greys with a hint of something.
-
-     These are chosen as dark colours: more saturated than their light
-     counterparts, not less, because saturation is the only thing carrying the
-     hue once the lightness is gone.
-  */
+  /* Dark folder tints: more saturated than the light ones, not just darker. */
   --tint-0: #21386E;   /* blue */
   --tint-1: #4A3D12;   /* amber */
   --tint-2: #14432F;   /* green */
@@ -272,8 +198,7 @@
   --tint-plain: #1E2537;
 }
 
-/* Flatten the light theme's tactile flourishes: pressing a card shifted it
-   into its own shadow, which makes no sense once the shadow is gone. */
+/* No press-into-shadow effect without shadows. */
 :root[data-theme="dark"] a.card:active,
 :root[data-theme="dark"] button.card:active,
 :root[data-theme="dark"] .btn:active,
@@ -292,40 +217,28 @@
   box-shadow: none;
 }
 
-/* Rows grouped in one surface with hairline dividers, rather than every row
-   carrying its own outline. */
+/* Grouped rows share one surface with hairline dividers. */
 :root[data-theme="dark"] .tide-row + .tide-row,
 :root[data-theme="dark"] .catch-row + .catch-row {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
 
-/* The map is the one surface with imagery of its own, and a bright tile sheet
-   on a dark app is a torch in a dark room. */
+/* Dim the map tiles a little in dark mode. */
 :root[data-theme="dark"] #fishMap .leaflet-tile-pane {
   filter: brightness(.82) saturate(.85);
 }
 
-/* --- one light per page ----------------------------------------------------
-   Every screen gets its own colour, and NOT as branding: the hue is the
-   subject of the page. This app is about water and weather at a place through
-   the day, so the light behind each screen is the light that screen is about.
-   That is the difference between a palette and a decoration — you can tell
-   which page you are on with the text blurred out.
+/* --- per-page glow colours --------------------------------------------------
+     home        indigo into amber
+     map         cyan and deep blue
+     info        reef colours
+     conditions  cold blue with a warm edge
+     log         amber and gold
+     account     muted violet
+     settings    the most neutral
 
-     home        first light over the island — indigo lifting into amber
-     map         the water itself — cyan and deep blue, the only cool page
-     info        the reef, and the most colourful thing in this app by far
-     conditions  weather: cold front blue, with a warm edge where the sun is
-     log         the catch landed — amber and gold, the one warm page
-     account     quiet and personal, violet held well back
-     settings    machinery. Deliberately the dullest light in the set: a
-                 preferences screen that glows like the reef is a preferences
-                 screen shouting for attention it has not earned.
-
-   The attribute is on <html> because the bloom is painted on <html> — custom
-   properties inherit downwards, so setting this on <body> would leave the
-   canvas reading the default set forever.
+   Set on <html> because that's where the bloom is painted.
 --------------------------------------------------------------------------- */
 :root[data-page="home"] {
   --glow-1: 88 84 255;
@@ -364,47 +277,19 @@
 }
 
 /* --- the bloom -------------------------------------------------------------
-   Coloured light rising from below the fold — the shape every one of the
-   references uses. Radial rather than linear because they glow from a source
-   off the bottom of the screen, and a linear gradient has a direction but no
-   source.
+   Radial gradients from below the bottom edge, plus a noise layer on top.
 
-   IT LIVES ON <html>, NOT ON A PSEUDO-ELEMENT, and that is the whole story of
-   getting it to work. The obvious build is `body::before { position: fixed;
-   z-index: -2 }` and it renders nothing you can see: a negative z-index child
-   paints in step 2 of its stacking context while a non-positioned parent's
-   background paints in step 3, so the bloom went under body's own background.
-   Every computed style said the gradient was present, fixed, full-viewport and
-   correct; every pixel came back flat canvas.
+   Painted as <html>'s background rather than a fixed body::before: a negative
+   z-index pseudo-element ends up under body's own background and never shows.
 
-   The root's background cannot be painted over, because it IS the canvas. One
-   element, four layers, no stacking context to reason about.
+   background-attachment: fixed keeps the light still while content scrolls.
 
-   `background-attachment: fixed` is what makes it read as the room the app is
-   in rather than a picture printed on the page: scrolling moves the content
-   over the light instead of dragging the light along with it.
+   The sources are spread along the bottom edge instead of stacked; stacked,
+   they add up to a bright mid-tone where no text colour has enough contrast.
+   The radii reach ~110% of the viewport height and fade out at 100%, so the
+   light reaches the top third instead of sitting in a band at the bottom.
 
-   THE SOURCES ARE FANNED OUT, NOT STACKED. Piled on the same spot the five
-   layers summed into a hot mid-tone core, and a mid-tone is the one ground
-   where BOTH light and dark text lose contrast — in dark mode the pile got
-   bright enough that no text colour, white included, could clear 4.5:1 on it.
-   Spread across the bottom edge each source keeps its own colour at full
-   strength and the composite peak drops. Saturation was never the problem;
-   overlap was.
-
-   THE RAMP IS LONG ON PURPOSE, and getting this wrong is what made the first
-   two attempts read as a stripe along the bottom no matter how far the alpha
-   was pushed. A radial centred at 118% with a 72% radius that goes transparent
-   at 70% of that radius has died by 68% down the screen — no amount of opacity
-   turns a band into atmosphere, because the geometry had already decided where
-   the colour ends. These reach ~110% of the viewport height and ramp to
-   transparent at 100% of the radius, so the light climbs into the top third
-   the way it does in every one of the references.
-
-   The grain is the topmost layer and its alpha is baked into the SVG, because
-   a background layer cannot carry its own opacity. Without it the wide colour
-   ramps band visibly on an OLED phone — 300 bytes of feTurbulence breaks the
-   bands up, and a tiling PNG would not be 300 bytes.
+   The noise SVG (alpha baked in) prevents banding on OLED screens.
 --------------------------------------------------------------------------- */
 html {
   background-color: var(--cream);
@@ -418,7 +303,7 @@ html {
   background-attachment: fixed;
   background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
-/* Body must stay clear, or it paints the canvas out again. */
+/* Transparent so the bloom on <html> shows. */
 body { background-color: transparent; background-image: none; }
 
 * { box-sizing: border-box; }
@@ -426,10 +311,8 @@ body { background-color: transparent; background-image: none; }
 html, body {
   margin: 0;
   padding: 0;
-  /* NO `background` SHORTHAND HERE. It resets background-image to none, and
-     this rule comes after the bloom block — so the shorthand was quietly
-     deleting the gradient every time, while the computed styles further up
-     still looked correct. The canvas colour is set with the bloom, on <html>. */
+  /* Don't use the `background` shorthand here; it would reset the bloom's
+     background-image. The canvas colour is set on <html> with the bloom. */
   color: var(--ink);
   font-family: var(--font);
   -webkit-text-size-adjust: 100%;
@@ -468,9 +351,7 @@ a { color: inherit; }
   display: block;
 }
 
-/* Modern icons. Everything .pixel gets except the pixelation — they are drawn
-   with curves and a 2px stroke, and snapping those to a grid is the one thing
-   that would make them look like a mistake rather than a choice. */
+/* Modern icons: like .pixel but without pixelated rendering. */
 .ico { display: block; }
 
 /* --- top bar ------------------------------------------------------------- */
@@ -480,11 +361,8 @@ a { color: inherit; }
   background: var(--cream);
   border-bottom: var(--border-w) solid var(--line);
 }
-/* Home only. Everywhere else the page's own <h1> says where you are, in type
-   twice the size, so the bar is a second title above the real one — and on a
-   phone that is 68px of a screen that has none to spare. The element stays in
-   the DOM: --topbar-h is measured from it, and a bar that is display:none
-   measures 0, which is exactly what the map and the folder pile want. */
+/* Top bar only on Home. Kept in the DOM (not display:none) so --topbar-h
+   measures 0 on other pages. */
 body.no-topbar .topbar { display: none; }
 
 .topbar__inner {
@@ -600,16 +478,14 @@ a.card, button.card {
   text-decoration: none; cursor: pointer; width: 100%;
 }
 
-/* Micro-interactions. Everything animated here is transform/opacity only, so
-   it stays on the compositor — important on the species grid, where 40 cards
-   are on screen and anything triggering layout would stutter while scrolling. */
+/* Micro-interactions: transform/opacity only so they stay on the compositor. */
 @media (prefers-reduced-motion: no-preference) {
   a.card, button.card, .btn, .chip, .icon-btn, .gallery__item, .zone-pin {
     transition: transform .14s ease, box-shadow .14s ease,
                 background-color .14s ease, border-color .14s ease;
   }
 
-  /* Pointer devices only — :hover on touch sticks after a tap. */
+  /* Pointer devices only; :hover sticks on touch. */
   @media (hover: hover) {
     a.card:hover, button.card:hover {
       transform: translateY(-2px);
@@ -622,8 +498,7 @@ a.card, button.card {
 
   .species-card__art svg { transition: transform .18s ease; }
 
-  /* Freshly rendered lists ease in rather than snapping. One animation on the
-     container, not per card, so a 40-item grid costs the same as a 4-item one. */
+  /* Lists fade in as a whole, not per card. */
   .grid { animation: list-in .22s ease both; }
 }
 
@@ -654,7 +529,7 @@ a.card:active, button.card:active {
 }
 .species-card__art svg { width: 100%; max-width: 150px; height: auto; }
 
-/* Angled hero art on the detail sheet — needs more room than a card thumb. */
+/* Angled hero art on the detail sheet. */
 .species-card__art--hero {
   min-height: 200px;
   margin-bottom: 16px;
@@ -664,8 +539,7 @@ a.card:active, button.card:active {
 
 .species-card__sci { font-style: italic; font-size: 12.5px; font-weight: 700; color: var(--ink-60); }
 
-/* Real reference photo. Hidden until one loads, so a species with no free
-   image simply shows the pixel art with no empty slot. */
+/* Reference photo, hidden until it loads. */
 .photo {
   margin: 0;
   border: var(--border-w) solid var(--line);
@@ -689,8 +563,7 @@ a.card:active, button.card:active {
   border-top: var(--border-w-sm) solid var(--line);
   background: var(--paper);
 }
-/* Reference gallery on the detail sheet — several angles, since a fish in the
-   hand looks nothing like one on a reef. */
+/* Photo gallery on the detail sheet. */
 .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 @media (min-width: 560px) { .gallery { grid-template-columns: repeat(4, 1fr); } }
 
@@ -713,9 +586,7 @@ a.card:active, button.card:active {
 }
 .gallery__item:active { transform: translate(1px, 1px); }
 
-/* Any class that sets `display` outranks the UA's [hidden] { display: none },
-   so hiding an element by attribute silently does nothing. Restate it once,
-   globally, rather than remembering per component. */
+/* Classes that set `display` override [hidden], so restate it globally. */
 [hidden] { display: none !important; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -726,10 +597,7 @@ a.card:active, button.card:active {
   border: var(--border-w-sm) solid var(--line); background: var(--paper);
   white-space: nowrap;
 }
-/* Soft tints with dark text, not accent fills with white.
-   --on-accent went white when the accents became dark blue, which left the
-   pale chips (yellow, sky) at 1.2:1 — invisible. The tints below are backdrops
-   for near-black text and every one clears 4.5:1. */
+/* Light tints with dark text (all above 4.5:1). */
 .chip--local  { background: #F5EFD2; color: #4A3E12; border-color: #E7DCAE; }
 .chip--target { background: #DFEDE4; color: #22503A; border-color: #C7DFD1; }
 .chip--family { background: var(--blue-lt); color: var(--blue-dk); border-color: #D3DAEE; }
@@ -753,9 +621,7 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
   box-shadow: var(--shadow); cursor: pointer; text-decoration: none;
 }
 .btn:active { transform: scale(.97); }
-/* One strong colour, used for the thing you are meant to press. The old
-   palette made this gold; on blue-and-off-white a gold button is the loudest
-   thing on a calm page and it is not the most important. */
+/* Primary button. */
 .btn--primary {
   background: var(--blue); color: var(--on-accent);
   border-color: var(--blue);
@@ -781,23 +647,15 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
 }
 :root[data-theme="dark"] .btn--provider { background: var(--paper); }
 
-/* The "sign up" action — visually distinct from the neutral log-in button,
-   the way a suggested choice is highlighted in a confirm dialog. */
+/* Sign-up button, highlighted as the suggested action. */
 .btn--suggest {
   background: var(--green);
   color: var(--on-accent);
 }
 
-/* Floating labels.
-   The label starts inside the input, acting as the placeholder, and lifts to
-   the top of the box once the field is focused or has content. Uses a real
-   <label for> rather than a placeholder attribute, so it stays announced to
-   screen readers and survives autofill — a placeholder-only field is
-   invisible to assistive tech and to anyone who has already started typing.
-
-   The input carries placeholder=" " (one space) purely so :placeholder-shown
-   can be used to detect emptiness; there is no CSS selector for "input is
-   empty" otherwise. */
+/* Floating labels: the <label> sits inside the input and moves up on focus
+   or when filled. Inputs use placeholder=" " so :placeholder-shown can
+   detect an empty field. */
 .float {
   position: relative;
   margin-bottom: 14px;
@@ -853,11 +711,7 @@ button.chip[aria-pressed="true"] { background: var(--invert-bg); color: var(--in
 .field > label { font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-60); }
 .field__hint { font-size: 12px; font-weight: 600; color: var(--ink-60); }
 
-/* Every text-like input, by exclusion rather than by listing types.
-   The previous version enumerated text/number/date/password/search — and
-   type="email" was simply missing, so it rendered unstyled: no border, no
-   padding, and dark because color-scheme applies to native controls. Opting
-   out the few non-text types means the next one added is styled by default. */
+/* All text-like inputs (by excluding non-text types, so new ones are covered). */
 input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]),
 select, textarea {
   font-family: inherit; font-size: 15px; font-weight: 700;
@@ -873,10 +727,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- conditions ---------------------------------------------------------- */
 
-/* The one card that inverts on purpose: in light it is the dark slab the
-   temperature sits on. In dark there is nothing to invert TO — a light slab in
-   a dark room is a hole in the page — so it becomes a raised surface like every
-   other card and the accent does the work. */
+/* Dark card in light mode; in dark mode it's a normal raised surface. */
 .now-card {
   background: var(--now-bg); color: var(--now-fg);
   border: var(--border-w) solid var(--line); border-radius: var(--radius);
@@ -952,10 +803,8 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- identify ------------------------------------------------------------ */
 
-/* One box, three states, switched by data-mode: the placeholder, the live
-   viewfinder, the frozen still. Stacking them in a grid cell rather than
-   swapping innerHTML is what keeps the box from collapsing to nothing and
-   snapping back between states. */
+/* Camera box with three states via data-mode (placeholder, live, still),
+   stacked in one grid cell so the box doesn't resize. */
 .identify__stage {
   position: relative;
   background: var(--art-bg);
@@ -976,8 +825,6 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 #camView {
   width: 100%; max-height: 420px;
-  /* COVER, not contain. A viewfinder with letterbox bars reads as a broken
-     video; the guide box below is what tells you where the crop is. */
   object-fit: cover;
   display: block;
   background: #000;
@@ -988,8 +835,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   border-radius: calc(var(--radius-sm) - 4px);
 }
 
-/* The framing guide: fill this, side-on. Only up while the camera is live —
-   over a frozen still it would be telling you to fix a photo already taken. */
+/* Framing guide, only while the camera is live. */
 .identify__guide {
   place-self: stretch;
   display: none;
@@ -1014,9 +860,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .identify__start { flex: 1; }
 
-/* A round shutter, because that is what a shutter looks like everywhere else a
-   camera appears. A rectangle saying "Take photo" under a live viewfinder
-   reads as a form control and gets hunted for. */
+/* Shutter button. */
 .identify__shutter {
   width: 64px; height: 64px; flex: none;
   border-radius: 50%;
@@ -1037,8 +881,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .identify__shutter:disabled { opacity: .5; cursor: default; }
 .identify__shutter:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 
-/* Quieter than the shutter and always present — a second way in, not a rival
-   to the primary one. */
+/* Upload button. */
 .identify__upload {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; margin-top: 10px; padding: 10px 14px;
@@ -1056,8 +899,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   .identify__shutter, .identify__shutter span { transition: none; }
 }
 
-/* The identified species, art beside the name. Stacks on a narrow phone so
-   the sprite never squeezes the scientific name into two characters a line. */
+/* Result: art beside the name, stacked on narrow screens. */
 .verdict__head { display: grid; gap: 14px; align-items: center; }
 .verdict__art {
   background: var(--art-bg);
@@ -1072,8 +914,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- sync & connected accounts ------------------------------------------- */
 
-/* One line under the log heading. Quiet by default — it only earns attention
-   when something is wrong, so only the warn state gets a colour. */
+/* Sync status line; only the warn state is coloured. */
 .sync-line {
   margin: 12px 0 0;
   font-size: 12.5px; font-weight: 700;
@@ -1096,13 +937,8 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 /* --- info page ----------------------------------------------------------- */
 
-/* Three-way switch between Fishes, Gear and Zones. A segmented control rather
-   than chips: these are mutually exclusive views, not filters, and the shared
-   track makes that obvious at a glance. */
-/* --- Info categories, as bookmarks ---------------------------------------
-   Stacked cards that overlap like tabs in a filing box: the selected one
-   lifts clear and shows its count, the others tuck behind. It reads as three
-   places rather than three settings, which is what they are. */
+/* Fishes / Gear / Zones switch. */
+/* --- Info categories as bookmark tabs ------------------------------------ */
 
 .bookmarks { display: flex; flex-direction: column; }
 .bookmark {
@@ -1115,7 +951,6 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   border-radius: var(--radius-sm);
   color: var(--ink);
   background: var(--sand-lt);
-  /* Each tucks under the one above, so the stack reads as depth. */
   margin-top: -10px;
   transition: transform .3s cubic-bezier(.34,1.2,.5,1), margin .3s cubic-bezier(.34,1.2,.5,1),
               background-color .25s ease, color .25s ease, box-shadow .25s ease;
@@ -1129,7 +964,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   transition: color .25s ease;
 }
 
-/* The chosen one comes to the front and takes the strong colour. */
+/* Selected tab. */
 .bookmark[aria-selected="true"] {
   background: var(--blue);
   color: var(--on-accent);
@@ -1140,7 +975,6 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 .bookmark[aria-selected="true"] .bookmark__count { color: rgb(255 255 255 / .72); }
 .bookmark:not([aria-selected="true"]):active { transform: scale(.99); }
 
-/* Stacking order so each really does sit under the one above it. */
 .bookmark:nth-child(1) { z-index: 3; }
 .bookmark:nth-child(2) { z-index: 2; }
 .bookmark:nth-child(3) { z-index: 1; }
@@ -1148,10 +982,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) { .bookmark { transition-duration: .01ms; } }
 
-/* Search box and camera on one line. They ask the same question — which fish
-   is this — one from a name and one from a picture, so they read as a pair.
-   The camera is NOT in the segmented control above: that row is the reference
-   categories you browse, and a mode that takes a photo is not one of those. */
+/* Search box and camera button on one row. */
 .search-row { display: flex; align-items: stretch; gap: 8px; }
 .search-row input { min-width: 0; }
 .search-row__cam {
@@ -1168,8 +999,6 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
   transition: background .16s ease, transform .16s ease;
 }
 .search-row__cam:active { transform: scale(.96); }
-/* Pressed reads as "this mode is on" — the same signal a selected tab gives,
-   since with the search box hidden it is the only thing left saying so. */
 .search-row__cam[aria-pressed="true"] {
   background: var(--sky-deep);
   border-color: var(--line);
@@ -1182,18 +1011,15 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .segmented__icon { display: block; height: 30px; }
 .segmented__icon svg { width: auto; height: 30px; }
-/* Unselected icons stay muted so the chosen tab reads first. */
 .segmented__btn[aria-selected="false"] .segmented__icon { opacity: .5; }
 
-/* "Also matching: 3 in Gear" — a search that finds nothing on this tab but
-   plenty on another should say so rather than look like a dead end. */
+/* "Also matching: 3 in Gear" hint for empty searches. */
 .info-elsewhere {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   margin: 0 0 20px;
   font-size: 13px; font-weight: 800; color: var(--ink-60);
 }
 .info-elsewhere .chip { cursor: pointer; font-family: inherit; }
-/* .empty centres its contents; a flex row ignores text-align, so say it again. */
 .empty .info-elsewhere { justify-content: center; margin-bottom: 16px; }
 
 .gear-card { position: relative; overflow: hidden; text-align: left; }
@@ -1232,7 +1058,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .zone-card__art svg { width: 100%; max-width: 140px; height: auto; }
 .zone-card__type { text-transform: capitalize; }
-/* Blurbs vary from one line to five; clamping keeps a row of cards even. */
+/* Clamp blurbs so cards line up. */
 .zone-card__blurb {
   display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
   -webkit-box-orient: vertical; overflow: hidden;
@@ -1250,7 +1076,7 @@ input[type="file"] { font-family: inherit; font-size: 13px; font-weight: 700; }
 }
 .media-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-/* Play badge, so a clip is never mistaken for a still. */
+/* Play badge on video thumbnails. */
 .media-thumb--video::after,
 .catch-row__thumb img.is-video + .play-badge,
 img.is-video ~ .play-badge { content: ''; }
@@ -1310,27 +1136,15 @@ img.is-video ~ .play-badge { content: ''; }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
 /* --- map screen ----------------------------------------------------------
-   One screenful, no page scroll: conditions above, map below on a phone;
-   side by side on a wide window, the way a maps app lays out.
-
-   --topbar-h is measured in JS rather than guessed, because the brand text
-   wraps at narrow widths and a hardcoded value would leave the map either
-   short or overflowing. See app.js.
-*/
+   One screen, no page scroll: weather above the map on phones, side by side
+   on wide windows. --topbar-h comes from app.js. */
 body:has(.map-screen) { padding-bottom: 0; }
 
 .map-screen {
-  position: relative;      /* the phone drawer positions against this */
+  position: relative;
   display: grid;
-  /* The map gets the whole screen. On a phone the weather is lifted out of
-     the flow into a drawer over the foot of it (below), so there is no second
-     row to size — which is also what stopped the old split from being a
-     compromise: the panel needed room for a forecast, the map needed room to
-     be a map, and on a short phone neither won. */
-  /* A slim row for the way home, then the map. The strip is a REAL row rather
-     than another floating pill: the map already carries four of those, and the
-     one control you must always be able to find is the one that should not be
-     hunted for among them. It costs ~40px and it replaces a 58px puck. */
+  /* Phone: the map fills the screen and the weather is a drawer over it. */
+  /* Back-to-home row above the map. */
   grid-template-rows: auto minmax(0, 1fr);
   height: calc(100dvh - var(--topbar-h, 68px) - var(--tab-space) - env(safe-area-inset-bottom, 0px));
   min-height: 460px;
@@ -1359,27 +1173,23 @@ body:has(.map-screen) { padding-bottom: 0; }
 .map-screen__back:active { transform: scale(.96); }
 .map-screen__back:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .map-screen__back svg { flex: none; }
-/* The place name, so the strip is not one lonely button in a bar of nothing. */
 .map-screen__where {
   margin: 0 0 0 auto; padding-right: 4px;
   font-size: 10px; font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; color: var(--ink-60);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Desktop keeps the side rail, so the way home is already on screen. */
+/* Not needed on desktop (the rail is visible). */
 @media (min-width: 900px) { .map-screen__top { display: none; } }
 
 .map-screen__info {
-  /* Out of the grid flow entirely, so #mapWrap fills the single row. */
+  /* Out of the grid flow so #mapWrap fills the row. */
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  z-index: 5;              /* over #mapWrap, which sets z-index 0 */
+  z-index: 5;
   max-height: 66%;
   padding: 0 12px 8px;
-  /* Its own token, not --band-sky. A band is a stripe of page that may be
-     transparent so the bloom shows; this is a panel that sits OVER the map and
-     has to hide it. Sharing one token made the drawer see-through the moment
-     the bands did. */
+  /* Opaque panel colour (bands are transparent). */
   background: var(--drawer-bg);
   border-top: var(--border-w) solid var(--line);
   border-radius: var(--radius) var(--radius) 0 0;
@@ -1388,21 +1198,17 @@ body:has(.map-screen) { padding-bottom: 0; }
   display: flex;
   flex-direction: column;
   gap: 5px;
-  /* Collapsed leaves --wx-peek showing: the grip and the place name. Measured
-     in JS from the real elements rather than guessed, because the place name
-     line wraps differently with a long name and a hardcoded value would
-     either clip it or leave a gap. */
+  /* Collapsed height (--wx-peek) is measured in JS. */
   transform: translateY(0);
   transition: transform .24s cubic-bezier(.22, .61, .36, 1);
 }
 .map-screen__info.is-collapsed {
   transform: translateY(calc(100% - var(--wx-peek, 56px)));
 }
-/* Mid-drag JS drives the transform directly; a transition would lag the finger. */
+/* No transition while dragging. */
 .map-screen__info.is-dragging { transition: none; }
 
-/* The pull handle. Sticky so it stays reachable when the drawer's own content
-   is scrolled — otherwise scrolling the forecast takes the grip away with it. */
+/* Drag handle; sticky so it stays reachable when the drawer scrolls. */
 .wx-grip {
   position: sticky; top: 0; z-index: 1;
   flex: none;
@@ -1413,7 +1219,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   width: calc(100% + 24px);
   border: 0; background: var(--drawer-bg);
   cursor: grab;
-  touch-action: none;      /* the drag is ours, not the browser's scroll */
+  touch-action: none;
 }
 .wx-grip:active { cursor: grabbing; }
 .wx-grip span {
@@ -1421,10 +1227,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   background: var(--ink-30);
 }
 .wx-grip:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: -4px; }
-/* Location on the left, the link through to tides on the right. Inline rather
-   than a full-width button below the forecast: on a 780px viewport that button
-   was the row that pushed the strip out of sight, and a text link costs nothing
-   vertically. */
+/* Place name on the left, tides link on the right. */
 .map-screen__bar {
   display: flex;
   align-items: baseline;
@@ -1434,8 +1237,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 .map-screen__info .eyebrow {
   margin: 0;
   text-align: left;
-  /* One line always: a wrapped place name grew the panel and pushed the map
-     out of alignment with the tab bar. */
+  /* Single line; wrapping would change the panel height. */
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1453,10 +1255,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 .map-screen__link:hover { text-decoration: underline; }
 
-/* The "you are reading another place's weather" marker. Sits between the
-   place name and the tides link, and is only in the flow while a zone is
-   selected — the label ellipsises to make room rather than the bar wrapping,
-   which would push the map out of line with the tab bar. */
+/* Marker shown while the weather is for a tapped zone. */
 .map-screen__reset {
   flex: none;
   display: grid;
@@ -1471,21 +1270,15 @@ body:has(.map-screen) { padding-bottom: 0; }
   cursor: pointer;
   color: var(--paper, #fff);
   background: var(--sky-deep);
-  /* Baseline alignment on a round button leaves it sitting low next to text. */
   align-self: center;
 }
 .map-screen__reset:hover { filter: brightness(1.15); }
 .map-screen__reset:focus-visible { outline: 2px solid var(--sky-deep); outline-offset: 2px; }
 
-/* The provider/updated line is useful on the Conditions page but is pure
-   overhead here, where every pixel is contested. */
+/* Hide the provider line on the map screen. */
 .map-screen__info #mapWeather .field__hint { display: none; }
 
-/* The full-size conditions card fills the whole 40% on a phone, pushing the
-   forecast and the tides button below the fold — so on this screen it is
-   condensed: smaller temperature, stats on ONE row of four rather than a
-   2x2 block, and a tighter advice pill. That reclaims roughly 100px, which
-   is what the compact forecast strip and the button need. */
+/* Compact weather card for the map screen. */
 .map-screen__info .now-card { padding: 10px; }
 .map-screen__info .now-card__temp { font-size: 28px; }
 .map-screen__info .now-card__desc { font-size: 13px; }
@@ -1501,10 +1294,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 .map-screen__info .advice { margin-top: 8px; padding: 5px 11px; font-size: 11.5px; }
 .map-screen__info .field__hint { margin: 0; font-size: 10.5px; }
 
-/* Swipeable weather deck: conditions and forecast side by side, one page
-   wide each. Scroll-snap gives the gesture, the momentum and the keyboard
-   behaviour for free — a JS drag implementation would have to reproduce all
-   three and would fight the panel's own scrolling. */
+/* Swipeable weather deck (conditions / forecast) using scroll-snap. */
 .wx-deck {
   display: flex;
   overflow-x: auto;
@@ -1513,7 +1303,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   scroll-behavior: smooth;
   overscroll-behavior-x: contain;
   gap: 8px;
-  /* The native bar would sit across the cards; the dots below say the same. */
+  /* Hide the scrollbar; the dots show position. */
   scrollbar-width: none;
 }
 .wx-deck::-webkit-scrollbar { display: none; }
@@ -1521,15 +1311,12 @@ body:has(.map-screen) { padding-bottom: 0; }
   flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: start;
-  /* Both pages fill the deck's height so swiping doesn't resize the panel.
-     The deck is as tall as its tallest page — without this the forecast card
-     floated in a short box and the layout jumped between pages. */
+  /* Both pages fill the deck height so swiping doesn't resize it. */
   display: flex;
   flex-direction: column;
 }
 .wx-deck__page > * { flex: 1 1 auto; }
 
-/* The strip sits centred in the taller box rather than pinned to the top. */
 .wx-deck__page .forecast {
   align-items: center;
   height: 100%;
@@ -1557,7 +1344,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   border-radius: 999px;
 }
 
-/* Zone detail lives in the sidebar on desktop, so it needs to scroll. */
+/* Desktop zone panel scrolls. */
 .zone-panel__head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin: 4px 0 10px;
@@ -1567,7 +1354,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 #zonePanel { padding-top: 6px; border-top: var(--border-w) solid var(--line); }
 
-/* Compact five-day strip — no condition label, no wind row, smaller icon. */
+/* Compact five-day strip. */
 .forecast--compact { gap: 3px; }
 .forecast--compact .fc-day { padding: 3px 2px; }
 .map-screen__info #mapForecast .card { padding: 6px; }
@@ -1576,14 +1363,11 @@ body:has(.map-screen) { padding-bottom: 0; }
 .forecast--compact .fc-day__p { font-size: 10px; }
 
 @media (min-width: 900px) {
-  /* Sidebar + map, like a maps app. 34/66 rather than a strict 40/60 — the
-     panel only needs to fit its cards; the map benefits from the rest. */
+  /* Desktop: sidebar + map. */
   .map-screen {
     grid-template-rows: minmax(0, 1fr);
     grid-template-columns: minmax(340px, 34%) minmax(0, 1fr);
   }
-  /* Back to a sidebar. The drawer is a phone answer to a phone problem —
-     a wide window has room for both and nothing to reclaim. */
   .map-screen__info {
     position: static;
     transform: none;
@@ -1595,9 +1379,8 @@ body:has(.map-screen) { padding-bottom: 0; }
     gap: 12px;
   }
   .wx-grip { display: none; }
-  /* The sidebar covers no part of the map, so nothing needs lifting. */
   .map-screen { --wx-visible: 0px; }
-  /* Room to stack on a wide window, so the deck stops being a carousel. */
+  /* Stack the weather cards on wide windows. */
   .wx-deck {
     display: block;
     overflow: visible;
@@ -1617,23 +1400,15 @@ body:has(.map-screen) { padding-bottom: 0; }
 
 /* --- map ----------------------------------------------------------------- */
 
-/* Leaflet's panes and controls run to z-index 1000. `isolation` traps them in
-   their own stacking context so they can't paint over the tab bar or a modal. */
+/* Leaflet uses z-indexes up to 1000; isolate them from the nav and sheets. */
 #mapWrap {
   position: relative;
   isolation: isolate;
   z-index: 0;
-  min-height: 0; /* let the grid row actually shrink it */
+  min-height: 0;
 
-  /* Every other surface on this screen is inset — the weather panel, the
-     cards inside it. The map was the one element running clean off the
-     window, which read as the layout having lost its edge rather than as a
-     deliberate full-bleed. The bottom stays flush: the tab bar is already a
-     hard edge there, and a gap above it would look like a gap, not a margin.
-     Absolutely-positioned children (the locate button, the zone hint) offset
-     from the padding box, so they come in with it — but that also means
-     anything measured from the TOP has to add the gutter back, or it floats
-     in the gap above the map instead of sitting on it. Hence the variable. */
+  /* Inset the map like the other panels, except at the bottom where it meets
+     the tab bar. --map-gutter is used to offset top-positioned children. */
   --map-gutter-top: 10px;
   padding: var(--map-gutter-top) 12px 0;
 }
@@ -1642,21 +1417,16 @@ body:has(.map-screen) { padding-bottom: 0; }
   height: 100%;
   width: 100%;
   background: var(--art-bg);
-  /* Rounded only where the gutter exists, so the corners the map still runs
-     into stay square and it doesn't look like a card floating half off. */
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   overflow: hidden;
 }
 
 @media (min-width: 900px) {
-  /* The left edge meets the sidebar's border — a real boundary, not a window
-     edge, so it stays flush and only the two window-facing sides get the
-     gutter. A little more of it here: there is more room to spend. */
   #mapWrap { --map-gutter-top: 14px; padding: var(--map-gutter-top) 16px 0 0; }
   #fishMap { border-radius: 0 var(--radius-sm) 0 0; }
 }
 
-/* Leaflet injects its own controls; keep them in the app's visual language. */
+/* Restyle Leaflet's controls. */
 .leaflet-container { font-family: var(--font); }
 .leaflet-control-zoom a {
   border: var(--border-w-sm) solid var(--line) !important;
@@ -1679,15 +1449,13 @@ body:has(.map-screen) { padding-bottom: 0; }
   cursor: pointer;
   transition: transform .12s;
 }
-/* Layer filters, floated over the top of the map. Centred: the zoom control
-   owns the top-left and the locate button the bottom-right, and squeezing a
-   third control against either was worse than using the empty middle. */
+/* Layer filters, centred over the top of the map. */
 .map-filters {
   position: absolute;
   top: calc(var(--map-gutter-top, 0px) + 10px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 800;            /* over Leaflet's panes, under its popups (1000) */
+  z-index: 800;            /* above Leaflet panes, below popups */
   display: flex;
   gap: 6px;
   padding: 4px;
@@ -1706,9 +1474,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   cursor: pointer; white-space: nowrap;
   transition: background .16s ease, color .16s ease;
 }
-/* The basemap switch. Its own group in the opposite corner from the zoom
-   control, so the top of the map reads left-to-right as: how close, what is
-   drawn on it, what it is drawn on. */
+/* Basemap switch. */
 .map-filters--base { left: auto; right: 12px; transform: none; }
 .map-filters__btn[aria-pressed="true"] { background: var(--sky-deep); color: var(--on-accent); }
 .map-filters__btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
@@ -1716,14 +1482,13 @@ body:has(.map-screen) { padding-bottom: 0; }
 .zone-pin:hover { transform: translateY(-2px) scale(1.06); }
 .zone-pin svg { width: 32px; height: auto; }
 
-/* Your own spots. Smaller than a zone pin and a hook rather than a fish, so
-   at a glance you can tell what the app knows about from what you added. */
+/* User spot markers. */
 .my-spot-pin {
   width: 34px; height: 34px;
   display: grid; place-items: center;
   background: var(--coral);
   border: var(--border-w) solid var(--line);
-  border-radius: 50% 50% 50% 6px;   /* a dropped-pin corner */
+  border-radius: 50% 50% 50% 6px;
   box-shadow: 2px 2px 0 var(--line);
   cursor: pointer;
   transition: transform .12s;
@@ -1731,11 +1496,10 @@ body:has(.map-screen) { padding-bottom: 0; }
 .my-spot-pin:hover { transform: translateY(-2px) scale(1.08); }
 .my-spot-pin svg { width: 22px; height: auto; }
 
-/* A long press puts up the naming popup; without this iOS also raises its own
-   text-selection callout over the top of it. */
+/* Suppress the iOS callout on long press. */
 #fishMap { -webkit-touch-callout: none; }
 .leaflet-container { -webkit-user-select: none; user-select: none; }
-/* ...but the one field the user is meant to type into needs it back. */
+/* Re-enable selection in the name field. */
 .spot-pop input { -webkit-user-select: text; user-select: text; }
 
 .spot-pop { min-width: 190px; font-family: var(--font); }
@@ -1750,7 +1514,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 .spot-pop__row { display: flex; gap: 8px; flex-wrap: wrap; }
 .spot-pop__row .btn { flex: 1 1 auto; text-align: center; text-decoration: none; }
 
-/* Leaflet's popup chrome is white and square-cornered; match the app instead. */
+/* Restyle Leaflet popups. */
 .spot-popup .leaflet-popup-content-wrapper {
   background: var(--paper);
   color: var(--ink);
@@ -1761,8 +1525,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 .spot-popup .leaflet-popup-content { margin: 12px 14px; }
 .spot-popup .leaflet-popup-tip { background: var(--paper); border: var(--border-w) solid var(--line); }
 
-/* "Centre on me" button. Sits above Leaflet's own controls (z-index 800) but
-   inside #mapWrap's isolated stacking context, so it can't cover the tab bar. */
+/* Locate button. */
 .map-locate {
   position: absolute; right: 12px; z-index: 900;
   bottom: calc(12px + var(--wx-visible, 0px));
@@ -1788,11 +1551,8 @@ body:has(.map-screen) { padding-bottom: 0; }
   box-shadow: 0 0 0 2px var(--line);
 }
 
-/* Both bottom controls ride above whatever the drawer is currently covering.
-   Without this the locate button ends up half-buried behind it — the drawer
-   would have taken away the control you press to find yourself. --wx-visible
-   is set by map.js on .map-screen and is 0 on a wide window, where the panel
-   is a sidebar and covers nothing. */
+/* Keep the bottom controls above the weather drawer (--wx-visible is set
+   by map.js). */
 .map-hint {
   position: absolute; left: 12px; z-index: 500;
   bottom: calc(12px + var(--wx-visible, 0px));
@@ -1805,15 +1565,8 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 
 /* --- page transitions ----------------------------------------------------- */
-/*
-   Cross-fade between routes via the View Transitions API. Browsers without it
-   swap instantly, which is the current behaviour — nothing to fall back to.
-
-   The top bar and tab bar get their own transition names so they are treated
-   as persistent elements rather than part of the page snapshot. Without this
-   they cross-fade against themselves on every navigation, which reads as a
-   flicker on the one part of the UI that never actually changes.
-*/
+/* Page cross-fades via the View Transitions API. The top bar and nav get
+   their own names so they don't fade on every navigation. */
 .topbar { view-transition-name: topbar; }
 .tabbar { view-transition-name: tabbar; }
 
@@ -1836,17 +1589,9 @@ body:has(.map-screen) { padding-bottom: 0; }
 
 /* --- tab bar ------------------------------------------------------------- */
 
-/* A floating island rather than a bar welded to the bottom edge. It sits above
-   the page with the canvas visible around it, which is what makes it read as
-   an object you could pick up rather than a strip of chrome. */
+/* Floating nav bar. */
 .tabbar {
   position: fixed; z-index: 50;
-  /* Anchored on its RIGHT edge, not centred. Identical position either way —
-     below 484px this resolves to a 12px inset on both sides, above it to the
-     same centring as before — but it decides which way the pill goes when it
-     retracts on the map. Centred, it shrank about its own middle and left the
-     + floating in the void; pinned right, it rolls TO the edge and parks
-     there, which is what "to the side" means and where a thumb already is. */
   left: auto;
   right: max(12px, calc((100% - 460px) / 2));
   transform: none;
@@ -1869,15 +1614,8 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 .tabbar a:active { transform: scale(.92); }
 
-/* The + . It IS the middle slot of the bar — a grid child like the tabs, not a
-   button floating over them — and it bulges up out of the row so the bar has a
-   high point instead of five things of equal weight.
-
-   The swell around it is the BAR's own shape (.tabbar::before), not a ring on
-   the button. A ring travels with the button and stays visible when the bar
-   rolls away; a bump belongs to the bar and leaves with it, which is what makes
-   the rolled state read as the nav retracting rather than the button growing a
-   collar. */
+/* The + button: the middle grid slot of the bar, raised above it. The bump
+   behind it is drawn by .tabbar::before. */
 .fab {
   position: relative; z-index: 2;
   justify-self: center; align-self: center;
@@ -1893,15 +1631,10 @@ body:has(.map-screen) { padding-bottom: 0; }
   transition: transform .28s cubic-bezier(.34,1.4,.5,1), box-shadow .2s ease,
               background-color .25s ease;
 }
-/* Compounded, not replaced — dropping the rise here would make the press look
-   like the button falling into the bar. */
 .fab:active { transform: translateY(calc(-1 * var(--fab-rise))) scale(.92); }
 .fab:focus-visible { outline: 3px solid var(--blue-dk); outline-offset: 3px; }
 
-/* The swell. A disc in the bar's colour centred on the +, poking above the top
-   edge. It paints over the bar's own hairline where they overlap — a pseudo-
-   element draws above its parent's border — so the silhouette comes out as one
-   shape rather than a circle laid on a pill. */
+/* The bump behind the + (paints over the bar's top border). */
 .tabbar::before {
   content: '';
   position: absolute; z-index: 0;
@@ -1915,15 +1648,6 @@ body:has(.map-screen) { padding-bottom: 0; }
 }
 
 /* --- the rolled nav ------------------------------------------------------ */
-/*
-   On the map the bar retracts into the + so the map gets the room, and the +
-   brings it back. The pill collapses toward its CENTRE rather than to one end,
-   because the + is the control that reopens it and a button that moves across
-   the screen when it closes is a button you have to hunt for.
-
-   Width is the animated property, not display or visibility, so the retract is
-   something you can watch happen and connect to the button you pressed.
-*/
 .tabbar {
   transition: width .38s cubic-bezier(.32,.72,.3,1),
               background-color .3s ease, border-color .3s ease,
@@ -1933,17 +1657,14 @@ body:has(.map-screen) { padding-bottom: 0; }
   transition: color .2s ease, transform .2s ease, opacity .18s ease;
 }
 
-/* Phone only. Above 900px the bar is a side rail on a window with room to
-   spare, and hiding the primary navigation to buy space that is not scarce is
-   a trade in the wrong direction. */
+/* Phone only. */
 @media (max-width: 899px) {
   body.is-nav-hidden .tabbar { display: none; }
 }
 
 .fab[aria-expanded="true"] { background: var(--ink); }
 
-/* Two bars that rotate into an x. Rotating the SAME shape is what sells it —
-   swapping one glyph for another reads as a flicker, not a movement. */
+/* Two bars that rotate into an x. */
 .fab__x { position: relative; display: block; width: 20px; height: 20px; }
 .fab__x i {
   position: absolute; left: 50%; top: 50%;
@@ -1955,10 +1676,7 @@ body:has(.map-screen) { padding-bottom: 0; }
 .fab[aria-expanded="true"] .fab__x i:first-child { transform: translate(-50%, -50%) rotate(135deg); }
 .fab[aria-expanded="true"] .fab__x i:last-child  { transform: translate(-50%, -50%) rotate(45deg); }
 
-/* The room the hidden bar gives back — all of it. Scoped to the body so
-   .map-screen's height and margin, both derived from --tab-space, grow
-   together. Zero, not a smaller number: retracting to a puck used to leave
-   58px plus its clear space parked over the map in exchange for nothing. */
+/* Hidden nav: reclaim its space. */
 @media (max-width: 899px) {
   body.is-nav-hidden { --tab-space: 0px; }
 }
@@ -2016,58 +1734,40 @@ body:has(.map-screen) { padding-bottom: 0; }
 .tabbar a[aria-current="page"] { color: var(--ink); }
 .tabbar a[aria-current="page"] svg { color: var(--blue); }
 
-/* The account tab has nowhere to go yet — say so rather than look broken. */
 .tabbar__soon { opacity: .45; cursor: default; }
 
-/* NOTE: everything below is AFTER the base .tabbar rules on purpose. A
-   media query does not raise specificity — `.tabbar a[aria-current]` outside
-   one and inside one are both (0,1,1), so source order decides. Placed above,
-   the rail's white-on-blue active row lost its colour to the phone bar's
-   --ink and came out near-black on blue at about 2:1. */
+/* Keep these after the base .tabbar rules: media queries don't add
+   specificity, so source order decides. */
 /* --- rail bits, hidden on the phone bar ---------------------------------- */
-/*
-   These live in the same <nav> as the tabs so there is one nav, one set of
-   links and one active state. On a phone the brand is in the top bar, the gear
-   is in the top bar, and the + holds the slot the Log link would want — so all
-   three sit out until there is a rail to put them in.
-*/
-/* Scoped through .tabbar on purpose: `.tabbar a` is (0,1,1) and would beat a
-   bare `.rail-only` (0,1,0), leaving the rail's links visible in the phone bar
-   — which is exactly what happened the first time. */
+/* Rail-only items (brand, settings, collapse) share the <nav> with the tabs. */
+/* Scoped through .tabbar to beat `.tabbar a`. */
 .tabbar .rail__head, .tabbar .rail__group,
 .tabbar .rail-only, .fab__label { display: none; }
 
 /* --- the desktop rail ---------------------------------------------------- */
-/*
-   Same breakpoint as the map's two-column split, deliberately: one width at
-   which the app stops being a phone, rather than two that disagree by 60px and
-   produce a layout nobody designed.
-*/
+/* Same breakpoint as the map's two-column layout. */
 @media (min-width: 900px) {
   :root {
     --rail-w: 236px;
     --rail-inset: 14px;
-    /* No bottom bar up here, so pages stop reserving room for one. */
+    /* No bottom bar on desktop. */
     --tab-space: 28px;
   }
 
   body {
     padding-bottom: 32px;
     padding-left: calc(var(--rail-w) + var(--rail-inset) * 2);
-    /* Custom properties do not animate, but the value they resolve to does —
-       so the page slides over as the rail narrows instead of jumping. */
     transition: padding-left .34s cubic-bezier(.32,.72,.3,1);
   }
   body.rail-collapsed { --rail-w: 74px; }
 
-  /* The brand moves into the rail, so the top bar keeps only what has nowhere
-     else to go — the region switcher and the gear — and sits right. */
+  /* The brand is in the rail, so the top bar only keeps the region picker
+     and settings. */
   .topbar__inner > .brand { display: none; }
   .topbar__inner { justify-content: flex-end; max-width: none; padding-right: 24px; }
   .topbar { border-bottom: 0; }
 
-  /* The content sits in its own panel, the way the reference does, rather than
-     bleeding into the window edge beside a rail that has a shape. */
+  /* Content in its own rounded panel next to the rail. */
   main { margin-right: var(--rail-inset); }
   main > .band:first-of-type { border-radius: var(--radius) var(--radius) 0 0; }
   main > .band:last-of-type  { border-radius: 0 0 var(--radius) var(--radius); }
@@ -2086,14 +1786,10 @@ body:has(.map-screen) { padding-bottom: 0; }
     border: 0;
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
-    /* x hidden, not auto: the labels are clipped as the rail narrows, and
-       `overflow-y: auto` alone would give the other axis a scrollbar to do it
-       with. */
     overflow-x: hidden; overflow-y: auto;
     transition: width .34s cubic-bezier(.32,.72,.3,1);
   }
-  /* The swell is a phone answer to a phone problem: there is no row here for
-     the + to bulge out of. */
+  /* No bump on the rail. */
   .tabbar::before { display: none; }
 
   .tabbar .rail__head, .tabbar .rail-only { display: flex; }
@@ -2104,14 +1800,9 @@ body:has(.map-screen) { padding-bottom: 0; }
     text-decoration: none; color: var(--cream);
     padding: 4px 8px 14px;
   }
-  /* Scoped through .tabbar: `.tabbar a svg` is (0,1,2) and outranks a bare
-     `.rail__mark svg` (0,1,1), which shrank the brand to the 20px meant for
-     nav icons. */
+  /* Scoped through .tabbar to beat `.tabbar a svg`. */
   .tabbar .rail__mark svg { width: 32px; height: auto; }
-  /* The mark draws itself in --blue, which on the rail's near-black panel is
-     all but invisible. The CSS `stroke` property beats the presentation
-     attribute the SVG sets inline, so the mark can be recoloured for this one
-     surface without the art module knowing where it is. */
+  /* Recolour the mark for the dark rail. */
   .tabbar .rail__mark svg [stroke] { stroke: var(--cream); }
   .rail__name {
     font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.15;
@@ -2121,14 +1812,10 @@ body:has(.map-screen) { padding-bottom: 0; }
     margin: 14px 0 6px; padding: 0 10px;
     font-size: 10px; font-weight: 800; letter-spacing: .16em;
     text-transform: uppercase;
-    /* Section headings, not links — deliberately quieter than the items under
-       them, and above 4.5:1 all the same. */
     color: rgb(246 244 234 / .55);
   }
   .rail__group:first-of-type { margin-top: 4px; }
 
-  /* A row, not a stack: at this size the label is the target and the icon is
-     recognition, which is the opposite of the phone bar. */
   .tabbar a {
     flex-direction: row; align-items: center; justify-content: flex-start;
     gap: 12px;
@@ -2142,10 +1829,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   .tabbar a:active { transform: none; background: rgb(246 244 234 / .12); }
   .tabbar a svg { width: 20px; height: 20px; }
 
-  /* The marker that says which one you are on: the app's one strong colour,
-     filling the row. A thin bar at the rail's edge was the first attempt and
-     the rail clips it — `overflow-y: auto` forces overflow-x to auto too, so
-     anything drawn outside the padding box is cut off. */
+  /* Active item. */
   .tabbar a[aria-current="page"] {
     background: var(--blue);
     color: var(--on-accent);
@@ -2153,13 +1837,10 @@ body:has(.map-screen) { padding-bottom: 0; }
   .tabbar a[aria-current="page"] svg { color: var(--on-accent); }
   .tabbar a[aria-current="page"]:hover { background: var(--blue); color: var(--on-accent); }
 
-  /* Brand first, then the thing you came to do, then the places you can go. */
   .rail__head { order: -2; }
   .fab {
     order: -1;
     width: auto; height: 44px;
-    /* stretch, not the `align-self: center` the phone bar sets — that is what
-       kept this a narrow pill floating in the middle of the rail. */
     align-self: stretch;
     border-radius: 14px;
     display: flex; align-items: center; justify-content: center; gap: 9px;
@@ -2176,7 +1857,6 @@ body:has(.map-screen) { padding-bottom: 0; }
   /* --- the foot ---------------------------------------------------------- */
 
   .rail__toggle {
-    /* Pushed to the bottom, which is where the rail ran out of things to say. */
     margin-top: auto;
     display: flex; align-items: center; gap: 12px;
     padding: 10px; border: 0; border-radius: 14px;
@@ -2186,8 +1866,6 @@ body:has(.map-screen) { padding-bottom: 0; }
     transition: color .2s ease, background-color .2s ease;
   }
   .rail__toggle::before {
-    /* A hairline above it, drawn as a pseudo-element so the gap belongs to the
-       button and moves with it rather than to whatever happens to be last. */
     content: '';
     position: absolute; left: 12px; right: 12px;
     margin-top: -13px; height: 1px;
@@ -2199,17 +1877,11 @@ body:has(.map-screen) { padding-bottom: 0; }
 
   /* --- collapsed --------------------------------------------------------- */
 
-  /* Labels go by clipping, not display:none. Width is what animates here, and
-     text that disappears on the first frame makes the panel look like it
-     emptied before it moved. */
-  /* :not(.rail__mark) — the brand mark is a <span> inside an <a>, so it matched
-     the label rule and collapsed to nothing along with the words. */
+  /* Collapsed rail: labels are clipped (not display:none) so the width animates. */
+  /* :not(.rail__mark): the brand mark is also a span inside a link. */
   .rail__name, .fab__label, .tabbar a span:not(.rail__mark), .rail__toggle span {
     white-space: nowrap;
-    /* max-width, not width: it animates from a real number to zero, where
-       `width: auto` has nothing to animate from. Fading alone was not enough —
-       an invisible label still takes its full width, so the icons centred
-       around it and sat left of the rail with the text clipped off the edge. */
+    /* max-width so it can animate to 0. */
     max-width: 220px; overflow: hidden;
     transition: opacity .22s ease .1s,
                 max-width .34s cubic-bezier(.32,.72,.3,1);
@@ -2223,7 +1895,6 @@ body:has(.map-screen) { padding-bottom: 0; }
     transition: opacity .12s ease,
                 max-width .34s cubic-bezier(.32,.72,.3,1);
   }
-  /* The gap belongs to a label that is no longer there. */
   body.rail-collapsed .tabbar a { gap: 0; }
 
   body.rail-collapsed .tabbar { padding-left: 9px; padding-right: 9px; }
@@ -2234,7 +1905,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   body.rail-collapsed .rail__head { gap: 0; }
   body.rail-collapsed .fab { gap: 0; }
 
-  /* The group headings become the dividers they were already acting as. */
+  /* Group headings become dividers. */
   body.rail-collapsed .rail__group {
     height: 1px; overflow: hidden;
     margin: 12px 8px; padding: 0;
@@ -2244,8 +1915,6 @@ body:has(.map-screen) { padding-bottom: 0; }
 
   /* --- polish ------------------------------------------------------------ */
 
-  /* The active row is the only place the rail uses the accent, so it can
-     afford to sit slightly proud of the panel. */
   .tabbar a[aria-current="page"] {
     box-shadow: 0 6px 16px rgb(43 69 147 / .45);
   }
@@ -2256,14 +1925,11 @@ body:has(.map-screen) { padding-bottom: 0; }
   .fab:hover { background: var(--blue-dk); }
 }
 
-/* The rail is taller than a short laptop window once every group is in it, so
-   it scrolls — but only then, and without a scrollbar cutting through the
-   rounded corner on the machines where it never needs to. */
+/* Scroll the rail on short windows, without a visible scrollbar. */
 @media (min-width: 900px) and (max-height: 620px) {
   .tabbar { padding-top: 12px; }
   .rail__head { padding-bottom: 8px; }
 }
-
 
 /* --- toast --------------------------------------------------------------- */
 
@@ -2282,9 +1948,8 @@ body:has(.map-screen) { padding-bottom: 0; }
 
 /* --- modal --------------------------------------------------------------- */
 
-/* Sheet slides up from the bottom over a dimming backdrop. --sheet-progress
-   is set live while dragging so the dim eases off as the sheet is pulled
-   away, which is what makes the gesture feel attached to your finger. */
+/* Bottom sheet over a dimming backdrop. --sheet-progress is set while
+   dragging. */
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 70;
   --sheet-progress: 0;
@@ -2305,12 +1970,10 @@ body:has(.map-screen) { padding-bottom: 0; }
   padding: 6px 16px calc(28px + env(safe-area-inset-bottom, 0px));
   transform: translateY(100%);
   transition: transform .28s cubic-bezier(.22, 1, .36, 1);
-  /* Momentum scrolling, and stop a scroll from chaining to the page behind. */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 
-  /* Keep the browser's default scrollbar from cutting across the rounded
-     corners. A slim, inset, rounded thumb sits inside the shape instead. */
+  /* Slim scrollbar inside the rounded corners. */
   scrollbar-width: thin;
   scrollbar-color: var(--ink-30) transparent;
   scrollbar-gutter: stable;
@@ -2323,15 +1986,12 @@ body:has(.map-screen) { padding-bottom: 0; }
 .sheet::-webkit-scrollbar-thumb {
   background: var(--ink-30);
   border-radius: 999px;
-  /* Transparent border + background-clip keeps the thumb narrow and away from
-     the sheet's edge, so it never touches the rounded corner. */
   border: 3px solid transparent;
   background-clip: content-box;
 }
 .sheet::-webkit-scrollbar-thumb:hover { background: var(--ink-60); background-clip: content-box; }
 
-/* Grab handle — the ONLY drag target. Making the whole sheet draggable would
-   fight every attempt to scroll a long species card. */
+/* Grab handle (the only drag target). */
 .sheet__grip {
   display: block;
   width: 100%;
@@ -2339,7 +1999,7 @@ body:has(.map-screen) { padding-bottom: 0; }
   border: 0;
   background: none;
   cursor: grab;
-  touch-action: none; /* let the pointer handlers own the gesture */
+  touch-action: none;
   position: sticky; top: 0; z-index: 2;
 }
 .sheet__grip:active { cursor: grabbing; }
@@ -2391,7 +2051,6 @@ body.is-sheet-open {
 }
 .version-history[open] > summary { margin-bottom: 6px; }
 
-/* Numbers would fight the version chips, which already say which release. */
 .version-list { list-style: none; margin: 0; padding: 0; }
 
 .version-item { padding: 14px 0; border-top: var(--border-w-sm) solid var(--line); }
@@ -2406,9 +2065,7 @@ body.is-sheet-open {
   color: var(--ink-60);
 }
 
-/* The version number is the easter egg's door. It gets a pointer and stops
-   text selection turning seven taps into a highlighted blue smear, but no
-   other affordance — a button that announced itself would not be hidden. */
+/* Version number (tap target for the easter egg). */
 #appVersion { cursor: pointer; -webkit-user-select: none; user-select: none; }
 
 .retro-field label .chip { margin-left: 8px; vertical-align: middle; }
@@ -2420,17 +2077,9 @@ body.is-sheet-open {
 
 /* --- species photos ------------------------------------------------------- */
 
-/* The photo fills the same frame the sprite did — same ratio, same chrome — so
-   the card layout is untouched and only its contents changed.
-
-   `contain`, not `cover`, and the two are the same thing for almost every
-   photo: the pipeline already crops to 4:3 centred on the fish, so there is
-   nothing left to fit. It matters for the handful too long to frame that way,
-   which ship whole — there `contain` letterboxes them and `cover` would take
-   the tail off, which is the one outcome worth avoiding.
-   The backing is the app's own art panel, not white: these are photographs
-   with their own backgrounds now, and white bars around an underwater shot
-   read as a mistake rather than a frame. */
+/* Species photo in the same frame as the sprite. `contain` because the
+   pipeline already crops to 4:3; the few uncropped ones get letterboxed
+   instead of losing the tail. */
 .species-photo {
   display: block;
   width: 100%;
@@ -2441,10 +2090,7 @@ body.is-sheet-open {
 }
 .species-photo--hero { aspect-ratio: 4 / 3; }
 
-/* Deliberately not a fish. A borrowed silhouette here would read as "this is
-   what it looks like" on a card that otherwise carries photographs, and being
-   confidently wrong about the fish in your hand is the one failure this app
-   must not have. */
+/* Placeholder when there's no photo. */
 .species-photo--none {
   display: grid;
   place-items: center;
@@ -2460,7 +2106,7 @@ body.is-sheet-open {
   color: var(--ink-60); text-align: center; padding: 0 8px;
 }
 
-/* CC BY and CC BY-SA both require the photographer be named. */
+/* Photo credit (required by CC BY / BY-SA). */
 .photo-credit {
   margin: 6px 0 14px;
   font-size: 11px; font-weight: 700;
@@ -2469,9 +2115,7 @@ body.is-sheet-open {
 .photo-credit a { color: var(--ink-60); }
 
 /* --- name hierarchy -------------------------------------------------------
-   Local name first and largest. Somebody here knows "maya-maya"; "mangrove
-   red snapper" is the name in the book. The English and the Latin stay
-   because they are what you need to look it up — just not to recognise it. */
+   Local name first and largest, then English and scientific names. */
 
 .species-card__names { display: flex; flex-direction: column; gap: 1px; }
 .species-card__lead {
@@ -2500,14 +2144,9 @@ body.is-sheet-open {
   font-size: 14px; font-weight: 700; color: var(--ink-60);
 }
 
-/* Which language the headline name is, since it is now the headline.
-   NOT --band-violet: the band tints are near-black in dark mode and --on-accent
-   is near-black in both, so that pairing rendered an invisible chip. The accent
-   is vivid in both themes, which is what --on-accent is designed to sit on. */
+/* Language chip for the headline name. */
 .chip--lang { background: #E7E3F4; color: #3B3168; border-color: #D6D0EC; }
 
-/* The "why do I need an account" line in the sign-in prompt. Short on purpose:
-   it answers the question the popup raises and then gets out of the way. */
 .spot-pop__why {
   margin: 0 0 10px;
   font-size: 12.5px; font-weight: 600; line-height: 1.5;
@@ -2516,20 +2155,12 @@ body.is-sheet-open {
 }
 
 /* --- opening a folder: the card turns over ------------------------------- */
-/*
-   Outside the media query and outside .deck on purpose: this is appended to
-   <body>, because the deck is overflow:hidden inside a pinned page and a card
-   cannot leave a box that clips it.
-
-   Two faces, one rotated 180deg behind the other, both with backface-visibility
-   hidden so only the one facing you paints. The wrapper grows; the inner turns.
-*/
+/* Folder flip animation. Appended to <body> because the deck clips its
+   contents. Two faces with backface-visibility hidden; the wrapper scales
+   and the inner element rotates. */
 .deck-flip {
   position: fixed;
   z-index: 70;
-  /* Centre, not the corner: the zoom is uniform and moves the card's middle to
-     the screen's middle, so both parts of the transform share an origin and
-     neither has to correct for the other. */
   transform-origin: 50% 50%;
   will-change: transform, opacity;
   pointer-events: none;
@@ -2545,62 +2176,32 @@ body.is-sheet-open {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-/* The back is a flat panel of the folder's own colour. It is what you are
-   looking at while the card is being stretched to the size of a screen, which
-   is why the stretch never shows. */
 .deck-flip__back {
   transform: rotateY(180deg);
   border-radius: 18px;
 }
-/*
-   The clone, put back under its own control.
-
-   Every one of these is undoing something .dcard does for life in the deck:
-   it is absolutely positioned against the deck, sized short of it to leave room
-   for the bills, given a transform by paint() and faded by the swipe. Two
-   classes deep so these win — `.dcard` and `.deck-flip__front` are both one
-   class, and the deck's rules come later in the file.
-*/
+/* Undo the deck positioning on the cloned card (two classes deep so these
+   win over .dcard). */
 .deck-flip .dcard {
   position: static;
   width: 100%; height: 100%;
   transform: none;
   opacity: 1;
 }
-/* The float is for a card sitting in the line. Half a degree of rotation on
-   something scaling by six reads as a wobble. */
 .deck-flip .dcard__float { animation: none; }
-/* The body fades out for cards that are not live; the one being opened is. */
 .deck-flip .dcard__body > * { opacity: 1; }
 
 /* --- info: the folder deck ----------------------------------------------- */
-/*
-   Phone only. A line of folders you swipe through — nothing is dismissed, you
-   move ALONG them.
-
-   THE LINE COMES FROM THE TOP. The folder you are reading sits at the bottom of
-   the deck; the ones still to come stack above it, each showing its bill. One
-   step per bill height, so every upcoming folder shows its whole tab — name and
-   picture — and nothing else. A smaller step would show a slice of a label,
-   which is worse than showing none.
-
-   Positions are written by JS every scroll frame (transform, opacity, z-index —
-   compositor properties only). This file owns the SHAPE and the IDLE FLOAT.
-*/
+/* Folder deck (phone only). Upcoming folders stack above the current one,
+   one tab height apart. card-deck.js sets transform/opacity/z-index per
+   frame; this handles layout and the idle float. */
 @media (max-width: 899px) {
   .chips#familyFilters { display: none; }
 
-  /* Read once, then it is 60px between you and the folders. */
   .band--yellow .subtitle { display: none; }
 
   /* --- the three categories, under the search box ------------------------- */
-  /*
-     Small pills rather than the stacked bookmark cards. Three things you switch
-     between are a control, not a table of contents, and 150px of bookmark to say
-     so was the deck's screen space being spent on furniture.
-  */
-  /* flex-direction: row is not redundant — the base .bookmarks is a column
-     (the desktop bookmark stack), and `display: flex` alone inherits it. */
+  /* Small pill tabs on phones. */
   .bookmarks {
     display: flex; flex-direction: row; gap: 6px;
   }
@@ -2618,14 +2219,11 @@ body.is-sheet-open {
     transform: none;
   }
   .bookmark__icon { display: none; }
-  /* The count goes. The card you land on says how many are in it, and three
-     numbers in the switcher were paying for that twice. */
   .bookmark__count { display: none; }
   .bookmark__label {
     font-size: 12.5px; font-weight: 800; letter-spacing: -.01em;
   }
 
-  /* The title, in the same widget as the search box. */
   .info-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .info-head .display { margin: 0; font-size: 30px; line-height: 1; }
   .info-head .eyebrow {
@@ -2633,15 +2231,9 @@ body.is-sheet-open {
     font-size: 9.5px; letter-spacing: .12em;
   }
 
-  /* --- a page that does not scroll under the gesture ---------------------- */
-  /*
-     While the deck is up, Info is exactly one screen: header, then deck,
-     nothing below. Any page scroll here competes with the swipe.
-
-     MAIN is the column, not the first band. The header and the deck are two
-     sibling <section>s; sizing the first one to the viewport just pushes the
-     second one off the bottom.
-  */
+  /* --- no page scroll while the deck is up -------------------------------- */
+  /* While the deck is shown, Info is exactly one screen tall (no page scroll
+     to fight the swipe). */
   html.deck-locked, body.deck-locked { height: 100%; overflow: hidden; }
   body.deck-locked main {
     height: calc(100dvh - var(--tab-space) - env(safe-area-inset-bottom, 0px));
@@ -2668,14 +2260,8 @@ body.is-sheet-open {
 
   /* --- the deck ----------------------------------------------------------- */
 
-  /* ISOLATION IS load-bearing HERE, not decoration. card-deck.js writes each
-     folder a z-index of up to 1000 so the pile stacks in depth order — but
-     those numbers were only ever meant to order the cards AGAINST EACH OTHER.
-     In the root stacking context they also outranked the nav (50), the quick
-     actions (51) and their veil (49), so an open + menu appeared UNDER the
-     folders. `isolation: isolate` makes the deck its own context: the 1000s
-     stay meaningful inside it and the whole pile competes with the rest of the
-     app as one layer. Same trick as #mapWrap uses to pen in Leaflet's panes. */
+  /* isolation: card-deck.js uses z-indexes up to 1000, which would otherwise
+     beat the nav and the + menu. */
   .deck {
     position: relative; flex: 1; min-height: 230px; width: 100%;
     isolation: isolate;
@@ -2683,7 +2269,7 @@ body.is-sheet-open {
   }
   .deck__cards { position: absolute; inset: 0 0 22px; }
 
-  /* Transparent, on top, and the only thing that scrolls. */
+  /* Invisible scroller on top that receives the swipes. */
   .deck__rail {
     position: absolute; inset: 0 0 22px; z-index: 10;
     overflow-y: scroll;
@@ -2698,42 +2284,26 @@ body.is-sheet-open {
   .deck__rail > i { display: block; height: 100%; scroll-snap-align: start; }
   .deck__rail:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 22px; }
 
-  /* Anchored to the BOTTOM: the card you are reading is the lowest one, and
-     everything still to come stacks above it. */
+  /* Anchored to the bottom; upcoming cards stack above. */
   .dcard {
     position: absolute; left: 0; right: 0; bottom: 0;
-    /* Short of the deck by three steps, so the three bills above have room.
-       The fourth was 42px the photographs needed more. */
+    /* Leaves room for three tabs above. */
     height: calc(100% - 126px);
     pointer-events: none;
     will-change: transform, opacity;
   }
 
-  /*
-     THE FOLDER IS TWO ROUNDED BOXES, NOT ONE CLIPPED ONE.
-
-     It was a single element with a clip-path polygon, which cuts SQUARE corners
-     wherever the path turns — border-radius is applied before the clip, so the
-     bill's corners came out sharp against rounded everything-else, and the
-     drop-shadow traced that mismatch. A bill and a body sharing one background,
-     each rounded on the corners that are actually outside edges, gives the same
-     silhouette with every corner correct. Their shared edge is invisible
-     because it is the same colour meeting itself.
-
-     The shadow lives on the WRAPPER, so it follows the union of the two rather
-     than outlining each.
-  */
+  /* A folder is two rounded boxes (tab + body) with the same background,
+     rather than one clip-path shape, which can't have rounded corners. The
+     shadow is on the wrapper so it follows both. */
   .dcard__float {
     height: 100%;
     display: flex; flex-direction: column;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .17));
-    /* Follows the tint, so the dark theme's deep folders carry light text
-       without a second set of rules for everything inside them. */
+    /* Text colour follows the tint. */
     color: var(--tint-fg);
   }
-  /* ONLY THE FRONT ONE FLOATS. Every card drifting at once read as the page
-     itself being unsteady; one card moving reads as that card being the live
-     object and the rest being filed behind it. */
+  /* Only the front card floats. */
   .dcard.is-live .dcard__float {
     animation: dcard-float 7s ease-in-out infinite;
   }
@@ -2746,8 +2316,7 @@ body.is-sheet-open {
     100% { transform: translate3d(0, 0, 0) rotate(0deg); }
   }
 
-  /* The tab. 38px tall, which is exactly one step, so a card behind shows its
-     bill and nothing more. */
+  /* Tab: 38px, one step tall. */
   .dcard__bill {
     flex: none;
     height: 38px; width: 66%;
@@ -2763,8 +2332,6 @@ body.is-sheet-open {
     font-size: 14.5px; font-weight: 900; letter-spacing: -.02em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* Beside the name and quieter than it: the name is what you are choosing by,
-     the number is the detail you check once you have. */
   .dcard__n {
     flex: none; align-self: center;
     font-size: 12.5px; font-weight: 800;
@@ -2776,14 +2343,11 @@ body.is-sheet-open {
     flex: 1; min-height: 0;
     display: flex; flex-direction: column;
     padding: 12px 12px 10px;
-    /* Square where it meets the bill above it, rounded everywhere else. */
     border-radius: 0 18px 18px 18px;
     background: var(--folder-bg, var(--paper));
   }
 
-  /* THE PICTURES ARE THE BODY. Four of them, in a square, because a folder you
-     are choosing between thirty-odd of is chosen by what is in it — a number
-     tells you how many, a photograph tells you what. */
+  /* Up to four preview photos. */
   .dcard__shots {
     flex: 1; min-height: 0;
     display: grid;
@@ -2793,39 +2357,14 @@ body.is-sheet-open {
   }
   /* One on its own takes the whole body. */
   .dcard__shots[data-n="1"] { grid-template-columns: 1fr; }
-  /*
-     TWO SIT SIDE BY SIDE, and it is worth saying why they are not bigger.
-
-     The body is about 4:3 and so is every photograph in the set, and two 4:3
-     boxes do not tile into a 4:3 space: whichever way you turn them, each comes
-     out at roughly half linear size. That is geometry, not a bug in the grid,
-     and the only way past it is to crop.
-
-     Cropping was tried — full-width letterbox cells at 2.7:1 — and it is worse.
-     `cover` takes the middle band, and these photographs do not all put the
-     fish in the middle, so half of them came out as a stripe of sand with a
-     tail leaving the frame. Two smaller photographs that are whole beat two
-     large ones that are wrong.
-
-     Side by side rather than stacked so the pair uses the full width and reads
-     as a deliberate arrangement instead of two stamps adrift in colour.
-  */
+  /* Two photos side by side. They're 4:3 like the body, so they come out at
+     about half size; cropping to fill looked worse (fish cut off). */
   .dcard__shots[data-n="2"] { grid-template-columns: 1fr 1fr; }
-  /* Three in a two-column grid leaves an empty quarter. The last one takes the
-     whole row instead, so every count fills its box. */
+  /* With three, the last one spans the row. */
   .dcard__shots[data-n="3"] .dcard__shot:last-child { grid-column: span 2; }
 
-  /*
-     THE CELL IS THE LARGEST 4:3 THAT FITS ITS TRACK, not the track itself.
-     Every photograph in the set is 4:3 (1400x1050 and friends), so a cell of
-     that shape crops nothing. Stretched to fill the track instead, a two-shot
-     folder gave each photo a 431x196 box — 2.2:1 — and `cover` ate the top and
-     bottom fins off every fish in it.
-
-     aspect-ratio with BOTH maximums is what makes it safe: the box is the
-     biggest 4:3 rectangle that fits, so it can never overflow the card however
-     short the phone, and the self-alignment centres what is left over.
-  */
+  /* Each cell is the largest 4:3 box that fits its track (the photos are all
+     4:3), so nothing gets cropped and it can't overflow on short screens. */
   .dcard__shot {
     aspect-ratio: 4 / 3;
     max-width: 100%; max-height: 100%;
@@ -2842,8 +2381,6 @@ body.is-sheet-open {
   }
   .dcard__shot .species-photo img { width: 100%; height: 100%; object-fit: cover; }
   .dcard__shot svg { width: 40px; height: 40px; }
-  /* The gap-filler when a species has no photograph — it is a labelled hole in
-     the Info list, and at this size the label has nowhere to go. */
   .dcard__shot .species-photo--none span { display: none; }
 
   .dcard__sub {
@@ -2852,9 +2389,7 @@ body.is-sheet-open {
     font-size: 12.5px; font-weight: 700; color: var(--ink-60);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* The body belongs to the card you are reading. On the ones above, only the
-     bill is showing anyway — fading it stops half a photograph flashing past
-     mid-swipe. */
+  /* Fade the body on cards behind the front one. */
   .dcard:not(.is-live) .dcard__body > * { opacity: 0; }
   .dcard__body > * { transition: opacity .28s ease; }
 
@@ -2867,13 +2402,8 @@ body.is-sheet-open {
   }
   .deck__dots { font-variant-numeric: tabular-nums; color: var(--ink-60); }
 
-  /*
-     Brighter than the first set. Those were pastels on an off-white page, which
-     put about 4% lightness between a folder and the paper behind it — the
-     colour was there but it did not read as colour, it read as a smudge. These
-     sit far enough from --cream to be seen while staying light enough to carry
-     the same dark text at well over 4.5:1.
-  */
+  /* Light folder tints, far enough from --cream to read as colour, still
+     4.5:1+ with dark text. */
   .dcard[data-tint="0"] { --folder-bg: var(--tint-0); }
   .dcard[data-tint="1"] { --folder-bg: var(--tint-1); }
   .dcard[data-tint="2"] { --folder-bg: var(--tint-2); }
@@ -2884,7 +2414,6 @@ body.is-sheet-open {
 
   /* --- the opened folder --------------------------------------------------- */
 
-  /* Same two-box construction as the card, for the same reason. */
   .folder-head {
     position: sticky;
     top: calc(var(--topbar-h, 0px) + 8px);
@@ -2892,9 +2421,7 @@ body.is-sheet-open {
     margin-bottom: 16px;
     filter: drop-shadow(0 6px 14px rgb(22 24 29 / .14));
     color: var(--tint-fg);
-    /* The header is a drag handle, so the browser must not claim the vertical
-       gesture for scrolling before it reaches us. The body below still scrolls
-       normally — only this strip is ours. */
+    /* The header is a drag handle; only it opts out of touch scrolling. */
     touch-action: none;
     cursor: grab;
     user-select: none; -webkit-user-select: none;
@@ -2940,18 +2467,14 @@ body.is-sheet-open {
 }
 
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
-  /* The float is decoration; the fan is information. Only the decoration goes. */
+  /* Reduced motion: drop the float, keep the stacking. */
   .dcard__float { animation: none; }
   .dcard__body > * { transition: none; }
   .deck__rail { scroll-behavior: auto; }
 }
 
 /* --- settings: an index, then one panel ---------------------------------- */
-/*
-   Rows that go somewhere, grouped under quiet headings. The value sits under
-   the name because a settings list that only names its sections makes you open
-   every one to find out what anything is set to.
-*/
+/* Settings index rows: name with the current value underneath. */
 .wrap--narrow { max-width: 560px; }
 .display--sm { font-size: clamp(30px, 7vw, 38px); }
 .subtitle--tight { margin-bottom: 18px; }
@@ -2959,9 +2482,7 @@ body.is-sheet-open {
 .set-group {
   margin: 22px 0 8px; padding: 0 4px;
   font-size: 11px; font-weight: 800; letter-spacing: .14em;
-  /* --ink-60, not --ink-30: these name the sections of the page and they sit
-     on bare ground, which is exactly where the bloom is strongest. A label you
-     cannot read is not a quiet label, it is a missing one. */
+  /* --ink-60 for contrast over the glow. */
   text-transform: uppercase; color: var(--ink-60);
 }
 .set-group:first-of-type { margin-top: 6px; }
@@ -3018,12 +2539,8 @@ body.is-sheet-open {
 .set-back:active { transform: scale(.96); }
 
 /* --- the sign-in card ---------------------------------------------------- */
-/*
-   Plain fields with a leading icon rather than the floating-label pattern used
-   elsewhere in the app. Two fields on an otherwise empty screen do not need a
-   label that animates — the placeholder IS the label here, and the icon carries
-   the recognition. aria-label keeps that honest for a screen reader.
-*/
+/* Sign-in fields: leading icon, placeholder as label (aria-label for screen
+   readers). */
 .auth-form { display: flex; flex-direction: column; gap: 10px; }
 
 .auth-field {
@@ -3036,11 +2553,7 @@ body.is-sheet-open {
   color: var(--ink-30);
   pointer-events: none;
 }
-/* #authForm, not .auth-field, and not by preference. The base input rule is
-   `input:not([type=file]):not([type=checkbox])...` — six attribute :not()s,
-   which is specificity (0,6,1). A plain `.auth-field input` is (0,1,1) and
-   loses, so the padding never applied and the leading icon sat on top of the
-   first letter of the placeholder. An id is the shortest thing that wins. */
+/* Needs an id to beat the base input rule's specificity (0,6,1). */
 #authForm .auth-field input {
   width: 100%;
   font-family: inherit; font-size: 15.5px; font-weight: 700;
@@ -3078,13 +2591,10 @@ body.is-sheet-open {
 
 /* --- account ------------------------------------------------------------- */
 
-/* The Edit button sits on the name row, top-right, the way it does on every
-   profile screen people already use. Floated rather than a flex sibling so the
-   name keeps the full width when it wraps. */
+/* Edit button, top right of the name row. */
 .prof__edit { float: right; margin: 2px 0 0 10px; }
 
-/* Previous handles. A <details> because it is a trail, not a headline — it
-   matters when you go looking and never before. */
+/* Previous handles. */
 .acct-past { margin-top: 10px; }
 .acct-past summary {
   font-size: 12px; font-weight: 800; color: var(--ink-60);
@@ -3116,7 +2626,7 @@ body.is-sheet-open {
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: #0B0E17;
-  touch-action: none;      /* the pan and pinch are ours, not the browser's */
+  touch-action: none;
   cursor: grab;
   user-select: none;
 }
@@ -3124,15 +2634,12 @@ body.is-sheet-open {
 .crop__img {
   position: absolute; top: 0; left: 0;
   transform-origin: 0 0;
-  max-width: none;         /* the base img rule would cap this at 100% */
+  max-width: none;
   will-change: transform;
   -webkit-user-drag: none;
 }
 
-/* The promise: what is inside the ring is what you get. Everything outside is
-   dimmed rather than hidden — you still have to see what you are dragging.
-   One element, because a huge box-shadow spread is cheaper than an SVG mask
-   and does not need a second paint layer. */
+/* Circular crop mask: a large box-shadow dims everything outside it. */
 .crop__mask {
   position: absolute; inset: 0;
   pointer-events: none;
@@ -3164,8 +2671,7 @@ body.is-sheet-open {
 .edit-photo .acct-photo__fill { font-size: 40px; }
 .edit-photo__acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
-/* The counter sits INSIDE the field. Beside it, a limit only announces itself
-   when you hit it, which reads as the field silently breaking. */
+/* Character counter inside the field. */
 .field__count-wrap { position: relative; display: block; }
 .field__count-wrap input { padding-right: 58px; }
 .field__count {
@@ -3176,15 +2682,8 @@ body.is-sheet-open {
 }
 .edit-save { margin-top: 18px; }
 
-/* --- the profile header ----------------------------------------------------
-   A cover, an avatar hung over its edge, the name, then the numbers. Same
-   shape signed in or out — signed out is this screen with an empty seat, not a
-   different screen with a form on it.
-
-   THE COVER IS THE PAGE'S OWN LIGHT, not a photograph and not an upload. The
-   account page already has a hue (see "one light per page"), so a banner
-   showing anything else would be a second identity arguing with the first —
-   and there is no image to host, crop, or let someone break.
+/* --- profile header --------------------------------------------------------
+   Cover (the page's glow colour), avatar overlapping it, name, stats.
 --------------------------------------------------------------------------- */
 .prof { margin-bottom: 20px; }
 
@@ -3202,9 +2701,7 @@ body.is-sheet-open {
     radial-gradient(110% 140% at 88% 128%, rgb(var(--glow-2) / .85), transparent 70%),
     radial-gradient(90% 130% at 52% 150%, rgb(var(--glow-3) / .70), transparent 68%);
 }
-/* Nearly opaque here, unlike the page bloom: this is a 104px band with no body
-   text on it, so it can be the full-strength version of the same colour. The
-   restraint the page needs is a legibility constraint, not a taste one. */
+/* Stronger than the page glow; no text sits on the cover. */
 .acct-cog { flex: none; }
 .prof__cover .acct-cog {
   position: absolute; top: 10px; right: 10px; margin: 0;
@@ -3212,14 +2709,8 @@ body.is-sheet-open {
   color: #16181D;
 }
 
-/* The avatar hangs over the cover's edge. Negative margin on a row of its own
-   rather than absolute positioning, so the name below it is pushed down by the
-   overhang instead of having to be nudged past it by hand. */
-/* THE OVERHANG BELONGS TO THE AVATAR, NOT THE ROW. Pulling the row up ate 42px
-   of the cover it was supposed to hang over, and then pulling the name block up
-   to compensate ate the rest — the 104px cover rendered at about 60. The row
-   sits flush under the cover and carries the card's background; only the
-   picture reaches up. */
+/* The avatar overlaps the cover's bottom edge. */
+/* Only the avatar reaches up into the cover; the row itself sits below it. */
 .prof__row {
   display: flex; align-items: flex-start;
   padding: 0 14px;
@@ -3245,9 +2736,7 @@ body.is-sheet-open {
   padding: 8px 16px 0;
 }
 
-/* One card of four, split by hairlines, rather than four separate tiles. These
-   numbers are one statement about one log — boxing them separately made them
-   read as four unrelated facts. */
+/* Stats in one card split by hairlines. */
 .prof__stats {
   display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--paper);
@@ -3274,10 +2763,7 @@ body.is-sheet-open {
   .prof__cover { height: 132px; }
 }
 
-
-/* The photo is a button. On a phone it is the biggest thing on the screen and
-   the obvious thing to press, so making it the control rather than putting a
-   link beside it saves a row and a decision. */
+/* The avatar is the button for changing it. */
 .acct-photo {
   position: relative; flex: none;
   width: 84px; height: 84px; padding: 0;
@@ -3295,7 +2781,7 @@ body.is-sheet-open {
   box-shadow: 0 6px 18px rgb(43 69 147 / .3);
 }
 .acct-photo__fill img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* The camera badge sits ON the ring, so the affordance reads without a label. */
+/* Camera badge on the avatar ring. */
 .acct-photo__edit {
   position: absolute; right: -1px; bottom: -1px;
   display: grid; place-items: center;
@@ -3312,8 +2798,6 @@ body.is-sheet-open {
 
 .acct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 
-/* Sign out is not destructive, but it is the one button here you can press by
-   accident and be confused by, so it says so. */
 .btn--danger { color: #B3261E; }
 .btn--danger:hover { background: #FCEEEC; }
 .acct-name {
@@ -3321,7 +2805,6 @@ body.is-sheet-open {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .acct-sub { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: var(--ink-60); }
-
 
 .acct-rows { gap: 0; }
 .acct-row {
@@ -3338,9 +2821,7 @@ body.is-sheet-open {
 .acct-row--soon { opacity: .62; }
 .acct-row--soon .btn[disabled] { cursor: not-allowed; }
 
-/* Everything that moves, moves at one speed. Without this the palette change
-   lands but the app still feels like the old one — the references are calm
-   largely because nothing in them snaps. */
+/* Shared transition timing. */
 a.card, button.card, .btn, .chip, .icon-btn, .bookmark,
 .species-photo, .gallery__item, .search-row__cam, .map-filters__btn {
   transition: transform .2s cubic-bezier(.34,1.2,.5,1),

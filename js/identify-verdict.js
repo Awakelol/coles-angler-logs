@@ -1,24 +1,17 @@
-// ---------------------------------------------------------------------------
-// CROSS-CHECKING TWO IDENTIFIERS
+// Combining the two fish identifiers.
 //
-// Two services look at the same photo and they do not know the same things:
+//   Fishial  fish-specific model; good where it has training data (mostly
+//            North American/European sportfish). Returns a ranked list.
+//   LLM      general vision model given this region's catalogue to choose
+//            from. Worse at close lookalikes, better at ruling out fish that
+//            don't live here.
 //
-//   FISHIAL  a model trained specifically on fish. Strong where it has
-//            training data, which skews North American and European sportfish.
-//            Returns a ranked list with accuracy scores.
-//   CLAUDE   a general model, but it can be handed THIS region's catalogue and
-//            told to pick from it. Weaker at fine-grained lookalikes, much
-//            better at knowing a fish is not plausible in these waters.
+// If they agree, that's the answer. If not, the local catalogue breaks the tie:
+// a species that doesn't occur here is wrong however confident the model is.
 //
-// The rule: agreement is the answer. Disagreement is not a coin toss — the
-// LOCAL CATALOGUE breaks the tie. A species that does not occur in these
-// waters is wrong however confident the classifier is, and that is the one
-// judgement neither model makes on its own.
-//
-// Pure and free of network calls so it can be tested directly.
-// ---------------------------------------------------------------------------
+// No network calls here, so it's easy to test.
 
-/** Scientific names vary in case, spacing, and trailing authority strings. */
+/** Normalise case, spacing and trailing authority strings. */
 export function normalise(name) {
   return String(name || '')
     .toLowerCase()
@@ -36,7 +29,7 @@ export const VERDICTS = {
   SPLIT: 'split',
   ONE_SIDED: 'one-sided',
   NONE: 'none',
-  // Reached without any language model — see reconcileLocal().
+  // Only used without a language model; see reconcileLocal().
   LOCAL_MATCH: 'local-match',
   LOCAL_DEMOTED: 'local-demoted',
   RELATED: 'related',
@@ -46,19 +39,14 @@ export const VERDICTS = {
 const genusOf = (name) => normalise(name).split(' ')[0] || '';
 
 /**
- * Check Fishial's ranking against the local catalogue — no language model.
+ * Check Fishial's ranking against the local catalogue (no LLM needed).
  *
- * This is the whole cross-check done for free. Fishial is trained mostly on
- * North American and European sportfish, so on an Indo-Pacific fish its top
- * answer can be confidently wrong. What catches that is not intelligence, it
- * is a lookup: does this species actually occur here? The catalogue already
- * knows, and that judgement costs nothing to make.
- *
- * The escalation, in order:
- *   1. Top answer is a local species          -> take it
- *   2. A LOWER-ranked answer is local         -> take that, say why
- *   3. None are local but a genus matches     -> offer the local relative
- *   4. Nothing matches                        -> report it, flagged clearly
+ * Fishial's top answer can be confidently wrong for Indo-Pacific fish, but
+ * checking whether a species occurs here catches most of that:
+ *   1. top answer is local                -> take it
+ *   2. a lower-ranked answer is local     -> take that, and say so
+ *   3. none local, but a genus matches    -> suggest the local relative
+ *   4. nothing matches                    -> report it, flagged
  *
  * @param {Array} candidates [{scientific, accuracy}] ranked, best first
  * @param {Array} catalogue  [{id, scientific, common}] species found here
@@ -83,7 +71,7 @@ export function reconcileLocal(candidates, catalogue = []) {
 
   const top = ranked[0];
 
-  // 1 & 2 — the best-ranked candidate that actually occurs here.
+  // 1 & 2: best-ranked candidate that occurs here.
   const localIndex = ranked.findIndex((c) => byName.has(c.key));
   if (localIndex >= 0) {
     const hit = ranked[localIndex];
@@ -113,8 +101,7 @@ export function reconcileLocal(candidates, catalogue = []) {
     };
   }
 
-  // 3 — same genus as something local. Close relatives look alike, and this is
-  // usually the right family of answer even when the species is wrong.
+  // 3: same genus as a local species (usually the right kind of fish).
   for (const c of ranked) {
     const relative = byGenus.get(genusOf(c.scientific));
     if (relative) {
@@ -133,7 +120,7 @@ export function reconcileLocal(candidates, catalogue = []) {
     }
   }
 
-  // 4 — nothing local. Say so rather than dressing up a foreign species.
+  // 4: nothing local.
   return {
     verdict: VERDICTS.NOT_LOCAL,
     agreed: false,
@@ -149,12 +136,11 @@ export function reconcileLocal(candidates, catalogue = []) {
 }
 
 /**
- * Decide what to tell the user.
+ * Combine the LLM's pick with Fishial's ranking.
  *
  * @param {object}   claude   {scientific, speciesId, confidence, reasoning}
  * @param {Array}    fishial  [{scientific, accuracy}] ranked, best first
- * @param {Function} inRegion (scientificName) => boolean — is it in the local
- *                            catalogue? This is what makes the tie-break real.
+ * @param {Function} inRegion (scientificName) => boolean, is it in the catalogue
  */
 export function arbitrate(claude, fishial, inRegion = () => false) {
   const ranked = (fishial || [])
@@ -167,7 +153,7 @@ export function arbitrate(claude, fishial, inRegion = () => false) {
     return { verdict: VERDICTS.NONE, agreed: false, confidence: 'none', answer: null };
   }
 
-  // Only one side answered — usable, but say which one and don't inflate it.
+  // Only one side answered.
   if (!pick || !ranked.length) {
     const source = pick ? 'claude' : 'fishial';
     const answer = pick ? claude.scientific : ranked[0].scientific;
@@ -183,7 +169,7 @@ export function arbitrate(claude, fishial, inRegion = () => false) {
 
   const top = ranked[0];
 
-  // 1. Both landed on the same species. This is the strong case.
+  // 1. Both agree.
   if (top.key === pick) {
     return {
       verdict: VERDICTS.AGREED,
@@ -195,9 +181,7 @@ export function arbitrate(claude, fishial, inRegion = () => false) {
     };
   }
 
-  // 2. They disagree. Is Claude's pick anywhere in Fishial's ranking? If so
-  //    the two are closer than the top line suggests — Fishial saw it, just
-  //    ranked something else higher.
+  // 2. Disagree, but Fishial still ranked the LLM's pick somewhere.
   const alsoSeen = ranked.findIndex((f) => f.key === pick);
   if (alsoSeen > 0) {
     return {
@@ -213,8 +197,7 @@ export function arbitrate(claude, fishial, inRegion = () => false) {
     };
   }
 
-  // 3. Genuine disagreement. The catalogue decides: a species that isn't found
-  //    here is wrong no matter how confident the classifier is.
+  // 3. Real disagreement: prefer whichever species occurs here.
   const topIsLocal = inRegion(top.scientific);
   const pickIsLocal = inRegion(claude.scientific);
 
@@ -246,8 +229,7 @@ export function arbitrate(claude, fishial, inRegion = () => false) {
     };
   }
 
-  // 4. Nothing separates them. Say so rather than pretending — an honest
-  //    "these two disagree" is more useful than a confident wrong answer.
+  // 4. Can't separate them; say so.
   return {
     verdict: VERDICTS.SPLIT,
     agreed: false,

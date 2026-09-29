@@ -1,6 +1,4 @@
-// ---------------------------------------------------------------------------
 // Small shared UI helpers.
-// ---------------------------------------------------------------------------
 
 /** Escape untrusted text before it goes into an innerHTML template. */
 export function esc(value) {
@@ -64,19 +62,13 @@ export function round(n, places = 1) {
 const reducedMotion = () =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// How far the sheet must be dragged before releasing closes it. Deliberately
-// well past a casual flick: the grab handle is small and the whole point is
-// that an accidental downward swipe should snap back, not dismiss the page
-// you were reading.
+// Drag distance needed to close a sheet. High enough that a stray swipe snaps back.
 const DRAG_CLOSE_PX = 130;
 const DRAG_CLOSE_VELOCITY = 0.75; // px/ms — a fast flick closes sooner
 
 /**
- * Show a modal sheet. `render()` returns the sheet's inner HTML.
- *
- * Slides up over a dimming backdrop, and can be dragged back down to close —
- * but only by its handle. Making the whole sheet draggable would fight every
- * attempt to scroll a long species card.
+ * Show a modal bottom sheet. `render()` returns its inner HTML.
+ * Drag-to-close only works from the grip so it doesn't fight scrolling.
  */
 export function openSheet(title, render, onMount) {
   const backdrop = el(`
@@ -119,8 +111,7 @@ export function openSheet(title, render, onMount) {
     }
     backdrop.classList.remove('is-open');
     backdrop.classList.add('is-closing');
-    // Don't rely on transitionend alone — if the element is hidden mid-flight
-    // it never fires and the sheet would linger in the DOM forever.
+    // Fallback in case transitionend never fires.
     const done = () => backdrop.remove();
     sheet.addEventListener('transitionend', done, { once: true });
     setTimeout(done, 400);
@@ -154,11 +145,9 @@ export function openSheet(title, render, onMount) {
 
   grip.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    // Downward only; resisting upward drag stops the sheet detaching from the
-    // bottom of the screen.
+    // Downward only.
     dy = Math.max(0, e.clientY - startY);
     sheet.style.transform = `translateY(${dy}px)`;
-    // Backdrop lightens as it goes, so the gesture feels connected.
     backdrop.style.setProperty('--sheet-progress', String(Math.min(1, dy / 260)));
   });
 
@@ -184,14 +173,13 @@ export function openSheet(title, render, onMount) {
   grip.addEventListener('pointerup', endDrag);
   grip.addEventListener('pointercancel', endDrag);
 
-  // Tapping the grip closes too — a drag target that does nothing when
-  // tapped is a small trap.
+  // Tapping the grip closes too.
   grip.addEventListener('click', () => {
     if (dy < 4) close();
   });
 
   document.body.appendChild(backdrop);
-  // Next frame, so the browser has a start state to animate from.
+  // Next frame so the transition has a start state.
   requestAnimationFrame(() => backdrop.classList.add('is-open'));
 
   if (onMount) onMount(backdrop, close);

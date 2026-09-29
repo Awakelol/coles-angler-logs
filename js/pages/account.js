@@ -1,22 +1,9 @@
-// ---------------------------------------------------------------------------
-// ACCOUNT
+// Account / profile page.
 //
-// Two names, deliberately.
-//
-//   the HANDLE       what you signed up as. Unique, validated, and what the
-//                    account IS. Never changes here — renaming it would mean
-//                    renaming the thing you sign in with.
-//   the DISPLAY NAME a label on top of it. Anything, including nothing, in
-//                    which case the handle is shown instead.
-//
-// Keeping them apart is what lets someone call themselves whatever they like
-// without their sign-in quietly becoming something else.
-//
-// The avatar and display name live in IndexedDB, per account, and DO NOT SYNC.
-// Firestore's rules currently permit users/{uid}/catches and nothing else, so
-// a profile document would be denied. The shape is ready — one row keyed by
-// the same account id — but publishing that rule is a console action.
-// ---------------------------------------------------------------------------
+// The handle (username) is the sign-in identity; the display name is an
+// optional label shown instead of it. The avatar and display name are stored
+// per account in IndexedDB and don't sync yet (Firestore rules only allow
+// users/{uid}/catches).
 
 import { currentUser, signOut, linkedProviders, cloudConfigured,
          renameHandle, handleAvailableAt, USERNAME_RULES } from '../auth.js';
@@ -34,7 +21,7 @@ const PROVIDER_LABEL = {
 
 const DISPLAY_NAME_MAX = 30;
 
-/** The blob URL currently on screen, so it can be released when we replace it. */
+/** Blob URL currently on screen, released when replaced. */
 let avatarUrl = null;
 
 function releaseAvatar() {
@@ -52,17 +39,8 @@ function initials(name) {
 }
 
 /**
- * The profile header, shared by both states.
- *
- * A COVER, AN AVATAR OVER IT, THEN THE NUMBERS. Same shape whether or not you
- * are signed in, and that is the point: signed out is not a different screen
- * with a form on it, it is this screen with an empty seat. The old version
- * opened with "Not signed in" and a login form, which described the app's
- * state rather than yours — and buried the fact that you already HAVE a log.
- *
- * The cover is the page's own light (see --glow-* in style.css), not an image:
- * the account page's hue already exists, so a banner that is anything else is
- * a second identity fighting the first. No upload to manage either.
+ * Profile header (cover, avatar, name, stats). Same layout signed in or out.
+ * The cover is just the page's glow colour, not an uploaded image.
  */
 function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
   return `
@@ -83,10 +61,7 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
                  </span>
                </button>
                <input type="file" id="avatarInput" accept="image/*" hidden>`
-            : // Not a button, but still YOUR face. `editable` decides whether
-              // the picture is a control, not whether there is a picture —
-              // conflating the two left the profile showing a stranger's
-              // silhouette while the editor two taps away showed the photo.
+            : // Not editable here, but still show the avatar.
               `<div class="acct-photo prof__pic">
                  <span class="acct-photo__fill${avatar ? '' : ' acct-photo__fill--empty'}"
                        id="avatarFill">${
@@ -110,9 +85,6 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
         <p class="acct-sub">${esc(sub)}</p>
       </div>
 
-      <!-- Shown signed out too, and deliberately. These are the records already
-           on this device: the honest argument for making an account is the
-           thing you would lose, not a paragraph about sync. -->
       <div class="prof__stats" id="acctStats">
         ${['Catches', 'Species', 'Spots', 'Days']
           .map((k) => `<div class="prof__stat"><span class="prof__v">&mdash;</span><span class="prof__k">${k}</span></div>`)
@@ -121,14 +93,10 @@ function profileHeaderHtml({ name, handle, sub, avatar, editable, edit }) {
     </div>`;
 }
 
-
 /**
- * The handle row. Editable once every 30 days, locked the rest of the time,
- * and never on a synced account — see renameHandle() in js/auth.js for why.
- *
- * When it is locked the field is still SHOWN, disabled, with the date it frees
- * up. Hiding it would leave someone hunting for a control that exists, and
- * "not yet" is a more useful answer than nothing at all.
+ * Handle field. Changeable once every 30 days and never for synced accounts
+ * (see renameHandle() in auth.js). While locked it's shown disabled with the
+ * date it unlocks.
  */
 function handleFieldHtml(user) {
   if (user.syncs) {
@@ -193,7 +161,7 @@ function handleFieldHtml(user) {
     </div>`;
 }
 
-/** The edit screen: everything about you that you can change, and nothing else. */
+/** The edit-profile screen (#/account?edit=1). */
 function editHtml(user) {
   return `
     <section class="band band--cream">
@@ -209,8 +177,6 @@ function editHtml(user) {
         <p class="subtitle subtitle--tight">Your photo and what the app calls you</p>
 
         <form id="profileForm">
-          <!-- The photo first and centred, because it is the thing people came
-               here to change and the biggest target on the screen. -->
           <div class="edit-photo">
             <button type="button" class="acct-photo" id="avatarBtn"
                     aria-label="Change your profile photo">
@@ -235,8 +201,6 @@ function editHtml(user) {
                 <input type="text" id="displayName" name="displayName"
                        maxlength="${DISPLAY_NAME_MAX}" autocomplete="nickname"
                        placeholder="${esc(user.username)}">
-                <!-- Live, because a limit you only meet by hitting it is a
-                     limit that reads as the field being broken. -->
                 <span class="field__count" id="nameCount" aria-hidden="true">0/${DISPLAY_NAME_MAX}</span>
               </div>
               <p class="field__hint">
@@ -284,18 +248,12 @@ export function render(ctx) {
                above is adopted by the first account you make.</p>
           </div>
 
-          <!-- The form itself, not a link to it. This is the screen ABOUT your
-               account; sending someone to the catch log to get one made the two
-               screens that exist for this the two that could not do it. -->
           ${authCardHtml()}
         </div>
       </section>`;
   }
 
-  // THE EDITOR IS ITS OWN SCREEN, reached by the Edit button, not a form
-  // sitting under the profile. A profile page is for reading; putting the
-  // fields on it means every visit shows you a half-filled form you did not
-  // ask for. Same `?param` shape Settings uses for its panels.
+  // Editing is a separate screen (?edit=1) opened from the Edit button.
   if (ctx?.params?.get('edit')) return editHtml(user);
 
   const providers = linkedProviders();
@@ -362,22 +320,17 @@ export function render(ctx) {
     </section>`;
 }
 
-/**
- * Fill the stat strip. Runs signed out too, reading the device's own records —
- * store.allCatches(null) is the local log, which exists whether or not anyone
- * has made an account. That is the whole argument for the strip being there.
- */
+/** Fill the stat strip. Signed out, this shows the guest log. */
 async function paintStats(root, userId, regionId) {
   const box = root.querySelector('#acctStats');
   if (!box) return;
   const [catches, spots] = await Promise.all([
-    store.allCatches(userId),
-    store.allSpots(userId, regionId),
+    store.catchesFor(userId),
+    userId ? store.allSpots(userId, regionId) : [],
   ]);
   if (!box.isConnected) return;
   const stats = computeStats(catches);
-  // Days on the water, not days since signing up: distinct dates in the log.
-  // An account age counts nothing you did; this counts trips.
+  // Days fished = distinct dates in the log.
   const days = new Set(catches.map((c) => c.date).filter(Boolean)).size;
   const values = [
     [catches.length, 'Catches'],
@@ -399,11 +352,9 @@ async function paintStats(root, userId, regionId) {
 export async function mount(root, ctx) {
   const user = currentUser();
 
-  // Signed out, the whole screen is the sign-in card. No guest button: looking
-  // around without an account is something you choose on the way to the log,
-  // not on the screen about your account.
+  // Signed out: the sign-in card (no guest option here; that's on the log).
   if (!user) {
-    // The strip above the form is the device's own log, so it fills here too.
+    // Stats still show the guest log.
     paintStats(root, null, ctx.regionId).catch(() => {});
     mountAuthCard(root, { onDone: () => ctx.navigate('/account'), allowGuest: false });
     return;
@@ -435,21 +386,20 @@ export async function mount(root, ctx) {
     }
   };
 
-  // Read after paint rather than blocking the screen on IndexedDB.
+  // Load stats after the first paint.
   const profile = await profiles.get(user.id);
   if (!root.isConnected) {
     releaseAvatar();
     return;
   }
   paint(profile);
-  // Only the profile carries the strip; on the editor this is a no-op.
   await paintStats(root, user.id, ctx.regionId);
   if (!root.isConnected) {
     releaseAvatar();
     return;
   }
 
-  // --- the photo ---
+  // --- avatar ---
   const picker = root.querySelector('#avatarInput');
   root.querySelector('#avatarBtn')?.addEventListener('click', () => picker?.click());
   root.querySelector('#pickAvatar')?.addEventListener('click', () => picker?.click());
@@ -458,8 +408,7 @@ export async function mount(root, ctx) {
     const file = picker.files?.[0];
     if (!file) return;
     try {
-      // The cropper resolves null when it is cancelled — a normal outcome, not
-      // an error, so it must not toast or clear anything.
+      // null = cancelled.
       const blob = await cropAvatar(file);
       if (blob) {
         paint(await profiles.save(user.id, { avatar: blob }));
@@ -468,7 +417,7 @@ export async function mount(root, ctx) {
     } catch (err) {
       toast(err.message || 'Could not use that photo');
     } finally {
-      // Cleared so choosing the SAME file again still fires a change event.
+      // Reset so picking the same file again fires change.
       picker.value = '';
     }
   });
@@ -478,7 +427,7 @@ export async function mount(root, ctx) {
     toast('Photo removed');
   });
 
-  // --- the name ---
+  // --- names ---
   const count = root.querySelector('#nameCount');
   const tally = () => {
     if (count && input) count.textContent = `${input.value.length}/${DISPLAY_NAME_MAX}`;
@@ -495,9 +444,7 @@ export async function mount(root, ctx) {
   root.querySelector('#profileForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // THE HANDLE GOES FIRST, and if it is refused nothing else is saved. Half
-    // a save is worse than none: the toast would say the display name was
-    // stored while the rename you actually came for was silently dropped.
+    // Rename the handle first; if that fails, save nothing.
     if (handleEl && !handleEl.disabled) {
       const wanted = handleEl.value.trim();
       if (wanted && wanted !== user.username) {
@@ -517,9 +464,7 @@ export async function mount(root, ctx) {
     if (!handleEl || handleEl.disabled || handleEl.value.trim() === user.username) {
       toast(value ? 'Display name saved' : 'Going by your handle');
     }
-    // The editor is a detour. Finishing it puts you back on the profile you
-    // pressed Edit from, showing the change — staying put makes you wonder
-    // whether the Save did anything.
+    // Back to the profile.
     if (ctx?.params?.get('edit')) ctx.navigate('/account');
   });
 }

@@ -1,16 +1,8 @@
-// ---------------------------------------------------------------------------
-// REVERSE GEOCODING — turning coordinates into a place name
+// Reverse geocoding (coordinates -> place name).
 //
-// "11.24°, 125.00°" tells an angler nothing. "Tacloban City" does.
-//
-// Uses BigDataCloud's reverse-geocode-client endpoint: no API key, no signup,
-// and explicitly intended to be called from a browser. Nominatim would be the
-// obvious alternative but its usage policy requires an identifying User-Agent,
-// which a page cannot set, so calling it from client JS is off-policy.
-//
-// Results are cached hard — a coordinate's name does not change — and keyed to
-// a rounded grid so drifting a few metres doesn't trigger a fresh lookup.
-// ---------------------------------------------------------------------------
+// Uses BigDataCloud's client endpoint, which needs no key and is meant for
+// browser use. (Nominatim's policy requires a User-Agent a page can't set.)
+// Results are cached per rounded coordinate.
 
 const CACHE_KEY = 'angler.placecache';
 const ENDPOINT = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
@@ -39,9 +31,8 @@ function writeCache(all) {
 const inFlight = new Map();
 
 /**
- * Best available name for a position, most specific first.
- * @returns {Promise<string|null>} e.g. "Tacloban City, Leyte" — null if the
- *          lookup fails, so callers can fall back rather than show an error.
+ * Most specific available name for a position.
+ * @returns {Promise<string|null>} e.g. "Tacloban City, Leyte", or null on failure
  */
 export function placeName(coords) {
   if (!coords) return Promise.resolve(null);
@@ -56,12 +47,10 @@ export function placeName(coords) {
     .then((res) => (res.ok ? res.json() : null))
     .then((d) => {
       if (!d) return null;
-      // Offshore positions have no locality at all, only a body of water or a
-      // subdivision — worth showing rather than falling back to nothing.
+      // Offshore there's no locality, only a water body or subdivision.
       const local = d.city || d.locality || d.localityInfo?.administrative?.[3]?.name || '';
       const wider = d.principalSubdivision || d.countryName || '';
-      // "Eastern Visayas (Region VIII)" is the official form but the bracketed
-      // half is noise in a one-line label, and it forces a wrap on a phone.
+      // Drop the "(Region VIII)" suffix.
       const tidy = (v) => String(v || '').replace(/\s*\([^)]*\)/g, '').trim();
       const parts = [tidy(local), tidy(wider)]
         .filter(Boolean)

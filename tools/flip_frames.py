@@ -1,11 +1,7 @@
-"""
-Frames of the folder flip, for looking at.
+"""Frames of the folder flip animation.
 
-`Page.captureScreenshot` takes longer than the flip does, so a timed capture
-always lands after it — every frame comes out showing the finished state. This
-pauses the animation at fixed points instead and reloads between them, because
-a hash change does not reload and the second shot would start with a folder
-already open.
+captureScreenshot is slower than the flip, so this pauses the animation at
+fixed points instead, reloading between frames.
 
 Run:  python tools/flip_frames.py
 Out:  _screenshots/tour/flip-frames.png
@@ -67,8 +63,7 @@ async def main():
                 # A unique query forces a real load rather than a hash change.
                 await send("Page.navigate", url=f"{BASE}/index.html?flip={k}#/info")
                 await asyncio.sleep(3.4)
-                # Third card along, so the back of it is a colour rather than
-                # the white of "Everything".
+                # Third card, so the back is a colour rather than white.
                 await send("Runtime.evaluate", expression="""(() => {
                     const rail = document.querySelector('[data-deck-rail]');
                     if (!rail) return 0;

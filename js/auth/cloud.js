@@ -1,25 +1,11 @@
-// ---------------------------------------------------------------------------
-// CLOUD SIGN-IN  (providers: 'google' live, 'facebook' coded but disabled)
+// Cloud sign-in via Firebase Auth. Google is live; Facebook is wired up but
+// hidden behind a config flag.
 //
-// Real authentication, via Firebase Auth. Unlike js/auth/local.js this is
-// genuinely verified — the token is checked by Google, not by us — which is
-// what makes syncing a shared log safe later.
+// The Firebase SDK (~200 KB) is loaded from the CDN only when it's first
+// needed, so local-only users never download it.
 //
-// Two deliberate choices:
-//
-// LAZY SDK LOAD. The Firebase SDK is ~200 KB and the app is otherwise
-// dependency-free. It's imported from the CDN only when someone actually taps
-// a cloud sign-in button, so local-only users never download it and the app
-// keeps working with no network.
-//
-// REDIRECT, NOT POPUP. Popups are blocked or badly broken in iOS standalone
-// PWAs — the exact place this app runs. signInWithRedirect survives being
-// added to the home screen; signInWithPopup does not.
-//
-// Firebase web config is NOT a secret. apiKey here is a project identifier,
-// not a credential; access is controlled by Firebase Security Rules. It is
-// safe in the repo.
-// ---------------------------------------------------------------------------
+// The Firebase web config isn't a secret: apiKey identifies the project, and
+// access is controlled by the security rules.
 
 import { CONFIG } from '../config.js';
 import { syntheticEmail, derivePassword, isSyntheticEmail } from './credentials.js';
@@ -35,7 +21,6 @@ export function cloudConfigured() {
   return Boolean(f.apiKey && f.authDomain && f.projectId && f.appId);
 }
 
-/** Everything the user must set up before any of this can work. */
 export const SETUP_STEPS = [
   'Create a project at console.firebase.google.com (no billing needed).',
   'Build → Authentication → Get started → enable Email/Password AND Google.',
@@ -63,7 +48,7 @@ async function firebase() {
     const app = initializeApp(CONFIG.firebase);
     return { app, auth: auth.getAuth(app), sdk: auth };
   })().catch((e) => {
-    appPromise = null; // let a later attempt retry rather than wedging
+    appPromise = null; // allow a retry
     const err = new Error('Could not reach Google sign-in. Check your connection.');
     err.cause = e;
     throw err;
@@ -72,24 +57,19 @@ async function firebase() {
   return appPromise;
 }
 
-/** Firebase provider ids -> the short names used through the app. */
+/** Firebase provider ids -> the short names used in the app. */
 const PROVIDER_NAMES = {
   'google.com': 'google',
   'facebook.com': 'facebook',
-  // Firebase calls email/password 'password'. The app calls it 'username',
-  // because that is what the person typed and what they will call it.
   password: 'username',
 };
 
 function toProfile(user) {
-  // Every linked provider, not just the one used to sign in — the whole point
-  // of linking is that a person is one account with several ways in.
   const providers = (user.providerData || [])
     .map((p) => PROVIDER_NAMES[p.providerId])
     .filter(Boolean);
 
-  // A username account's address is minted by us and points nowhere, so it is
-  // an identifier rather than contact detail and has no business on screen.
+  // Username accounts use a made-up address; don't show it.
   const realEmail = user.email && !isSyntheticEmail(user.email) ? user.email : null;
 
   return {
@@ -97,9 +77,7 @@ function toProfile(user) {
     username: user.displayName || realEmail?.split('@')[0] || 'angler',
     email: realEmail,
     photoURL: user.photoURL || null,
-    // How this account is chiefly identified. A username account that later
-    // connects Google is still a username account — that is the name the
-    // person signs in with — so it wins regardless of providerData order.
+    // A username account stays a username account even after linking Google.
     provider: providers.includes('username') ? 'username' : providers[0] || 'google',
     providers,
   };
@@ -110,8 +88,7 @@ function cache(profile) {
   else localStorage.removeItem(CLOUD_CACHE_KEY);
 }
 
-/** The cached cloud profile. Synchronous; may be briefly stale after sign-out
- *  on another device, which `verify()` reconciles. */
+/** The cached cloud profile. Can be briefly stale; verify() reconciles it. */
 export function cachedCloudUser() {
   try {
     const raw = JSON.parse(localStorage.getItem(CLOUD_CACHE_KEY) || 'null');
@@ -128,7 +105,7 @@ function providerFor(sdk, name) {
   throw new Error(`Unknown sign-in provider: ${name}`);
 }
 
-/** Last auth failure, surfaced to the UI. Silent failure is worse than ugly. */
+/** Last auth failure, so the UI can show what went wrong. */
 const LAST_ERROR_KEY = 'angler.authError';
 
 export function lastAuthError() {
@@ -154,19 +131,19 @@ function recordError(stage, err) {
   return detail;
 }
 
+const POPUP_UNAVAILABLE = [
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/cancelled-popup-request',
+];
+
 /**
  * Sign in with a provider.
  *
- * POPUP FIRST, redirect as fallback — and this order matters more than it
- * looks. signInWithRedirect relies on cross-origin storage between the app and
- * the `*.firebaseapp.com` auth handler. Chrome's storage partitioning and
- * Safari's ITP now block exactly that, so the user completes sign-in at Google,
- * gets sent back, and getRedirectResult() returns null — landing them on the
- * login screen as though nothing happened. Popup keeps the flow in one
- * browsing context and is unaffected.
- *
- * Redirect stays as the fallback for the case popup was originally chosen for:
- * iOS standalone PWAs, where popups may be blocked outright.
+ * Popup first: redirect sign-in depends on third-party storage that Chrome's
+ * partitioning and Safari's ITP now block, so getRedirectResult() often comes
+ * back empty. Redirect is only the fallback for when popups aren't available
+ * (mostly installed iOS PWAs).
  */
 export async function signInWith(name) {
   clearAuthError();
@@ -179,21 +156,11 @@ export async function signInWith(name) {
     cache(profile);
     return profile;
   } catch (err) {
-    const popupFailed = [
-      'auth/popup-blocked',
-      'auth/operation-not-supported-in-this-environment',
-      'auth/cancelled-popup-request',
-    ].includes(err?.code);
-
-    if (err?.code === 'auth/popup-closed-by-user') {
-      // Deliberate cancellation — not an error worth shouting about.
-      return null;
-    }
-    if (!popupFailed) {
+    if (err?.code === 'auth/popup-closed-by-user') return null;
+    if (!POPUP_UNAVAILABLE.includes(err?.code)) {
       recordError('popup', err);
       throw err;
     }
-    // Popup unavailable (usually an installed iOS PWA): fall back.
     await sdk.signInWithRedirect(auth, provider);
     return null; // navigating away
   }
@@ -202,17 +169,12 @@ export async function signInWith(name) {
 export const signInWithGoogle = () => signInWith('google');
 export const signInWithFacebook = () => signInWith('facebook');
 
-// ---------------------------------------------------------------------------
-// USERNAME ACCOUNTS IN THE CLOUD
+// --- username accounts ---------------------------------------------------------
 //
-// A username account is an ordinary Firebase Email/Password account whose
-// address and password are derived from what the person typed — see
-// js/auth/credentials.js for why, at length. From Firebase's point of view
-// there is nothing unusual about it, which is the point: it gets a real uid,
-// a real ID token, and Firestore rules can trust it.
-// ---------------------------------------------------------------------------
+// A username account is a normal Firebase Email/Password account with the
+// address and password derived from what the user typed (see credentials.js).
 
-/** Create the cloud half of a username account. */
+/** Create the cloud side of a username account. */
 export async function signUpWithPassword(username, password) {
   clearAuthError();
   const { auth, sdk } = await firebase();
@@ -221,13 +183,10 @@ export async function signUpWithPassword(username, password) {
 
   try {
     const result = await sdk.createUserWithEmailAndPassword(auth, email, derived);
-    // Store the username as typed. The synthetic address is lower-cased, so
-    // without this the display name would silently change case on sign-in.
+    // The synthetic email is lowercased, so keep the username's casing here.
     const displayName = String(username).trim();
     await sdk.updateProfile(result.user, { displayName });
-    // Don't spread result.user — providerData and friends are prototype
-    // getters and a spread would quietly drop them, leaving the profile with
-    // no providers at all.
+    // Don't spread result.user: providerData is a getter and would be lost.
     const profile = { ...toProfile(result.user), username: displayName };
     cache(profile);
     return profile;
@@ -237,7 +196,6 @@ export async function signUpWithPassword(username, password) {
   }
 }
 
-/** Sign in to an existing username account — the path a new device takes. */
 export async function signInWithPassword(username, password) {
   clearAuthError();
   const { auth, sdk } = await firebase();
@@ -254,7 +212,7 @@ export async function signInWithPassword(username, password) {
   }
 }
 
-/** The signed-in Firebase uid, or null. Used by the sync layer. */
+/** The signed-in Firebase uid, or null. */
 export async function currentUid() {
   if (!cloudConfigured()) return null;
   try {
@@ -265,7 +223,7 @@ export async function currentUid() {
   }
 }
 
-/** The live Firebase handles, for js/sync.js. Null when unavailable. */
+/** Firebase app/auth handles for sync.js, or null. */
 export async function firebaseHandles() {
   if (!cloudConfigured()) return null;
   try {
@@ -275,39 +233,13 @@ export async function firebaseHandles() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// ACCOUNT LINKING
+// --- account linking -------------------------------------------------------------
 //
-// One person, one account, several ways in. Without this, signing in with
-// Google and later with Facebook creates two unrelated uids — and since the
-// catch log is keyed by uid, that reads to the user as "my log vanished".
-//
-// Two halves, and both are needed:
-//
-//   1. Deliberate linking, below: signed in already, tap "connect Facebook",
-//      and the credential is attached to the SAME uid.
-//   2. Collision handling, in completeRedirect(): someone signs in with a
-//      provider whose email already belongs to another account. Firebase can
-//      resolve this itself — see the console setting noted in the README —
-//      but when it can't, it raises account-exists-with-different-credential
-//      and hands back a credential to link once the user proves the original
-//      account is theirs.
-//
-// The UI for (1) isn't built yet, by design. These functions are the seam it
-// will attach to.
-// ---------------------------------------------------------------------------
+// Linking keeps the same uid, so the catch log stays put. There are two paths:
+// linkProvider() when already signed in, and the account-exists collision
+// handled in completeRedirect().
 
-/**
- * Attach another provider to the account that is already signed in.
- *
- * Popup first for the same reason sign-in is — see signInWith(). Linking by
- * redirect would hit the identical storage-partitioning wall and come back
- * looking as though nothing had happened.
- *
- * The uid does not change, so the catch log is untouched by this. That is the
- * entire point: connecting Google to a username account gives a second way in,
- * not a second account.
- */
+/** Attach another provider to the signed-in account (popup first, as above). */
 export async function linkProvider(name) {
   clearAuthError();
   const { auth, sdk } = await firebase();
@@ -321,12 +253,7 @@ export async function linkProvider(name) {
     return profile;
   } catch (err) {
     if (err?.code === 'auth/popup-closed-by-user') return null;
-    const popupFailed = [
-      'auth/popup-blocked',
-      'auth/operation-not-supported-in-this-environment',
-      'auth/cancelled-popup-request',
-    ].includes(err?.code);
-    if (!popupFailed) {
+    if (!POPUP_UNAVAILABLE.includes(err?.code)) {
       recordError('link', err);
       throw err;
     }
@@ -335,7 +262,7 @@ export async function linkProvider(name) {
   }
 }
 
-/** Detach a provider. Refuses to remove the last one, which would orphan the account. */
+/** Detach a provider. Refuses to remove the last one. */
 export async function unlinkProvider(providerId) {
   const { auth, sdk } = await firebase();
   const user = auth.currentUser;
@@ -347,16 +274,11 @@ export async function unlinkProvider(providerId) {
   cache(toProfile(auth.currentUser));
 }
 
-/** Short names of everything linked, from the cached profile. Synchronous. */
 export function linkedProviders() {
   return cachedCloudUser()?.providers || [];
 }
 
-/**
- * A credential kept aside when a sign-in collided with an existing account.
- * Stored in sessionStorage, not localStorage: it's short-lived and should not
- * outlive the tab.
- */
+/** Details of a sign-in that collided with an existing account (per tab). */
 const PENDING_KEY = 'angler.pendingLink';
 
 export function pendingLink() {
@@ -372,8 +294,7 @@ export function clearPendingLink() {
 }
 
 /**
- * Call once on start-up. If we've just come back from a provider redirect,
- * this resolves the sign-in and caches the profile.
+ * Finish a provider redirect (sign-in or link) if we just came back from one.
  * @returns {Promise<object|null>} the profile if a sign-in just completed
  */
 export async function completeRedirect() {
@@ -382,7 +303,6 @@ export async function completeRedirect() {
   try {
     const fb = await firebase();
     sdk = fb.sdk;
-    // Also resolves a linkWithRedirect, so connecting an account lands here too.
     const result = await sdk.getRedirectResult(fb.auth);
     if (!result?.user) return null;
     const profile = toProfile(result.user);
@@ -390,10 +310,8 @@ export async function completeRedirect() {
     clearPendingLink();
     return profile;
   } catch (err) {
-    // The collision case: this provider's email already belongs to another
-    // account. Hold the credential so the app can link it once the user has
-    // signed in the original way, instead of silently creating a second
-    // account and appearing to lose their log.
+    // Email already belongs to another account: remember it so it can be
+    // linked after the user signs in the original way.
     if (err?.code === 'auth/account-exists-with-different-credential' && sdk) {
       try {
         const credential = sdk.OAuthProvider.credentialFromError(err);
@@ -406,21 +324,18 @@ export async function completeRedirect() {
           })
         );
       } catch {
-        // Non-fatal: worst case the user just signs in normally.
+        /* not fatal */
       }
       recordError('redirect-collision', err);
       return null;
     }
 
-    // Everything else gets recorded. Returning null silently here is what made
-    // a failed sign-in look like "nothing happened" — the UI now has something
-    // to show instead.
     recordError('redirect', err);
     return null;
   }
 }
 
-/** Reconcile the cached profile against Firebase, in the background. */
+/** Check the cached profile against Firebase in the background. */
 export async function verify() {
   if (!cloudConfigured() || !cachedCloudUser()) return;
   try {
@@ -434,8 +349,7 @@ export async function verify() {
       });
     });
   } catch {
-    // Offline: keep the cached profile rather than logging the user out for
-    // having no signal, which would be the wrong call on a boat.
+    // Offline: keep the cached profile.
   }
 }
 
@@ -446,6 +360,6 @@ export async function signOutCloud() {
     const { auth, sdk } = await firebase();
     await sdk.signOut(auth);
   } catch {
-    // Local cache is already cleared, which is what the UI reads.
+    // The cache is already cleared, which is what the UI reads.
   }
 }

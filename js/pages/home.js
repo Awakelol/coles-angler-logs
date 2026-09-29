@@ -1,7 +1,8 @@
-// Home — orientation, conditions teaser, quick stats, featured species.
+// Home: conditions teaser, quick stats, featured species.
 
 import { allSpecies, tipsFor } from '../data/index.js';
 import { store, computeStats } from '../store.js';
+import { currentUser } from '../auth.js';
 import { speciesHero, icon } from '../art.js';
 import { esc, round, fmtDate } from '../ui.js';
 
@@ -109,7 +110,7 @@ export function render(ctx) {
 
 export async function mount(root) {
   const pane = root.querySelector('#homeStats');
-  const catches = await store.allCatches();
+  const catches = await store.catchesFor(currentUser()?.id);
   const stats = computeStats(catches);
 
   if (!catches.length) {

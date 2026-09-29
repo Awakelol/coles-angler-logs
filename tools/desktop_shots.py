@@ -1,8 +1,4 @@
-"""Desktop screenshots at 1440x900.
-
-The tour in screenshots.py runs at phone width, so the rail, the two-column
-map and the rounded content panel never appear in it. desktop_check.py proves
-those layouts are correct; this is for looking at them.
+"""Desktop screenshots at 1440x900 (the main tour runs at phone width).
 
 Run:  python tools/desktop_shots.py   (with the static server up)
 Out:  _screenshots/desktop/
@@ -10,6 +6,7 @@ Out:  _screenshots/desktop/
 import asyncio, base64, json, os, subprocess, tempfile, time, urllib.request, websockets
 
 CHROME = next((p for p in [
+    os.environ.get("CHROME", ""),
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
 ] if os.path.exists(p)), None)

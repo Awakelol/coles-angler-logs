@@ -1,55 +1,24 @@
-// ---------------------------------------------------------------------------
-// IDENTIFY — point the camera at a fish, find out what it is.
+// Photo identification: the "photo" mode of the Info page.
 //
-// A LIVE VIEWFINDER, but still a STILL sent for identification. Those are two
-// different questions and only the first one changed:
+// Shows a live camera preview, but only sends a single still for
+// identification. Running a model on every frame wouldn't help (the fish
+// isn't moving), in-browser models don't know Indo-Pacific species, and a
+// still can wait until there's signal.
 //
-//   * Live PREVIEW: yes. `capture="environment"` handed the whole job to the
-//     OS camera app — you left the page, shot, came back, and the app had no
-//     say in framing. In-page you can see the guide, hold the fish where it
-//     belongs and shoot when it looks right.
+// The camera often isn't available (no HTTPS, no camera, permission denied,
+// in use), so the file picker is always shown as well.
 //
-//   * Live DETECTION, a model running per frame: still no, for the reasons
-//     that have not changed. A fish in a bucket or on the line is not moving,
-//     so per-frame inference buys nothing; the general-purpose browser models
-//     classify ImageNet categories — "coho salmon", "tench" — which is useless
-//     for Indo-Pacific reef fish, and one that isn't useless is too large to
-//     ship to a phone on a boat; it would eat the battery on the one device
-//     that has to last the trip. Above all a still can be taken now and
-//     identified later, which matters more than anything else here: this app
-//     is used where there is no signal, and a photo waits for one.
-//
-// So the shutter draws the current frame to a canvas and that still goes down
-// the same pipeline the file picker always used.
-//
-// THE CAMERA CAN ALWAYS FAIL and it is not an edge case — no HTTPS, no camera,
-// permission denied, or another app holding the device. Every one of those
-// lands on the file picker, which is why the picker is a permanent control at
-// the bottom rather than a fallback that appears in trouble. A photo already
-// in the roll is a first-class way in: the good shot of the fish is often the
-// one taken an hour ago on the boat.
-//
-// Recognition goes through /api/identify, a Cloudflare Worker (worker/), so
-// the API keys stay off this device. Fishial names the fish and the local
-// catalogue checks whether that species occurs here at all — see
-// js/identify-verdict.js. An AI second opinion is optional and costs money, so
-// the response says which path ran and the screen repeats it: a free answer
-// must never look like one that had a second opinion behind it.
-//
-// This is no longer a page of its own. It is the photo mode of Info, sitting
-// beside the search box: naming a fish you are holding and looking one up by
-// name are the same question asked two ways, so they belong behind the same
-// control rather than on opposite sides of the app. `/identify` still resolves
-// — it redirects to the mode. What lives here is the panel and its wiring;
-// Info renders it.
-// ---------------------------------------------------------------------------
+// Recognition goes through /api/identify (the Cloudflare Worker in worker/) so
+// API keys stay off the device. Fishial names the fish and the local catalogue
+// checks it occurs here (identify-verdict.js). An LLM second opinion is
+// optional; the result shows which path was used.
 
 import { prepareMedia, LIMITS, fmtMB } from '../media.js';
 import { getSpecies, localNames } from '../data/index.js';
 import { speciesHero, icon } from '../art.js';
 import { esc, toast, loadingBlock } from '../ui.js';
 
-/** The panel itself, with no page chrome — Info supplies that. */
+/** The panel markup; Info provides the surrounding page. */
 export function identifyPanelHtml() {
   return `
     <div class="section-head" style="margin-top:8px">
@@ -58,13 +27,9 @@ export function identifyPanelHtml() {
     </div>
     <div class="card identify">
       <div class="identify__stage" id="shot" data-mode="idle">
-        <!-- muted + playsinline are not optional: without them iOS refuses to
-             play inline and opens a fullscreen player over the app instead. -->
+        <!-- muted + playsinline: otherwise iOS opens a fullscreen player -->
         <video id="camView" playsinline muted autoplay></video>
-        <!-- Framing guide. The single biggest thing separating a photo that
-             identifies from one that doesn't is the fish filling the frame
-             side-on, so the app says so where you are looking rather than in
-             help text under the button. -->
+        <!-- framing guide -->
         <div class="identify__guide" aria-hidden="true"><span></span></div>
         <div class="identify__idle">
           ${icon('camera', { size: 108, palette: 'slate' })}
@@ -80,8 +45,6 @@ export function identifyPanelHtml() {
         <button class="btn btn--sm" id="clearPhoto" hidden>Retake</button>
       </div>
 
-      <!-- Always here, never only in trouble: an existing photo is a normal
-           way to use this, not a consolation for a camera that failed. -->
       <input type="file" id="fishPhoto" accept="image/*" hidden>
       <button class="identify__upload" id="uploadPhoto">
         ${icon('camera', { size: 18, palette: 'slate' })}
@@ -98,13 +61,9 @@ export function identifyPanelHtml() {
 }
 
 /**
- * Wire the panel. Returns a cleanup that stops the camera and revokes the URL.
- *
- * The caller HAS to invoke it, and it matters more now than it did: a camera
- * left running is a light on the user's phone and a drain on the battery they
- * need for the trip. This used to lean on a one-shot `hashchange` listener,
- * which worked when leaving the page was the only way out — but Info switches
- * modes with replaceState, so no hashchange fires.
+ * Wire up the panel. Returns a cleanup function that stops the camera and
+ * revokes the preview URL. Info must call it when leaving photo mode, since
+ * it switches modes with replaceState (no hashchange).
  */
 export function mountIdentifyPanel(root) {
   const input = root.querySelector('#fishPhoto');
@@ -127,7 +86,7 @@ export function mountIdentifyPanel(root) {
     objectUrl = null;
   };
 
-  /** Stop every track. Releasing the <video> alone leaves the light on. */
+  /** Stop all tracks (clearing the <video> alone leaves the camera on). */
   function stopCamera() {
     if (!stream) return;
     for (const track of stream.getTracks()) track.stop();
@@ -135,7 +94,7 @@ export function mountIdentifyPanel(root) {
     video.srcObject = null;
   }
 
-  /** idle | live | still — one attribute the CSS reads, so no class juggling. */
+  /** idle | live | still, exposed as a data attribute for CSS. */
   function setMode(mode) {
     stage.dataset.mode = mode;
     start.hidden = mode !== 'idle';
@@ -146,8 +105,7 @@ export function mountIdentifyPanel(root) {
 
   async function openCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      // Not a failure worth a toast: the upload button below does the job and
-      // is already on screen. Say why the viewfinder isn't there and stop.
+      // The upload button is still there; just explain why there's no preview.
       msg.textContent = 'No camera on this device — upload a photo below';
       start.hidden = true;
       return;
@@ -155,9 +113,7 @@ export function mountIdentifyPanel(root) {
     start.disabled = true;
     start.textContent = 'Starting…';
     try {
-      // The rear camera by preference, not by requirement: `exact` throws
-      // outright on a laptop with only a front camera, and a webcam pointed at
-      // a fish on the desk is a perfectly good photo.
+      // Prefer the rear camera, but don't require it (`exact` fails on laptops).
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } },
         audio: false,
@@ -179,7 +135,7 @@ export function mountIdentifyPanel(root) {
     }
   }
 
-  /** The current frame, at the camera's real resolution rather than the CSS box. */
+  /** Grab the current frame at the camera's native resolution. */
   function grabFrame() {
     const w = video.videoWidth;
     const h = video.videoHeight;
@@ -203,19 +159,17 @@ export function mountIdentifyPanel(root) {
     result.innerHTML = '';
     input.value = '';
     msg.textContent = 'Camera off';
-    // Straight back to the viewfinder if it is still running — a retake that
-    // makes you press "start camera" again is a retake you won't bother with.
+    // Go straight back to the live preview if it's still running.
     setMode(stream ? 'live' : 'idle');
   }
 
-  /** The one path both the shutter and the file picker end in. */
+  /** Shared by the shutter and the file picker. */
   async function handle(file, busyBtn, busyLabel) {
     const label = busyBtn?.textContent;
     if (busyBtn) { busyBtn.disabled = true; busyBtn.textContent = busyLabel; }
     shoot.disabled = true;
     try {
-      // Same pipeline the catch log uses — downscales and re-encodes, so a
-      // 12 MP photo becomes something an API call can actually carry.
+      // Same downscaling as catch photos.
       const media = await prepareMedia(file);
       releaseUrl();
       objectUrl = URL.createObjectURL(media.blob);
@@ -239,9 +193,8 @@ export function mountIdentifyPanel(root) {
   shoot.addEventListener('click', async () => {
     try {
       const frame = await grabFrame();
-      // Keep the camera RUNNING through the identify. Stopping it here made
-      // "Retake" a two-step cold start, and the permission prompt can come
-      // back a second time on some browsers once the track is released.
+      // Keep the camera running so Retake is instant (and some browsers
+      // re-prompt for permission after the track is released).
       await handle(new File([frame], 'catch.jpg', { type: 'image/jpeg' }), null, null);
     } catch (err) {
       toast(err.message || 'Could not take that photo');
@@ -260,7 +213,7 @@ export function mountIdentifyPanel(root) {
   };
 }
 
-/** Blob -> base64, without the data: prefix the API doesn't want. */
+/** Blob -> base64 without the data: prefix. */
 function toBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -287,7 +240,7 @@ async function identify(blob, pane) {
       return;
     }
   } catch {
-    // Offline is the normal case on the water, not an error worth shouting at.
+    // Offline is common on the water; not an error.
     pane.innerHTML = problemHtml(0, null);
     return;
   }
@@ -295,7 +248,7 @@ async function identify(blob, pane) {
   pane.innerHTML = verdictHtml(data);
 }
 
-/** Confidence drives the colour, so a low-confidence guess never looks certain. */
+/** Colour by confidence so a weak guess doesn't look certain. */
 const TONE = { high: 'notice', medium: 'notice notice--warn', low: 'notice notice--warn' };
 
 function verdictHtml(v) {

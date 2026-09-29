@@ -1,10 +1,11 @@
 """
 Desktop-layout checks. The main suite runs at phone width, so the sidebar
-behaviour — zone detail in the panel rather than a modal — is invisible to it.
+behaviour - zone detail in the panel rather than a modal - is invisible to it.
 """
 import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.request, websockets
 
 CHROME = next((p for p in [
+    os.environ.get("CHROME", ""),
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
 ] if os.path.exists(p)), None)
@@ -15,7 +16,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_screensho
 PASS, FAIL = [], []
 def check(name, ok, detail=""):
     (PASS if ok else FAIL).append(name)
-    print(f"  {'PASS' if ok else 'FAIL'}  {name}{(' — ' + detail) if detail and not ok else ''}")
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}{(' - ' + detail) if detail and not ok else ''}")
 
 def hj(path, n=40):
     for _ in range(n):
@@ -85,8 +86,7 @@ async def main():
             """)
             check("the nav is a rail down the left",
                   rail["vertical"] and rail["onTheLeft"], str(rail))
-            # Every destination has a home up here, including the two the phone
-            # bar has no room for.
+            # All destinations are in the rail, including the phone-only-hidden ones.
             check("the rail lists every destination",
                   rail["labels"] == ["Home", "Map", "Log", "Info", "Account", "Settings"],
                   str(rail["labels"]))
@@ -99,10 +99,8 @@ async def main():
             check("the phone bar swell is gone", rail["noBump"], str(rail))
             check("content clears the rail", rail["contentClear"], str(rail))
 
-            # The rail is the one dark surface in a light app, so it is the one
-            # place --ink lands on a dark ground unnoticed. That is exactly what
-            # happened: the active row came out near-black on blue, because a
-            # later rule OUTSIDE the media query won on source order.
+            # Active rail item contrast (a later rule outside the media query
+            # once made it near-black on blue).
             contrast = await ev("""
                 const lum = (c) => {
                     const [r,g,b] = c.match(/[0-9.]+/g).slice(0,3).map(Number)
@@ -185,15 +183,14 @@ async def main():
                   w["label"] > 20 and narrow["label"] == 0, str(collapse))
             check("the icons centre in the collapsed rail",
                   narrow["iconDrawn"] and narrow["iconOffCentre"] <= 2, str(narrow))
-            # The mark is a <span> inside an <a>, so the label rule caught it and
-            # collapsed the logo along with the words.
+            # The brand mark is a span inside a link; it must not collapse
+            # with the labels.
             check("the brand mark survives the collapse", narrow["markShown"], str(narrow))
             check("collapsed icons get a title to read",
                   not w["titled"] and narrow["titled"] == "Home", str(collapse))
             check("the choice is remembered", narrow["stored"] is True, str(narrow))
 
-            # It is a preference about how you want to work, so it has to
-            # outlive the page, not just the click.
+            # Collapsed state persists across reloads.
             await send("Page.navigate", url=f"{BASE}/index.html#/info")
             for _ in range(40):
                 if await ev("return !!document.querySelector('.species-card');"): break
@@ -220,9 +217,7 @@ async def main():
                   restored["width"] > 200 and restored["label"] > 20
                   and not restored["titled"], str(restored))
 
-            # The roll is a phone behaviour. Its CSS is behind a media query but
-            # tabindex is not a rule — applied up here it left every link in a
-            # fully visible rail unreachable by keyboard on the map.
+            # The phone nav-hiding must not leave rail links unfocusable.
             await send("Page.navigate", url=f"{BASE}/index.html#/map")
             for _ in range(60):
                 if await ev("return !!document.querySelector('#mapWeather .now-card__temp');"): break
@@ -268,9 +263,8 @@ async def main():
             check("map takes the majority", layout["mapShare"] >= 0.6, str(layout["mapShare"]))
 
 
-            # On a wide window the map's left edge meets the sidebar's border —
-            # a real boundary — so only the two window-facing sides get the
-            # gutter, and the left must stay flush or the border looks orphaned.
+            # Desktop: the map's left edge is flush with the sidebar; only the
+            # window-facing sides are inset.
             inset = await ev("""
                 const map = document.getElementById('fishMap').getBoundingClientRect();
                 const side = document.querySelector('.map-screen__info').getBoundingClientRect();
@@ -287,9 +281,7 @@ async def main():
             check("the map still meets the sidebar border",
                   abs(inset["fromSidebar"]) <= 2, f"{inset['fromSidebar']}px")
             check("insetting the map did not collapse it", inset["w"] > 400, str(inset))
-            # The drawer is a phone answer to a phone problem. On a wide
-            # window the panel is a sidebar covering no part of the map, so
-            # there is nothing to pull down and no grip to pull it with.
+            # No drawer or grip on desktop.
             sidebar = await ev("""
                 const d = document.getElementById('wxDrawer');
                 const grip = document.getElementById('wxGrip');
@@ -357,9 +349,7 @@ async def main():
             check("zone detail is complete", zone["hasSpecies"], str(zone))
             check("zone panel can be closed", zone["closable"], str(zone))
 
-            # A fish opens in the sidebar too. There is no sheet here to swap,
-            # so this is the case that proves mountZoneSheet isn't quietly
-            # assuming one — the panel keeps its own head and close button.
+            # A fish opens in the sidebar panel too (no sheet here).
             drill = await ev("""
                 const panel = document.getElementById('zonePanel');
                 const zoneTitle = panel.querySelector('.zone-panel__head h2').textContent;

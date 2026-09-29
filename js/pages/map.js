@@ -1,10 +1,8 @@
-// Fishing map — zoom-aware zone pins over OpenStreetMap tiles.
+// Fishing map: zone pins over OpenStreetMap tiles, with the weather panel.
 //
-// Each zone carries a `minZoom`, so broad offshore grounds show when zoomed
-// out and small creeks only appear once you zoom in. Tapping a pin opens the
-// species found there plus lure and retrieve recommendations.
-//
-// Leaflet is vendored in vendor/leaflet so the app has no CDN dependency.
+// Each zone has a `minZoom`, so offshore grounds show when zoomed out and small
+// creeks only appear up close. Tapping a pin opens the zone's species and
+// tactics. Leaflet is vendored in vendor/leaflet.
 
 import { getLocation, nearestPlace, geolocationSupported, withinBounds } from '../api/geo.js';
 import { icon } from '../art.js';
@@ -18,7 +16,7 @@ import { prefs } from '../store.js';
 
 let leafletPromise = null;
 
-/** Load the vendored Leaflet bundle once, on first visit to this page. */
+/** Load the vendored Leaflet bundle once. */
 function loadLeaflet() {
   if (window.L) return Promise.resolve(window.L);
   if (leafletPromise) return leafletPromise;
@@ -57,8 +55,7 @@ export function render(ctx) {
 
   return `
     <div class="map-screen">
-      <!-- The nav bar is gone on this screen (app.js), so this row is the only
-           way off the map. Phone only — the desktop rail is already visible. -->
+      <!-- phone only: the nav bar is hidden on the map -->
       <div class="map-screen__top">
         <a class="map-screen__back" href="#/">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -71,27 +68,18 @@ export function render(ctx) {
       </div>
 
       <div class="map-screen__info" id="wxDrawer">
-        <!-- Phone only. The weather sits over the foot of the map as a drawer
-             you can pull down for a bigger map, leaving the grip and the place
-             name behind so there is something to pull back up. On a wide
-             window it is a sidebar and this does nothing. -->
+        <!-- phone only: drag handle for the weather drawer -->
         <button class="wx-grip" id="wxGrip" aria-expanded="true" aria-controls="wxDeck"
                 aria-label="Collapse the weather panel"><span></span></button>
         <div class="map-screen__bar">
           <p class="eyebrow" id="mapSource">${esc(ctx.region.name)}</p>
-          <!-- Only appears once the weather is showing a tapped zone rather
-               than you. It is the only thing on screen saying that what you
-               are reading is somewhere you aren't, so it doubles as the
-               indicator and the way back. -->
+          <!-- shown while the weather is for a tapped zone -->
           <button class="map-screen__reset" id="wxReset" hidden
                   aria-label="Show the weather where I am again"
                   title="Back to my location">&times;</button>
           <a class="map-screen__link" href="#/conditions">Tides &amp; forecast &rarr;</a>
         </div>
-        <!-- Two pages side by side: conditions, then the five-day strip.
-             Swiping between them costs no vertical space, which is what the
-             stacked version was fighting for on a phone. Scroll-snap does the
-             gesture natively — no drag handling, and it keeps momentum. -->
+        <!-- conditions and 5-day forecast, side by side with scroll-snap -->
         <div class="wx-deck" id="wxDeck">
           <section class="wx-deck__page" id="mapWeather"
                    aria-label="Current conditions">${loadingBlock('Fetching weather…')}</section>
@@ -102,23 +90,17 @@ export function render(ctx) {
           <button role="tab" data-page="1" aria-label="Five day forecast" aria-selected="false"></button>
         </div>
 
-        <!-- Desktop only: a tapped zone renders here instead of in a modal. -->
+        <!-- desktop: zone details render here -->
         <div id="zonePanel" hidden></div>
       </div>
 
       <div id="mapWrap">
         <div id="fishMap" role="application" aria-label="Fishing zone map"></div>
-        <!-- Over the map rather than above it in the layout: this screen is
-             one screenful with no page scroll, and a real row would cost the
-             height the drawer exists to give back. -->
         <div class="map-filters" id="mapFilters" role="group" aria-label="What to show on the map">
           <button class="map-filters__btn" data-layer="zones" aria-pressed="true">Zones</button>
           <button class="map-filters__btn" data-layer="spots" aria-pressed="true">Spots</button>
         </div>
-        <!-- Separate from the filters on purpose: those choose what is drawn
-             ON the map, this chooses what the map IS. Same pill styling so it
-             is obviously the same class of control, its own group so the two
-             questions don't read as one list. -->
+        <!-- basemap toggle -->
         <div class="map-filters map-filters--base">
           <button class="map-filters__btn" id="basemapBtn" aria-pressed="false"
                   aria-label="Switch between street map and satellite imagery">Map</button>
@@ -138,18 +120,14 @@ export function render(ctx) {
     </div>`;
 }
 
-// Rapid taps across zones start overlapping fetches, and they don't come back
-// in the order they were sent. Without this the panel can settle on whichever
-// request happened to be slowest rather than the zone you actually tapped.
+// Ignore responses from earlier requests when zones are tapped quickly.
 let weatherSeq = 0;
 
 /**
- * Weather panel above the map. Independent of Leaflet — if tiles fail to
- * load the forecast should still be there, and vice versa.
+ * Weather panel above the map (independent of Leaflet).
  *
- * @param {?{coords: object, name: string}} place a zone to show the weather
- *        for instead of the device location. Null means work it out: device
- *        fix if we have one and it's in the country, otherwise the region.
+ * @param {?{coords: object, name: string}} place zone to show weather for, or
+ *        null to use the device location (or the region if unavailable)
  */
 async function mountWeather(root, ctx, place = null) {
   const pane = root.querySelector('#mapWeather');
@@ -168,12 +146,8 @@ async function mountWeather(root, ctx, place = null) {
 
   if (reset) reset.hidden = !place;
 
-  // Where the person actually is, not a bearing and not the region name.
-  // Coordinates are meaningless to read, and naming the region is wrong when
-  // they're somewhere else entirely.
-  //
-  // A zone needs no lookup at all: its name is the one the user just tapped,
-  // which beats whatever the reverse geocoder calls that patch of water.
+  // Label: the zone's name if one was tapped, otherwise a reverse-geocoded
+  // place name for the device location.
   if (source) {
     if (place) {
       source.textContent = place.name;
@@ -203,35 +177,25 @@ async function mountWeather(root, ctx, place = null) {
 
 export async function mount(root, ctx) {
   const zones = ctx.region.zones || [];
-  // Weather is not tied to zones — show it even for a region with none.
+  // Show weather even for a region with no zones.
   mountWeather(root, ctx);
   if (!zones.length) return;
 
   const panel = root.querySelector('#zonePanel');
   const wideScreen = () => matchMedia('(min-width: 900px)').matches;
 
-  // Tapping a zone also swings the weather panel onto it. Leyte is 150 km
-  // end to end with an 8-knot strait at one end, so "the weather" is not one
-  // thing across it — the conditions where you are standing can be no guide
-  // at all to the water you were thinking of running out to.
-  //
-  // It stays on that zone until you dismiss it, deliberately: closing the
-  // sheet is how you get a clear look at the weather you just asked for, so
-  // reverting there would undo the thing you tapped for.
+  // Tapping a zone switches the weather panel to that zone (conditions vary a
+  // lot across Leyte). It stays until dismissed, even after the sheet closes.
   root.querySelector('#wxReset')?.addEventListener('click', () => mountWeather(root, ctx));
 
-  // On a wide window the zone belongs in the sidebar under the weather —
-  // a modal over a map you're still reading is the wrong shape there. On a
-  // phone there's no sidebar to put it in, so it stays a sheet.
-  // The sheet can walk on to another zone from a fish's "possible in these
-  // waters" list, so the weather follows the sheet rather than only the pin.
+  // Desktop: zone details go in the sidebar. Phone: a bottom sheet. The
+  // weather follows when the sheet moves on to another zone.
   const followWeather = (z) => mountWeather(root, ctx, { coords: z.coords, name: z.name });
 
   const openZone = (zone) => {
     followWeather(zone);
     if (!wideScreen() || !panel) {
-      // mountZoneSheet fills the body itself, so the render callback only has
-      // to hand openSheet something non-empty to size the sheet from.
+      // mountZoneSheet fills the body; openSheet just needs something to size from.
       openSheet(zone.name, () => zoneSheetHtml(zone), (sheetRoot) =>
         mountZoneSheet(sheetRoot, zone, ctx.regionId, { onZone: followWeather })
       );
@@ -274,12 +238,7 @@ export async function mount(root, ctx) {
   const cfg = ctx.region.map || {};
   const center = cfg.center || ctx.region.coords;
 
-  // Panning is fenced to the country the region belongs to. Without it you can
-  // drag off into empty ocean and lose the map entirely, with nothing on screen
-  // to tell you which way back — and every tile you drag through is a request
-  // to OpenStreetMap for somewhere this app has nothing to say about.
-  // Viscosity 1 makes it a wall rather than a rubber band; a soft edge on a
-  // touchscreen just feels like the map is fighting you.
+  // Keep panning inside the country (hard edge, no rubber band).
   const pb = cfg.panBounds;
   const map = L.map(container, {
     center: [center.lat, center.lon],
@@ -297,49 +256,32 @@ export async function mount(root, ctx) {
 
   // --- basemaps ------------------------------------------------------------
   //
-  // Street tiles are the better default: they name the towns and draw the
-  // roads you use to reach the water. Satellite is what you want once you are
-  // close in, where the drawn coastline is a generalisation and the imagery
-  // shows the actual reef edge, the sandbar and the channel through it.
-  //
-  // Esri's World Imagery is free and needs no key, unlike Mapbox or Google.
-  // It is their service on their terms, which are fine for personal use and
-  // worth re-reading before anyone makes money from this.
+  // Street map by default; satellite (Esri World Imagery, free, no key) for
+  // close-in detail like reef edges and channels. Check Esri's terms before
+  // any commercial use.
   const basemaps = {
     map: () =>
-      // No maxNativeZoom needed: OSM renders to 19 everywhere and simply
-      // refuses beyond it, which the map's own maxZoom already prevents.
+      // OSM goes to 19, same as the map's maxZoom.
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 19,
       }),
     satellite: () =>
       L.layerGroup([
-        // NOTE the {z}/{y}/{x} order — Esri serves row before column, and
-        // getting it the usual way round yields a plausible-looking map of
-        // somewhere else entirely.
+        // Esri uses {z}/{y}/{x} (row before column).
         L.tileLayer(
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           {
             attribution:
               'Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community',
             maxZoom: 19,
-            // Esri's imagery over Leyte stops at 18. Ask for 19 and it does
-            // NOT 404 — it returns a real tile reading "Map data not yet
-            // available", so the map appears to break at the last zoom step.
-            // maxNativeZoom stops the request and upscales the 18 tile
-            // instead: soft, but continuous and still the right place.
-            //
-            // Measured, not assumed. The placeholder is byte-identical
-            // wherever it appears, so fetching two tiles at one zoom and
-            // comparing them finds the ceiling; over Leyte 18 is the last
-            // level with real imagery everywhere.
+            // Esri imagery over Leyte stops at 18. Past that it returns a
+            // "Map data not yet available" tile instead of a 404, so cap the
+            // native zoom and let Leaflet upscale.
             maxNativeZoom: 18,
           }
         ),
-        // Imagery alone has no names on it. On open water that is most of the
-        // screen, and a map you cannot read place names off is hard to use for
-        // the one thing this is for — working out where you are going.
+        // Place-name labels on top of the imagery.
         L.tileLayer(
           'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
           { maxZoom: 19, maxNativeZoom: 18, pane: 'shadowPane' }
@@ -389,14 +331,10 @@ export async function mount(root, ctx) {
     return { zone, marker };
   });
 
-  // The broadest tier of pins — the ones that ask for the least zoom. Used as
-  // the floor below, so there is always something on the map.
+  // Lowest minZoom of any zone; used as a floor so the map is never empty.
   const broadestZoom = Math.min(...zones.map((z) => z.minZoom ?? 0));
 
-  // Reveal zones progressively: a pin shows once the map is zoomed in far
-  // enough for it to be meaningful, so the view never turns into pin soup.
-  // Filter state. Persisted: someone who fishes by their own marks shouldn't
-  // have to switch the region's zones off on every visit.
+  // Filters, remembered between visits.
   let showZones = prefs.get('mapShowZones', true) !== false;
   let showSpots = prefs.get('mapShowSpots', true) !== false;
 
@@ -409,17 +347,9 @@ export async function mount(root, ctx) {
       return;
     }
 
-    // Zoomed out further than any zone asks for, which the map's own minZoom
-    // allows: every pin would fail its test and you'd get bare tiles with
-    // "0 of 21 zones shown". Show the broadest tier instead. Clamping the
-    // ZOOM to fix this was the old approach and it was worse — it cropped the
-    // region to force a pin into view, so "the whole of Leyte" wasn't.
-    //
-    // At that last step out the broad gulf pins do touch, ~25px apart against
-    // a 44px pin. Raising the map's minZoom would separate them, but it would
-    // also crop the island on a landscape phone, where the pane is short
-    // enough to need the wider zoom to fit. Overlap at the extreme beats
-    // cutting the region off at a size people actually use.
+    // Zoomed out past every zone's minZoom: show the broadest tier instead
+    // of an empty map. (Clamping the zoom would crop the island on small
+    // screens, so some overlap at the widest zoom is accepted.)
     const floor = zoom < broadestZoom;
 
     let visible = 0;
@@ -441,18 +371,12 @@ export async function mount(root, ctx) {
   map.on('zoomend', syncMarkers);
   syncMarkers();
 
-  /**
-   * The fallback view: the whole region. Used before a location is known and
-   * whenever the device won't give one, so the map always shows something
-   * useful rather than an arbitrary point of empty water.
-   */
+  /** Fit the whole region. Used until a location is known, or without one. */
   function showWholeRegion() {
     const b = cfg.bounds;
     if (b) {
       const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
-      // Whatever zoom actually fits the region, unclamped. If that lands
-      // wider than any pin asks for, syncMarkers shows the broadest tier
-      // rather than the view zooming in and cutting the island off.
+      // Don't clamp; syncMarkers handles zooms wider than any pin.
       const fitZoom = map.getBoundsZoom(bounds, false, L.point(20, 20));
       map.setView(bounds.getCenter(), fitZoom, { animate: false });
     } else {
@@ -469,9 +393,7 @@ export async function mount(root, ctx) {
 
   showWholeRegion();
 
-  // The container is sized by CSS after render, and again whenever the split
-  // changes — rotating the phone, or the window crossing the desktop
-  // breakpoint. Leaflet caches its size and renders half a map otherwise.
+  // Leaflet caches its container size, so tell it when the layout changes.
   setTimeout(() => map.invalidateSize(), 60);
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(() => map.invalidateSize());
@@ -486,7 +408,7 @@ export async function mount(root, ctx) {
   function showYouAreHere(fix) {
     if (youLayer) map.removeLayer(youLayer);
     youLayer = L.layerGroup([
-      // Accuracy halo, so a poor fix doesn't look like false precision.
+      // Accuracy circle.
       L.circle([fix.lat, fix.lon], {
         radius: Math.max(fix.accuracyM, 25),
         color: '#F26430',
@@ -508,11 +430,7 @@ export async function mount(root, ctx) {
     try {
       const fix = await getLocation();
 
-      // Outside the country, flying to the fix would be pointless twice over:
-      // maxBounds would drag the view back to the border anyway, and the
-      // "you are here" dot would be left somewhere off screen implying the
-      // map had simply broken. Say where they are instead, and keep the
-      // region on screen — which is the thing they opened the app to see.
+      // Outside the country: keep the region in view and say where they are.
       if (!withinBounds(fix, cfg.panBounds)) {
         showWholeRegion();
         hint.textContent =
@@ -524,14 +442,8 @@ export async function mount(root, ctx) {
       map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), LOCATE_ZOOM));
       syncMarkers();
 
-      // Being far outside the region is worth saying — otherwise the map just
-      // looks empty and broken.
-      //
-      // The distance quoted is to the nearest ZONE, not to the region centre.
-      // Those used to disagree: the centre is a single point kept fixed as the
-      // tide-cache key, so once the region grew from one gulf to the whole
-      // island it could be a hundred kilometres from the water nearest you,
-      // and the message put that number next to a claim about zones.
+      // Far from the region: say so, with the distance to the nearest zone
+      // (the region centre can be far from any water).
       const near = nearestPlace(ctx.region, fix);
       if (!near) {
         hint.textContent = `No ${ctx.region.name} zones to compare against`;
@@ -542,8 +454,7 @@ export async function mount(root, ctx) {
       }
       return true;
     } catch (err) {
-      // Any refusal or failure drops back to the whole region rather than
-      // leaving the map wherever it happened to be.
+      // On failure, fall back to the whole-region view.
       showWholeRegion();
       if (!silent) toast(err.message);
       return false;
@@ -552,9 +463,7 @@ export async function mount(root, ctx) {
     }
   }
 
-  // Pressing "centre on me" means me — including in the weather panel, if a
-  // zone had taken it over. Only on a deliberate press: the silent attempt on
-  // open happens before any zone can have been tapped.
+  // An explicit "centre on me" also takes the weather back from a zone.
   root.querySelector('#locateBtn')?.addEventListener('click', () => {
     mountWeather(root, ctx);
     locate();
@@ -565,7 +474,7 @@ export async function mount(root, ctx) {
   const dots = root.querySelector('#wxDots');
   if (deck && dots) {
     const syncDots = () => {
-      // Round rather than floor: a snap can settle a pixel short of exact.
+      // Round, since snapping can land a pixel short.
       const page = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
       for (const b of dots.querySelectorAll('[data-page]')) {
         b.setAttribute('aria-selected', String(Number(b.dataset.page) === page));
@@ -580,12 +489,11 @@ export async function mount(root, ctx) {
     syncDots();
   }
 
-  // Ask on open. A browser only shows the prompt once — after that it answers
-  // from the stored decision — so this is not a repeated interruption, and a
-  // refusal simply leaves the whole-region view already on screen.
+  // Ask for location on open. Browsers only prompt once; a refusal just
+  // leaves the region view.
   if (geolocationSupported()) locate({ silent: true });
 
-  // Your own marks, on top of the region's zones.
+  // User spots on top of the zones.
   const userSpots = mountUserSpots(L, map, ctx.regionId, { visible: showSpots });
 
   // --- layer filters -------------------------------------------------------
@@ -611,23 +519,17 @@ export async function mount(root, ctx) {
       String(btn.dataset.layer === 'zones' ? showZones : showSpots));
   }
 
-  // --- the weather drawer (phone only) -------------------------------------
+  // --- weather drawer (phone only) -----------------------------------------
   //
-  // On a phone the weather sits over the foot of the map and pulls down out of
-  // the way, leaving its grip and the place name behind. The map is the reason
-  // this screen exists; the forecast is what you glance at before deciding to
-  // look at it. A fixed split made both worse on a short phone.
-  //
-  // The drag is hand-rolled for the same reason the long-press is: a finger on
-  // the grip has to be told apart from a finger scrolling the panel's own
-  // contents, and no built-in gesture knows the difference.
+  // The weather panel sits over the bottom of the map and can be dragged down
+  // out of the way, leaving the grip and place name visible. Dragging is done
+  // by hand so it doesn't interfere with scrolling inside the panel.
 
   const drawer = root.querySelector('#wxDrawer');
   const grip = root.querySelector('#wxGrip');
 
   if (drawer && grip) {
-    // How much stays on screen when it is down. Measured rather than guessed:
-    // a long place name wraps the bar and a hardcoded value would clip it.
+    // Height left showing when collapsed (measured; long names wrap).
     const measurePeek = () => {
       const bar = root.querySelector('.map-screen__bar');
       if (!bar) return 56;
@@ -637,8 +539,7 @@ export async function mount(root, ctx) {
     const screen = root.querySelector('.map-screen');
     const applyPeek = () => drawer.style.setProperty('--wx-peek', `${measurePeek()}px`);
 
-    // How much of the map the drawer is covering right now, so the locate
-    // button and the zone hint can sit above it instead of behind it.
+    // Expose how much map is covered so the locate button can sit above it.
     const applyVisible = () => {
       const px = collapsed ? measurePeek() : Math.round(drawer.getBoundingClientRect().height);
       screen?.style.setProperty('--wx-visible', `${px}px`);
@@ -654,11 +555,11 @@ export async function mount(root, ctx) {
         collapsed ? 'Expand the weather panel' : 'Collapse the weather panel');
       applyVisible();
       if (remember) prefs.set('mapDrawerDown', collapsed);
-      // Leaflet caches its size; the map's visible area just changed.
+      // Leaflet caches its size.
       setTimeout(() => map.invalidateSize(), 260);
     };
 
-    // The bar's height isn't final until the place name has resolved.
+    // Re-measure once the place name has loaded.
     applyPeek();
     setTimeout(() => { applyPeek(); applyVisible(); }, 800);
     setCollapsed(collapsed, false);
@@ -685,8 +586,7 @@ export async function mount(root, ctx) {
     grip.addEventListener('pointermove', (e) => {
       if (!dragging) return;
       const max = travel();
-      // Clamped both ways: dragging past either end should feel like the end,
-      // not detach the panel from the bottom of the screen.
+      // Clamp at both ends.
       dy = Math.min(max, Math.max(0, (startCollapsed ? max : 0) + (e.clientY - startY)));
       if (Math.abs(e.clientY - startY) > 4) moved = true;
       drawer.style.transform = `translateY(${dy}px)`;
@@ -698,7 +598,7 @@ export async function mount(root, ctx) {
       try { grip.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
       drawer.classList.remove('is-dragging');
       drawer.style.transform = '';
-      // A tap toggles; a drag settles wherever it passed halfway.
+      // Tap toggles; a drag snaps to the nearer end.
       setCollapsed(moved ? dy > travel() / 2 : !collapsed);
     };
     grip.addEventListener('pointerup', endDrag);
@@ -708,7 +608,7 @@ export async function mount(root, ctx) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(!collapsed); }
     });
 
-    // Crossing the desktop breakpoint changes what the panel even is.
+    // Re-evaluate when crossing the desktop breakpoint.
     const wide = matchMedia('(min-width: 900px)');
     wide.addEventListener('change', () => {
       drawer.style.transform = '';
@@ -718,7 +618,7 @@ export async function mount(root, ctx) {
     container._wxDrawer = { setCollapsed, isCollapsed: () => collapsed, measurePeek };
   }
 
-  // Handle for the browser test suite (tools/browser_test.py).
+  // Exposed for tools/browser_test.py.
   container._leafletMap = map;
   container._locate = locate;
   container._userSpots = userSpots;

@@ -1,15 +1,9 @@
-// ---------------------------------------------------------------------------
-// SPECIES PHOTOS
+// Species reference photos from Wikipedia / Wikimedia Commons, looked up by
+// scientific name. No key needed, CORS-enabled, and freely licensed (FishBase
+// photos are copyrighted, so those are only linked). Each photo links back to
+// its source page for attribution.
 //
-// Real reference photos, fetched by scientific name from the Wikipedia REST
-// API. No key, CORS-enabled, and everything on Wikimedia Commons carries a
-// free licence (CC or public domain) — unlike FishBase photos, which are
-// copyrighted by individual contributors and may not be embedded. Each photo
-// links back to its Wikipedia page, which is the attribution requirement.
-//
-// Results (including misses) are cached in localStorage for 30 days, so the
-// grid costs at most one request per species ever, not one per page view.
-// ---------------------------------------------------------------------------
+// Results, including misses, are cached in localStorage for 30 days.
 
 const CACHE_KEY = 'angler.photocache';
 const GALLERY_KEY = 'angler.gallerycache';
@@ -17,10 +11,7 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ENDPOINT = 'https://en.wikipedia.org/api/rest_v1/page/summary/';
 const COMMONS = 'https://commons.wikimedia.org/w/api.php';
 
-// Commons search returns plenty that isn't a photo of the animal: range maps,
-// distribution charts, stamps, museum labels, line drawings. Cheap to filter
-// on the filename, and far better than showing a distribution map as if it
-// were the fish.
+// Skip range maps, charts, stamps, labels and drawings by filename.
 const NOT_A_PHOTO = /(map|distribution|range|chart|diagram|drawing|illustration|stamp|logo|icon|label|sign|graph|skeleton|otolith)/i;
 
 function readCache() {
@@ -36,7 +27,7 @@ function writeCache(all) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(all));
   } catch {
-    // Quota hit — start over rather than wedging every future lookup.
+    // Quota exceeded: clear and start over.
     localStorage.removeItem(CACHE_KEY);
   }
 }
@@ -45,8 +36,8 @@ const inFlight = new Map();
 
 /**
  * @param {string} scientific  e.g. "Lutjanus argentimaculatus"
- * @returns {Promise<{src:string,page:string,credit:string}|null>} null when
- *          the species has no free photo — callers should hide the slot.
+ * @returns {Promise<{src:string,page:string,credit:string}|null>} null if no
+ *          free photo exists
  */
 export function fetchPhoto(scientific) {
   if (!scientific) return Promise.resolve(null);
@@ -94,11 +85,8 @@ function readGalleryCache() {
 const galleriesInFlight = new Map();
 
 /**
- * Several photos of one species, from Wikimedia Commons.
- *
- * The Wikipedia summary endpoint only ever returns one image, so the detail
- * sheet uses Commons search instead to show a few angles — a fish in the hand
- * looks very different to one on a reef.
+ * Several photos of a species from Commons search (the Wikipedia summary
+ * endpoint only gives one).
  *
  * @returns {Promise<Array<{src:string,page:string,credit:string,title:string}>>}
  */
@@ -136,7 +124,7 @@ export function fetchPhotos(scientific, limit = 4) {
           return {
             src: info.thumburl,
             page: info.descriptionurl,
-            // extmetadata values are HTML fragments; strip to plain text.
+            // extmetadata values are HTML; strip to text.
             credit: artist.replace(/<[^>]*>/g, '').trim() || 'Wikimedia Commons',
             title: p.title.replace(/^File:/, '').replace(/\.\w+$/, ''),
           };
@@ -159,11 +147,7 @@ export function fetchPhotos(scientific, limit = 4) {
   return req;
 }
 
-/**
- * Fill `figure[data-photo]` elements inside `root` as they scroll into view.
- * Lazy on purpose: the guide shows 40 species and eagerly fetching all of
- * them would be 40 requests for art most people never scroll to.
- */
+/** Lazily fill `figure[data-photo]` elements in `root` as they scroll into view. */
 export function hydratePhotos(root) {
   const figures = [...root.querySelectorAll('figure[data-photo]')];
   if (!figures.length) return;

@@ -1,18 +1,9 @@
-// ---------------------------------------------------------------------------
-// YOUR OWN SPOTS ON THE MAP
+// User map spots: long-press the map to drop a named mark and get directions
+// to it later. Unlike the region's zones and spots these belong to one account.
 //
-// Long-press anywhere on the water to drop a mark, name it, and get directions
-// to it later. Distinct from the zones and `region.spots` that ship with a
-// region: those are the same for everybody, these belong to one account.
-//
-// LONG-PRESS IS HAND-ROLLED rather than using Leaflet's `contextmenu`. That
-// event does fire on some touch browsers, but not all, and where it does the
-// timing isn't ours to set. Worse, it gives no way to distinguish a press from
-// the start of a pan — which on a map is the gesture people actually make most
-// of the time. So: a timer armed on pointerdown, cancelled by movement past a
-// few pixels or by the finger lifting early. Right-click is wired separately
-// for a desktop mouse, where a long press is not a gesture anyone makes.
-// ---------------------------------------------------------------------------
+// Long-press is done by hand (timer on pointerdown, cancelled by movement or
+// release) because Leaflet's contextmenu doesn't fire on every touch browser
+// and can't tell a press from the start of a pan. Right-click covers desktop.
 
 import { store } from './store.js';
 import { currentUser, isSignedIn } from './auth.js';
@@ -22,42 +13,25 @@ import { icon } from './art.js';
 import { esc, toast } from './ui.js';
 
 const LONG_PRESS_MS = 550;
-// Fingers wobble. Under this the press still counts; over it the user was
-// starting to pan and must not get a popup thrown in their way.
+// Movement allowed before a press turns into a pan.
 const MOVE_TOLERANCE_PX = 12;
 
 const NAME_MAX = 60;
 
 /**
- * Directions link for a coordinate.
- *
- * Apple devices get Apple Maps, everything else gets Google. Both are plain
- * https links that also work in a desktop browser, so a wrong guess degrades
- * to a working map rather than a dead scheme URL — which is exactly why this
- * doesn't use `maps://`.
- *
- * iPads have reported themselves as Macintosh since iPadOS 13, hence the
- * touch-points check rather than trusting the platform string alone.
+ * Directions link: Apple Maps on Apple devices, Google Maps elsewhere. Both
+ * are https links, so a wrong guess still opens a working map. (iPadOS
+ * reports itself as Macintosh.)
  */
 export function directionsUrl({ lat, lon }, ua = navigator.userAgent) {
-  const apple =
-    /iPhone|iPad|iPod/.test(ua) ||
-    (/Mac/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1) ||
-    /Macintosh/.test(ua);
+  const apple = /iPhone|iPad|iPod|Macintosh/.test(ua);
   const at = `${lat.toFixed(6)},${lon.toFixed(6)}`;
   return apple
     ? `https://maps.apple.com/?daddr=${at}&dirflg=d`
     : `https://www.google.com/maps/dir/?api=1&destination=${at}`;
 }
 
-/**
- * The nearest of the region's zones, as a phrase.
- *
- * A spot is somewhere off a landmark, not a pair of decimals. The map screen
- * already refuses to show coordinates as a location for the same reason —
- * "11.2380, 125.0040" tells you nothing you can act on, and "Off Cancabato
- * Bay, ~3 km" tells you where you are about to go.
- */
+/** Nearest zone as a phrase, e.g. "Off Cancabato Bay · ~3 km". */
 function nearZone(regionId, at) {
   let best = null;
   for (const z of zonesFor(regionId)) {
@@ -70,7 +44,7 @@ function nearZone(regionId, at) {
   return `Off ${best.name} · ~${km} km`;
 }
 
-/** The pin for one of your own spots. Deliberately not a fish. */
+/** Marker for a user spot (a hook, not a fish, to tell it from zones). */
 function spotMarkerHtml(spot) {
   return `<div class="my-spot-pin" title="${esc(spot.name)}">
             ${icon('hook', { size: 26, palette: 'sunset' })}
@@ -78,7 +52,7 @@ function spotMarkerHtml(spot) {
 }
 
 /**
- * Attach the whole feature to a live Leaflet map.
+ * Add user spots to a Leaflet map.
  *
  * @param {object} L        the Leaflet namespace
  * @param {object} map      the map instance
@@ -93,14 +67,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
 
   const userId = () => currentUser()?.id || null;
 
-  // A spot belongs to an account. Signed out there is no account for it to
-  // belong to, so there is nothing to show and nothing to add.
-  //
-  // Not showing them is a fix in its own right and the more serious of the
-  // two: store.allSpots(null) means "every user's", so a signed-out person on
-  // a shared phone was being shown everybody's marks. That is somebody's
-  // fishing spots, which is exactly the kind of thing people keep to
-  // themselves.
+  // Spots need an account. allSpots(null) would return every user's spots.
   const signedIn = () => isSignedIn();
 
   // --- rendering -----------------------------------------------------------
@@ -124,7 +91,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
       toast(`Removed ${spot.name}`);
     });
 
-    // Without this a tap inside the popup reaches the map underneath.
+    // Keep taps in the popup from reaching the map.
     L.DomEvent.disableClickPropagation(el);
     return el;
   }
@@ -144,8 +111,6 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
         title: spot.name,
         alt: spot.name,
       });
-      // Built fresh each open, so the nearest-zone line is right even if the
-      // region's zones have changed since the spot was dropped.
       marker.bindPopup(() => popupFor(spot), { className: 'spot-popup' });
       marker.addTo(layer);
     }
@@ -154,13 +119,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
 
   // --- adding --------------------------------------------------------------
 
-  /**
-   * What a long press does when there is nobody to save the spot for.
-   *
-   * It still opens where you pressed, and still says what you were about to
-   * do, because the alternative — nothing happening — reads as the gesture
-   * not working rather than as a rule.
-   */
+  /** Long press while signed out: explain that spots need an account. */
   function askToSignIn(latlng) {
     const el = document.createElement('div');
     el.className = 'spot-pop';
@@ -225,9 +184,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
       if (e.key === 'Escape') map.closePopup();
     });
 
-    // Leaflet treats keystrokes over the map as shortcuts (+/- zoom) and a
-    // drag inside the popup as a pan, so the field needs both stopped or you
-    // cannot type a name containing a minus, or select text in it.
+    // Stop Leaflet treating typing and dragging in the field as map shortcuts/pans.
     L.DomEvent.disableClickPropagation(el);
     L.DomEvent.disableScrollPropagation(el);
     L.DomEvent.on(el, 'keydown keypress keyup', L.DomEvent.stopPropagation);
@@ -237,8 +194,7 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
       .setContent(el)
       .openOn(map);
 
-    // Deferred: opening the popup moves focus about, and on a phone raising
-    // the keyboard immediately fights the map's auto-pan.
+    // Delay focus so the keyboard doesn't fight the popup's auto-pan.
     setTimeout(() => input.focus(), 120);
   }
 
@@ -254,12 +210,9 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
   };
 
   const onDown = (e) => {
-    // Adding while the layer is filtered off would drop a pin the user cannot
-    // see, and look like nothing happened.
+    // Don't add pins while spots are hidden.
     if (!shown) return;
-    // Only a primary press, and never on something already on the map — a long
-    // press on a zone pin is someone hesitating over it, not asking for a
-    // second pin on top.
+    // Primary button only, and not on existing markers/popups/controls.
     if (e.button != null && e.button !== 0) return;
     if (e.target.closest('.leaflet-marker-icon, .leaflet-popup, .leaflet-control')) return;
 
@@ -284,20 +237,20 @@ export function mountUserSpots(L, map, regionId, { visible = true } = {}) {
   container.addEventListener('pointerup', cancel);
   container.addEventListener('pointercancel', cancel);
   container.addEventListener('pointerleave', cancel);
-  // The map moving under a still finger is also not a press.
+  // Panning or zooming cancels the press.
   map.on('movestart zoomstart', cancel);
 
-  // iOS raises its own callout on a long press and would cover the popup.
+  // Suppress the iOS long-press callout.
   const onContextMenu = (e) => e.preventDefault();
   container.addEventListener('contextmenu', onContextMenu);
-  // A mouse has no long press worth making; right-click is the same intent.
+  // Right-click on desktop.
   map.on('contextmenu', (e) => { if (shown) askToAdd(e.latlng); });
 
   reload();
 
   return {
     reload,
-    /** Hidden spots stay loaded — the filter is a view, not a delete. */
+    /** Hide/show without unloading. */
     setVisible(next) {
       shown = !!next;
       if (shown) layer.addTo(map);

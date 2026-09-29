@@ -1,19 +1,14 @@
-// ---------------------------------------------------------------------------
-// Template for js/config.local.js — copy this file, rename it, add your keys.
-// The real config.local.js is gitignored so keys stay out of version control.
+// Copy to js/config.local.js (gitignored) and fill in your keys.
 //
 //   Tides   worldtides.info  (Account -> API key)  ~100 requests/month free
 //           stormglass.io    (Dashboard -> API key) ~10 requests/day free
 //   Weather works with no key by default (Open-Meteo).
 //
-// Alternatively, skip this file entirely and paste keys into the app's
-// Settings screen — they're stored per-device in localStorage.
-// ---------------------------------------------------------------------------
+// Or skip this and paste keys into Settings in the app (saved per device).
 
 export const LOCAL_CONFIG = {
-  // Google sign-in. Paste the whole config object from
-  // console.firebase.google.com → Project settings → Your apps → Web.
-  // These values are public identifiers, not secrets.
+  // Firebase web config, from console.firebase.google.com →
+  // Project settings → Your apps → Web.
   // firebase: {
   //   apiKey: '', authDomain: '', projectId: '',
   //   appId: '', storageBucket: '', messagingSenderId: '',

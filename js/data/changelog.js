@@ -1,24 +1,10 @@
-// ---------------------------------------------------------------------------
-// VERSION HISTORY
+// Version history, newest first. Shown at the bottom of Settings.
 //
-// One entry per released commit, newest first. Shown at the foot of Settings
-// so you can tell from the phone in your hand which build it is running —
-// which matters on a PWA, where a stale service worker can leave a device a
-// week behind the site without saying so.
+// Semver: MAJOR for big changes to how the app works, MINOR for new features,
+// PATCH for fixes and polish. Dates are commit dates.
 //
-// NUMBERING. Semver, read as: MAJOR when the shape of the app changes for the
-// person using it, MINOR for a new capability, PATCH for a fix or a polish
-// pass. Dates are the commit dates.
-//
-// 1.0.0 is the first build that did everything a fishing companion has to do
-// on its own — log, map, species, conditions — rather than the first commit.
-// Everything before it is 0.x, which is what those builds honestly were: the
-// app could not yet keep a catch log behind an account or identify anything.
-//
-// TO RELEASE: add an entry at the top, set APP_VERSION below to match, and
-// bump CACHE_VERSION in sw.js. All three by hand, on purpose — a version that
-// changes itself tells you nothing about whether anyone meant it to.
-// ---------------------------------------------------------------------------
+// To release: add an entry at the top, update APP_VERSION below, and bump
+// CACHE_VERSION in sw.js.
 
 export const APP_VERSION = '3.23.2';
 

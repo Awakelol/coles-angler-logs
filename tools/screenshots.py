@@ -1,8 +1,7 @@
-"""
-Captures a tour of the app as it actually looks on a phone.
+"""Screenshot tour of the app at phone size.
 
-Viewport-sized shots (not captureBeyondViewport) so position:fixed elements —
-the tab bar, modal sheets, the toast — land where they really do.
+Viewport-sized shots (not captureBeyondViewport) so fixed elements like the
+tab bar, sheets and toasts are where they really are.
 
 Usage:
     python -m http.server 8777 --bind 127.0.0.1   (from the project root)
@@ -23,6 +22,7 @@ import websockets
 
 CHROME = next(
     (p for p in [
+        os.environ.get("CHROME", ""),
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -47,9 +47,8 @@ SHOTS = [
      "const r=document.querySelector('[data-deck-rail]');"
      "r.scrollTop=r.clientHeight*3; r.dispatchEvent(new Event('scroll'));"
      "await new Promise(x=>setTimeout(x,500))"),
-    # No mid-flip shot here: captureScreenshot takes longer than the flip, so a
-    # timed capture always lands after it. tools/flip_frames.py pauses the
-    # animation at fixed points instead.
+    # No mid-flip shot: capture is slower than the animation. See
+    # tools/flip_frames.py.
     ("2e-folder-open", "#/info",      ".dcard",
      "document.querySelector('[data-deck-rail]').click();"
      "await new Promise(x=>setTimeout(x,1100))"),
@@ -100,11 +99,10 @@ SHOTS = [
     ("2d-drawer-scrolled", "#/info",  ".ffold",
      "window.scrollTo(0,420); await new Promise(r=>setTimeout(r,500))"),
     ("9f-account-signin", "#/account", "#authForm",                     None),
-    # The + open, so the quick actions and the x are in the tour rather than
-    # only in the test assertions.
+    # With the + menu open.
     ("9c-quick-actions", "#/",       ".fab",
      "document.querySelector('.fab').click(); await new Promise(r=>setTimeout(r,600))"),
-    # Dark theme sweep — set once, then walk the same screens.
+    # Dark theme sweep - set once, then walk the same screens.
     ("d1-home",      "#/",           ".kpi__v, .empty",
      "const t = await import('./js/theme.js'); t.setTheme('dark')"),
     ("d2-species",   "#/info",       ".species-card",
@@ -184,12 +182,9 @@ async def main():
             page = Page(ws)
             await page.send("Page.enable")
             await page.send("Runtime.enable")
-            # NOT setting Emulation.setDeviceMetricsOverride on purpose. It
-            # changes the layout viewport but not the visual viewport that
-            # 100dvh resolves against, so anything sized in dvh — the map
-            # screen — comes out short and the shot shows a false gap above
-            # the tab bar. --window-size plus --force-device-scale-factor
-            # gives a consistent viewport.
+            # Don't use Emulation.setDeviceMetricsOverride: it doesn't change
+            # the visual viewport that 100dvh uses, so the map comes out short.
+            # --window-size plus --force-device-scale-factor works.
 
             # Seed a couple of catches so the log and stats aren't empty.
             await page.send("Page.navigate", url=f"{BASE}/index.html#/log")
@@ -217,12 +212,10 @@ async def main():
             shots = SHOTS
             if locked:
                 shots = [x for x in SHOTS if not x[0].startswith("d")]
-                print("  (dark sweep skipped — THEME_LOCKED is on; those screens"
+                print("  (dark sweep skipped - THEME_LOCKED is on; those screens"
                       " would come out light under dark names)")
 
-            # PIN LIGHT for the main sweep. Headless reports a dark system
-            # preference, and now that the picker is unlocked `system` honours
-            # it — so every shot named for the light theme came out dark.
+            # Force light: headless reports a dark system preference.
             await page.eval("const t = await import('./js/theme.js'); t.setTheme('light'); return 1;")
 
             made = []

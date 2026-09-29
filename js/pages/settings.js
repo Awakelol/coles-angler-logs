@@ -1,4 +1,4 @@
-// Settings — API keys, data export/import, storage info.
+// Settings: accounts, theme, API keys, data export/import, version info.
 
 import { CONFIG, saveOverrides } from '../config.js';
 import { store, exportJson, importJson } from '../store.js';
@@ -12,31 +12,22 @@ import {
 import {
   currentUser, signOut, cloudConfigured, linkProvider, unlinkProvider, linkedProviders,
 } from '../auth.js';
-import { syncNow, lastSyncedAt } from '../sync.js';
+import { syncNow, syncSoon, lastSyncedAt } from '../sync.js';
 import { forceRefresh } from '../updates.js';
 import { authCardHtml, mountAuthCard } from '../auth-ui.js';
 import { esc, toast } from '../ui.js';
 
-
 // --- connected accounts ------------------------------------------------------
 
 const PROVIDER_LABEL = {
-  // 'local' and 'username' are the same thing to the person using it — one
-  // has met the network and the other hasn't. Both must have a label, or the
-  // internal name leaks onto the screen.
+  // Both mean a username account (local-only vs. synced).
   local: 'Username & password',
   username: 'Username & password',
   google: 'Google',
   facebook: 'Facebook',
 };
 
-/**
- * What this account is, what it syncs, and how else you can get into it.
- *
- * Linking is the part worth explaining on screen rather than in a tooltip:
- * people reasonably assume connecting Google means starting again, and will
- * not press a button they think might cost them their log.
- */
+/** Account panel: what it is, whether it syncs, and linked sign-in methods. */
 function connectedHtml() {
   const user = currentUser();
   const linked = linkedProviders();
@@ -94,7 +85,7 @@ function connectedHtml() {
     </div>`;
 }
 
-/** "today", "yesterday", or a date — a timestamp to the second helps nobody. */
+/** "today", "yesterday", or a date. */
 function fmtWhen(iso) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (days <= 0) return 'today';
@@ -102,17 +93,8 @@ function fmtWhen(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-// ---------------------------------------------------------------------------
-// ONE THING AT A TIME
-//
-// Settings used to be seven sections stacked on one page. Everything was
-// visible, which sounds like a virtue and reads as a wall: the two controls
-// most people ever touch sat between an API key field and a changelog.
-//
-// Now the route is an index, and `?p=<key>` opens a single panel. Same
-// sections, same ids, same mount() — mount uses `?.` throughout, so a panel
-// that isn't on screen simply has nothing to wire.
-// ---------------------------------------------------------------------------
+// Settings is an index of panels; `?p=<key>` opens one. mount() uses `?.`
+// throughout since only one panel's elements exist at a time.
 
 const ICONS = {
   account: '<path fill="currentColor" d="M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.5 8 5.5V21H4v-1.5C4 16.5 7.6 14 12 14Z"/>',
@@ -131,11 +113,8 @@ const chevron = `
   </svg>`;
 
 /**
- * The panels, in the order they appear on the index.
- *
- * `sub` is the one line the row shows underneath its name — the current value
- * where there is one. A settings list that only names its sections makes you
- * open every panel to find out what anything is set to.
+ * Panels in index order. `sub` is the summary line shown under the name
+ * (usually the current value).
  */
 function panels() {
   const t = CONFIG.tides;
@@ -313,10 +292,8 @@ function panels() {
     },
 
     {
-      // Which build is this? A fair question on a PWA, where a stale service
-      // worker can leave a phone a week behind the site and say nothing. The
-      // cache name is read from the browser rather than printed from a
-      // constant, so it is evidence rather than a claim.
+      // Version plus the actual cache name, since a stale service worker can
+      // leave a device behind without saying so.
       key: 'about',
       group: 'About',
       title: 'Version & history',
@@ -329,9 +306,6 @@ function panels() {
           </p>
           <p class="field__hint" id="buildInfo">Checking what&rsquo;s cached&hellip;</p>
 
-          <!-- Deliberately next to the cache name rather than filed under
-               "Your data": the line above is the evidence that something is
-               stale, and this is what you do about it. -->
           <div class="btn-row" style="margin-top:4px">
             <button class="btn btn--sm" id="refreshBtn">Refresh the app</button>
           </div>
@@ -341,9 +315,7 @@ function panels() {
             Needs a connection: offline, the cache <em>is</em> the app.
           </p>
 
-          <!-- Only here once found. Deliberately rendered next to the thing
-               you tapped to find it, rather than filed away under Appearance
-               where the discovery and the switch would be strangers. -->
+          <!-- only shown once retro mode is unlocked -->
           <div class="field retro-field" id="retroField" ${isRetroUnlocked() ? '' : 'hidden'}>
             <label>Art style <span class="chip chip--target">unlocked</span></label>
             <div class="chips" id="artPicker">
@@ -387,8 +359,7 @@ function panels() {
 const themeLabel = (t) => (t === 'system' ? 'Match phone' : t[0].toUpperCase() + t.slice(1));
 
 function indexHtml(list) {
-  // Grouped in source order, so a group's position is decided by where its
-  // first panel sits rather than by a second list that could disagree.
+  // Groups appear in the order of their first panel.
   const groups = [];
   for (const p of list) {
     const found = groups.find((g) => g.name === p.group);
@@ -439,8 +410,7 @@ export function render(ctx) {
   const key = ctx?.params?.get('p');
   const panel = list.find((p) => p.key === key);
 
-  // An unknown ?p= falls back to the index rather than an empty screen. Old
-  // links, a typo, and a panel that was removed all land somewhere useful.
+  // Unknown ?p= falls back to the index.
   if (!panel) return indexHtml(list);
 
   return `
@@ -468,8 +438,7 @@ export function mount(root) {
     location.hash = '#/log';
   });
 
-  // Signed out, the account panel carries the sign-in card itself rather than
-  // a link to the log. Same reasoning as the Account screen.
+  // Signed out: show the sign-in card here.
   mountAuthCard(root, { onDone: () => location.reload(), allowGuest: false });
 
   // --- connected accounts ---
@@ -490,8 +459,7 @@ export function mount(root) {
       const moved = (result.pushed || 0) + (result.pulled || 0);
       toast(moved ? `Synced ${moved} catch${moved === 1 ? '' : 'es'}` : 'Already up to date');
     } else if (result.reason === 'permission-denied') {
-      // Worth naming rather than shrugging: it means Firestore was never set
-      // up, which is a five-minute fix and not a bug in the app.
+      // Usually means Firestore hasn't been set up.
       toast('Cloud storage is not set up on the Firebase project yet');
     } else if (result.reason === 'offline') {
       toast('No connection — will sync later');
@@ -509,7 +477,7 @@ export function mount(root) {
       try {
         const profile = await linkProvider(name);
         if (!profile) {
-          // Popup closed, or we've been sent off on a redirect.
+          // Popup closed, or redirected.
           btn.disabled = false;
           btn.textContent = 'Connect';
           return;
@@ -520,8 +488,7 @@ export function mount(root) {
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Connect';
-        // credential-already-in-use is the one people actually hit: that
-        // Google account is already its own separate account here.
+        // That Google account is already a separate account here.
         say(
           err?.code === 'auth/credential-already-in-use'
             ? 'That Google account already has its own log here. Sign in with it directly instead.'
@@ -595,7 +562,7 @@ export function mount(root) {
 
   // --- data ---
   root.querySelector('#exportBtn')?.addEventListener('click', async () => {
-    const json = await exportJson();
+    const json = await exportJson(currentUser()?.id ?? null);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -610,8 +577,9 @@ export function mount(root) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const n = await importJson(await file.text());
+      const n = await importJson(await file.text(), currentUser()?.id ?? null);
       toast(`Imported ${n} catches`);
+      syncSoon();
     } catch (err) {
       toast(err.message);
     }
@@ -620,17 +588,15 @@ export function mount(root) {
 
   root.querySelector('#clearBtn')?.addEventListener('click', async () => {
     if (!confirm('Delete every logged catch? This cannot be undone.')) return;
-    await store.clearCatches();
+    // Soft-delete this user's catches so the deletion syncs to other devices.
+    const mine = await store.catchesFor(currentUser()?.id);
+    for (const c of mine) await store.deleteCatch(c.id);
     toast('All catches deleted');
+    syncSoon();
   });
 
-  // --- the easter egg ---
-  //
-  // Tap the version number seven times. Chosen because it is the gesture
-  // phones already teach — tapping the build number in Android's About screen
-  // — so it is guessable by anyone who has ever gone looking, and invisible to
-  // everyone else. The count is per visit, not stored: this should feel like
-  // something you did, not something the app was waiting to be told.
+  // --- easter egg ---
+  // Tap the version number 7 times to unlock retro mode (not persisted between visits).
   const versionEl = root.querySelector('#appVersion');
   const retroField = root.querySelector('#retroField');
   let taps = 0;
@@ -641,8 +607,7 @@ export function mount(root) {
     const left = UNLOCK_TAPS - taps;
 
     if (left > 0) {
-      // Silent until it is nearly done. Counting from the first tap would
-      // announce the secret to anyone who brushed the number once.
+      // Only hint once close to unlocking.
       if (left <= UNLOCK_HINT_AT) {
         toast(`${left} more…`);
       }
@@ -675,11 +640,8 @@ export function mount(root) {
     toast('Hidden again — you know where it is');
   });
 
-  // --- which build is actually installed ---
-  //
-  // The app version is a constant and only says what the code THINKS it is.
-  // The cache name comes from the service worker that is really serving this
-  // device, so the two disagreeing is exactly the situation worth seeing.
+  // --- installed build ---
+  // Shows the cache name from the service worker actually serving this device.
   const build = root.querySelector('#buildInfo');
   if (build) {
     (async () => {
@@ -704,8 +666,7 @@ export function mount(root) {
 
     const result = await forceRefresh();
     if (result.ok) {
-      // No toast: the reload eats it. The button says what happened for the
-      // moment before the page goes.
+      // No toast, the reload would hide it.
       btn.textContent = 'Reloading…';
       location.reload();
       return;
@@ -721,10 +682,6 @@ export function mount(root) {
   });
 
   // --- storage estimate ---
-  // Guarded on the element, not just the API. Settings is one panel at a time
-  // now, so every one of these lookups can legitimately come back null — and
-  // an unguarded one throws inside mount(), which the router turns into
-  // "Something broke on this screen" for the whole page.
   const info = root.querySelector('#storageInfo');
   if (info && navigator.storage?.estimate) {
     navigator.storage.estimate().then(({ usage, quota }) => {

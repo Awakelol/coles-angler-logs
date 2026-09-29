@@ -1,14 +1,8 @@
-// ---------------------------------------------------------------------------
-// Worker entry.
+// Worker entry point.
 //
-// The site is static; this script exists so there is somewhere for the API
-// keys to live. A Worker serving only assets cannot have environment
-// variables attached — Cloudflare says so plainly: "Variables cannot be added
-// to a Worker that only has static assets." Declaring `main` in
-// wrangler.jsonc gives it code, and the keys attach to that.
-//
-// Everything that isn't /api/* is handed straight back to the asset server.
-// ---------------------------------------------------------------------------
+// The site itself is static. This script exists because Cloudflare won't
+// attach environment variables (API keys) to an assets-only Worker. Anything
+// that isn't /api/* is passed to the asset server.
 
 import { identify } from './identify.js';
 
@@ -30,7 +24,7 @@ export default {
       });
     }
 
-    // Not ours — let the static asset server answer.
+    // Not an API route: serve static assets.
     return env.ASSETS.fetch(request);
   },
 };

@@ -1,66 +1,41 @@
-"""
-Species photo pipeline — iNaturalist + GBIF -> licence filter -> rank -> review
--> background removal -> a manifest the app reads.
+"""Species photo pipeline: iNaturalist / GBIF / Wikimedia Commons -> licence
+filter -> ranking -> manual review -> crop -> manifest for the app.
 
-Four stages, run in order. Every one is re-runnable and skips work already
-done, so adding a species later costs only that species.
+Each stage can be re-run and skips work that's already done.
 
-    python tools/fish_photos.py fetch     # candidates + metadata, no images yet
-    python tools/fish_photos.py review    # contact sheet in your browser
-    python tools/fish_photos.py build     # rembg -> white bg -> manifest
-    python tools/fish_photos.py status    # what is done, what is missing
+    python tools/fish_photos.py fetch     # find candidates + metadata
+    python tools/fish_photos.py review    # contact sheet in the browser
+    python tools/fish_photos.py build     # crop around the fish, write manifest
+    python tools/fish_photos.py status    # progress
 
-Optional, driven by what you flag while reviewing:
+Optional:
 
-    python tools/fish_photos.py more            # dig deeper where you said "give me more"
-    python tools/fish_photos.py score --unsure  # ask Gemini about the ones you flagged
-    python tools/fish_photos.py verify          # check the picks before building
-    python tools/fish_photos.py verify --gemini # ...and have a model look at them
-    python tools/fish_photos.py crops           # pass or fail each finished crop
+    python tools/fish_photos.py more            # more candidates for "give me more"
+    python tools/fish_photos.py score --unsure  # ask Gemini about flagged species
+    python tools/fish_photos.py verify          # sanity-check picks before building
+    python tools/fish_photos.py verify --gemini # ...with a model looking too
+    python tools/fish_photos.py crops           # pass/fail each finished crop
 
-In `review` each species takes one of five states: a chosen photo, "no good
-ones", "give me more", "unsure" (which may still name a favourite), or nothing
-at all. Clicking a chosen photo again, or a lit verdict again, clears it.
+In `review` each species is one of: a chosen photo, "no good ones", "give me
+more", "unsure" (optionally with a favourite), or undecided. Clicking a
+selection again clears it.
 
-WHAT THIS CAN AND CANNOT DECIDE
--------------------------------
-Licensing it decides completely: only CC0, CC-BY and CC-BY-SA are ever kept,
-and the credit line required by the licence is carried through to the app.
+Licensing: only CC0, CC BY and CC BY-SA are kept, and the required credit is
+carried into the manifest.
 
-Whether a photo is a clean side-profile of a whole fish out of water, it
-cannot. No API exposes that. What it can read are proxies — iNaturalist's
-"Alive or Dead" annotation (dead almost always means landed and laid out),
-research-grade status, image proportions, how many people agreed on the ID —
-and it ranks by those. The last call is yours in `review`, or Gemini's in
-`score` for the ones the proxies leave doubtful.
+Photo quality can't be checked automatically, so candidates are ranked on
+proxies (iNaturalist's "Alive or Dead" annotation, research grade, aspect
+ratio, ID agreements) and the final choice is made in `review` or by Gemini
+in `score`.
 
-SOURCES AND KEYS
-----------------
-iNaturalist and GBIF are both open and need no key or account.
+iNaturalist, GBIF and Commons need no key. Gemini (only for `score` and
+`verify --gemini`) reads GEMINI_API_KEY from `.dev.vars` in the project root
+(gitignored, also used by wrangler), read as utf-8-sig to tolerate a BOM.
 
-Gemini is optional and only `score` and `verify --gemini` use it. Put the key
-in `.dev.vars` in the project root, which is gitignored and is also where
-wrangler looks for local Worker secrets, so it has one home:
+`build` doesn't edit the photo itself: it fixes EXIF orientation, crops a 4:3
+window around the fish (located with rembg's u2net model) and scales it down.
 
-    GEMINI_API_KEY=your-key-here
-
-Read as utf-8-sig, because PowerShell redirection and Notepad both write a
-byte-order mark by default and a BOM would make the first key unmatchable.
-
-PHOTOS SHIP AS THEY WERE TAKEN
-------------------------------
-No background removal, no cut-outs, no compositing. `build` downloads the
-original, corrects its EXIF orientation, scales it down and saves it. That is
-all.
-
-Cutting the fish out was tried and dropped. It looked consistent in principle
-and was not in practice: some fish came back with a halo, some lost a fin the
-matting decided was background, and an underwater shot with the water removed
-stops looking like a fish in the sea. A real photograph in a consistent FRAME
-is steadier than a processed one, and the frame is a CSS rule rather than a
-permanent edit to the file.
-
-    python -m pip install pillow
+    python -m pip install pillow rembg
 """
 
 import argparse
@@ -81,9 +56,8 @@ WORK = ROOT / "tools" / "_photo_work"          # gitignored scratch
 CANDIDATES = WORK / "candidates.json"
 PICKS = WORK / "picks.json"                    # your choices, kept across runs
 RAW = WORK / "raw"
-# Drop a photo in here as <species-id>.jpg and it wins over anything the
-# APIs found. For images no API will serve — a museum server that refuses
-# downloads, or your own photo of a fish you caught.
+# Put <species-id>.jpg here to override whatever the APIs found (e.g. for
+# images that can't be downloaded, or your own photos).
 MANUAL = WORK / "manual"
 OUT_DIR = ROOT / "assets" / "photos"
 MANIFEST_JS = ROOT / "js" / "data" / "species-photos.js"
@@ -92,38 +66,26 @@ CROPS_HTML = WORK / "crops.html"
 
 UA = "ColesAnglerLog/2.0 (personal fishing app; contact via github.com/Awakelol)"
 
-# The only licences that may ship. Anything else is skipped outright rather
-# than downloaded and sorted out later — a file on disk is a file that can be
-# published by accident.
+# Only these licences are downloaded at all.
 OK_LICENCES = {"cc0", "cc-by", "cc-by-sa", "pd"}
 LICENCE_LABEL = {
     "cc0": "CC0",
     "cc-by": "CC BY",
     "cc-by-sa": "CC BY-SA",
-    # Only reachable via Commons. Strictly freer than the three the brief
-    # named, and the licence most of the old scientific plates carry, so
-    # excluding it would rule out material on a technicality.
+    # Public domain (Commons only).
     "pd": "Public domain",
 }
 
 CANDIDATES_PER_SPECIES = 10
 REQUEST_PAUSE = 1.1        # iNat asks for <=1 req/sec sustained; be a good guest
 
-# Gemini's free tier is a per-MINUTE budget, not a per-second one, and it is
-# small — around 20 requests. Pacing by "a short sleep between calls" burns it
-# in the first few seconds and every remaining photo comes back 429. Four and
-# a half seconds is ~13/min, comfortably under, and gemini_call backs off and
-# retries on top of that rather than giving up on the photo.
+# Gemini's free tier allows ~20 requests per minute, so space calls ~4.5 s
+# apart (gemini_call also backs off on 429).
 GEMINI_PAUSE = 4.5
 GEMINI_RETRIES = 4
 
-# Tried in order until one answers. Hardcoding a single model is how this broke
-# first time: gemini-2.5-flash-lite is LISTED by the models endpoint and returns
-# 404 when called, and gemini-2.5-flash had spent its daily free quota — two
-# different failures that both read as "your key is wrong".
-#
-# Lite models first. This asks one small question of each photo, which is what
-# they are for, and their free-tier budget is the larger one.
+# Tried in order until one answers (some listed models 404, some hit daily
+# quota). Lite models first: cheaper, larger free budget.
 GEMINI_MODELS = [
     "gemini-3.1-flash-lite",
     "gemini-3.5-flash-lite",
@@ -134,7 +96,7 @@ GEMINI_MODELS = [
 
 
 # --------------------------------------------------------------------------
-# the species list, read straight from the app so the two cannot drift
+# species list, read from the app's data files
 # --------------------------------------------------------------------------
 
 def load_species():
@@ -169,7 +131,7 @@ def get_json(url, tries=3):
 
 
 # --------------------------------------------------------------------------
-# stage 1 — fetch
+# stage 1: fetch
 # --------------------------------------------------------------------------
 
 def inat_place_id(name="Philippines"):
@@ -186,9 +148,7 @@ def inat_place_id(name="Philippines"):
 def inat_candidates(sci, place_id):
     """iNaturalist observations, licence-filtered at the API rather than here."""
     found = []
-    # Two passes: the region first, then the world. Local fish photographed
-    # locally are the ones an angler here will recognise, but a species with
-    # no Philippine observations must not end up with no photo at all.
+    # Philippine observations first, then worldwide as a fallback.
     for scope in ("local", "global"):
         if scope == "local" and not place_id:
             continue
@@ -205,8 +165,7 @@ def inat_candidates(sci, place_id):
         data = get_json(url)
         time.sleep(REQUEST_PAUSE)
         for obs in (data or {}).get("results", []):
-            # "Alive or Dead" — a landed fish is laid out, side on, in air.
-            # This is the single most useful signal the API actually exposes.
+            # iNaturalist's "Alive or Dead" annotation.
             dead = any(a.get("controlled_attribute_id") == 17
                        and a.get("controlled_value_id") == 20
                        for a in obs.get("annotations", []))
@@ -267,28 +226,21 @@ def gbif_candidates(sci):
 
 COMMONS = "https://commons.wikimedia.org/w/api.php"
 
-# Commons holds far more than photographs. Range maps and taxonomy diagrams
-# match a species search perfectly and are useless on a card.
+# Filename words that indicate maps, diagrams etc. rather than photos.
 NOT_A_PHOTO = re.compile(
     r"(map|range|distribution|diagram|chart|graph|logo|icon|stamp|coin|"
     r"signature|locator|phylogen|cladogram)", re.I)
 
 
 def commons_licence(meta):
-    """Commons records licences as free text; this maps it to our codes.
-
-    Anything not confidently free returns None and the file is skipped. The
-    default has to be "no" — a permissive guess here puts a file we may not
-    have the right to publish into the repository.
+    """Map Commons' free-text licence to our codes. Returns None unless it's
+    clearly one we accept.
     """
     short = (meta.get("LicenseShortName", {}).get("value") or "").lower()
     terms = (meta.get("UsageTerms", {}).get("value") or "").lower()
     text = f"{short} {terms}"
 
-    # EXCLUSIONS FIRST, and this order is the whole point. "CC BY-NC-SA"
-    # contains "share alike", so a share-alike test placed above this returns
-    # cc-by-sa for a non-commercial licence and ships a file we have no right
-    # to publish. It did exactly that until a test caught it.
+    # Check exclusions first: "CC BY-NC-SA" also contains "share alike".
     if re.search(r"\bnc\b|non-?commercial", text):
         return None
     if re.search(r"\bnd\b|no-?deriv", text):
@@ -309,11 +261,10 @@ def commons_licence(meta):
 
 
 def commons_candidates(sci):
-    """Wikimedia Commons, licence-filtered here rather than at the API.
+    """Wikimedia Commons candidates, licence-filtered here.
 
-    Two passes: the species category first, because Commons files a species'
-    images under `Category:<Scientific name>` and that is curated, then a plain
-    search for species whose category is missing or differently named.
+    Searches `Category:<Scientific name>` first, then a plain text search for
+    species whose category is missing or named differently.
     """
     out = []
     queries = [
@@ -341,8 +292,7 @@ def commons_candidates(sci):
             seen.add(url)
             artist = re.sub(r"<[^>]*>", "", (info.get("extmetadata", {})
                             .get("Artist", {}).get("value") or "")).strip()
-            # Commons wraps the artist in nested markup, and stripping tags can
-            # leave the same name twice ("Unknown authorUnknown author").
+            # Stripping markup can leave the name doubled.
             half = len(artist) // 2
             if artist and len(artist) % 2 == 0 and artist[:half] == artist[half:]:
                 artist = artist[:half]
@@ -367,24 +317,13 @@ def commons_candidates(sci):
 
 
 def rank(cands):
-    """Order by the signals we can actually read.
-
-    Landscape is weighted because a fish photographed side-on fills a wide
-    frame; a portrait crop is usually someone holding it vertically or a
-    close-up of a head. It is a tendency, not a rule, which is exactly why
-    this ranks rather than filters.
+    """Sort candidates by the signals we have. Landscape images score higher
+    since side-on fish photos tend to be wide.
     """
     def score(c):
         s = 0.0
-        # "Dead" USED to be worth +3, on the theory that a landed fish is laid
-        # out side-on in air. Reviewing 68 of them showed what it actually
-        # correlates with: market stalls and catch piles, which are the single
-        # most common reason a photo got rejected — "less from the market,
-        # preferrably still in water", seven times over.
-        #
-        # It is not a penalty either, because one fish laid flat on a deck is
-        # exactly right. It is simply no longer evidence in either direction,
-        # and the signals that DO track a usable photo carry the weight instead.
+        # "Dead" isn't scored: in review it mostly meant market piles, though
+        # a single fish on a deck is fine.
         if c["research"]:
             s += 2.5           # somebody else agreed it is this species
         if c["scope"] == "local":
@@ -420,10 +359,8 @@ def rank(cands):
 
 
 def confidence(cands):
-    """How much the ranking should be trusted for this species.
-
-    Low means the proxies had little to go on — no landed shot, nothing local,
-    or barely any candidates — and a human or Gemini should look.
+    """How much to trust the ranking for this species. Low means few candidates
+    or weak signals, so a person or Gemini should look.
     """
     if not cands:
         return 0.0
@@ -476,7 +413,7 @@ def cmd_fetch(args):
 
 
 # --------------------------------------------------------------------------
-# stage 2 — review
+# stage 2: review
 # --------------------------------------------------------------------------
 
 def html_escape(text):
@@ -492,7 +429,7 @@ def cmd_review(args):
     order = sorted(data.items(), key=lambda kv: (kv[1]["confidence"], kv[0]))
 
     rows = []
-    # Which species already have a photo on disk — the ones left are the work.
+    # Which species already have a photo on disk - the ones left are the work.
     have = {p.stem for p in OUT_DIR.glob("*.jpg")} if OUT_DIR.exists() else set()
 
     for sid, rec in order:
@@ -539,7 +476,7 @@ def cmd_review(args):
             f"</div>"
             f"<div class='row'>{''.join(cells)}</div>"
             f"<textarea class='note' data-sp='{sid}' rows='1' "
-            f"placeholder='Remarks — what is wrong with these, what to look for instead'>"
+            f"placeholder='Remarks - what is wrong with these, what to look for instead'>"
             f"{html_escape(chosen.get('note', ''))}</textarea>"
             f"</section>")
 
@@ -597,7 +534,7 @@ def cmd_review(args):
 <h1>Pick a photo per species</h1>
 <p class=lede>Looking for: whole fish, side-on, out of water, uncluttered. Click a photo to choose it;
 click it again to unchoose. Images are shown uncropped, so what you see is the whole frame —
-<b>open full size</b> for the original. Everything saves the moment you click it — including
+<b>open full size</b> for the original. Everything saves the moment you click it - including
 the remarks box under each row, which is there for anything I should know: what is wrong with
 these, what to look for instead, a name that needs correcting.</p>
 {''.join(rows)}
@@ -632,7 +569,7 @@ async function send(sp, verdict, index) {{
     document.getElementById('state').textContent = '';
   }} catch (e) {{
     if (cell) cell.textContent = '';
-    document.getElementById('state').textContent = 'NOT SAVED — is the review server still running?';
+    document.getElementById('state').textContent = 'NOT SAVED - is the review server still running?';
   }}
 }}
 
@@ -646,7 +583,7 @@ function setVerdict(sp, verdict) {{
   }}
 }}
 
-// Remarks save on a pause, not per keystroke — one write per thought.
+// Remarks save on a pause, not per keystroke - one write per thought.
 const noteTimers = {{}};
 document.addEventListener('input', (e) => {{
   const n = e.target.closest('.note');
@@ -665,7 +602,7 @@ document.addEventListener('input', (e) => {{
       if (cell) {{ cell.textContent = 'remark saved'; setTimeout(() => cell.textContent = '', 1400); }}
       document.getElementById('t-note').textContent = j.notes + ' with remarks';
     }} catch (err) {{
-      document.getElementById('state').textContent = 'REMARK NOT SAVED — is the server running?';
+      document.getElementById('state').textContent = 'REMARK NOT SAVED - is the server running?';
     }}
   }}, 600);
 }});
@@ -693,7 +630,7 @@ document.addEventListener('click', (e) => {{
     }}
     sec.querySelectorAll('.cand').forEach(c => c.classList.remove('is-on'));
     cand.classList.add('is-on');
-    // Choosing a photo while "unsure" is lit keeps the flag — you can mark a
+    // Choosing a photo while "unsure" is lit keeps the flag - you can mark a
     // favourite and still say you want another opinion on it.
     const keep = sec.dataset.verdict === 'unsure' ? 'unsure' : 'pick';
     setVerdict(sp, keep === 'unsure' ? 'unsure' : '');
@@ -710,11 +647,7 @@ document.addEventListener('click', (e) => {{
 
 
 def load_picks():
-    """Picks, normalised to the current shape.
-
-    They started life as a bare integer per species. Tolerating that costs
-    three lines and means an old file is not silently read as garbage.
-    """
+    """Load picks.json, upgrading the old format (a bare index per species)."""
     if not PICKS.exists():
         return {}
     raw = json.loads(PICKS.read_text(encoding="utf-8"))
@@ -723,8 +656,7 @@ def load_picks():
         if isinstance(v, int):
             out[sid] = {"verdict": "none"} if v < 0 else {"verdict": "pick", "index": v}
         elif isinstance(v, dict) and (v.get("verdict") or v.get("note")):
-            # A remark with no verdict is a legitimate state — "I looked, I
-            # have something to say, I have not decided yet" — so it survives.
+            # A remark without a verdict is kept.
             out[sid] = v
     return out
 
@@ -747,12 +679,8 @@ def pick_counts(picks):
 
 
 def bind_server(port, handler, what):
-    """Bind, stepping past ports already in use.
-
-    A port left held by an earlier run raises WinError 10048 out of the socket
-    layer as a bare traceback, which says nothing about what to do. Stepping
-    forward and saying which port it landed on is more use than an error, and
-    SO_REUSEADDR alone does not help on Windows.
+    """Bind to the first free port from `port` upward (SO_REUSEADDR doesn't
+    help on Windows).
     """
     import socketserver
 
@@ -766,7 +694,7 @@ def bind_server(port, handler, what):
         except OSError as e:
             last = e
             if attempt == 0:
-                print(f"  port {port} is in use — trying the next one")
+                print(f"  port {port} is in use - trying the next one")
     raise SystemExit(
         f"Could not bind any port from {port} to {port + 11}: {last}\n"
         f"Something is still listening. Find it with:\n"
@@ -774,13 +702,7 @@ def bind_server(port, handler, what):
 
 
 def serve_review(port):
-    """Serve the sheet and take each decision straight to disk.
-
-    A file:// page cannot write anything, which is why this used to end in a
-    copy-and-paste. Over 68 species that is a step too many and a chance to
-    lose the lot to a mistyped paste, so the page posts each choice here and
-    it lands in picks.json as you click.
-    """
+    """Serve the review sheet and save each choice to picks.json as it's made."""
     import http.server, socketserver, threading
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -827,8 +749,7 @@ def serve_review(port):
                         if msg.get("index") is not None:
                             entry["index"] = int(msg["index"])
                     else:
-                        # Unselected. A remark survives it — clearing a choice
-                        # is not the same as retracting what you said about it.
+                        # Unselected; keep any remark.
                         entry.pop("verdict", None)
                         entry.pop("index", None)
 
@@ -867,12 +788,8 @@ def serve_review(port):
 
 
 def cmd_more(args):
-    """Dig deeper for the species you flagged 'give me more'.
-
-    The first pass takes the most-voted observations, which is the right
-    default and also means it never sees anything past the first thirty. This
-    goes further and sorts differently, so what comes back is genuinely new
-    rather than the same photos in the same order.
+    """Fetch more candidates for species flagged 'give me more', going past the
+    first page and sorting differently so the results are new.
     """
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
     picks = load_picks()
@@ -898,9 +815,8 @@ def cmd_more(args):
         fresh += gbif_candidates(rec["scientific"])
         new = [c for c in rank(fresh) if c["url"].split("?")[0] not in have]
         rec["candidates"] = (rec["candidates"] + new)[:CANDIDATES_PER_SPECIES * 3]
-        # Drop the "give me more" flag, since it has now been dug into — but
-        # ONLY that flag. With --only this runs over species that already have
-        # a chosen photo, and popping the entry would throw the choice away.
+        # Clear only the "more" flag; with --only the species may already
+        # have a pick.
         if picks.get(sid, {}).get("verdict") == "more":
             entry = dict(picks[sid])
             entry.pop("verdict", None)
@@ -912,7 +828,7 @@ def cmd_more(args):
         if new:
             print(f"  {sid}: +{len(new)} new (now {len(rec['candidates'])})")
         else:
-            print(f"  {sid}: nothing new — {len(rec['candidates'])} is all that exists "
+            print(f"  {sid}: nothing new - {len(rec['candidates'])} is all that exists "
                   f"under an open licence")
 
     CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
@@ -955,23 +871,14 @@ def inat_deeper(sci, place_id, order_by, page):
 
 
 # --------------------------------------------------------------------------
-# stage 2b — optional Gemini opinion on the doubtful ones
+# stage 2b: optional Gemini opinion
 # --------------------------------------------------------------------------
 
 def read_key(name):
-    """`.dev.vars` first, then the environment.
-
-    `.dev.vars` is where wrangler already looks for local secrets and is
-    already gitignored, so the key has one home for both the Worker and this
-    script rather than one each. An environment variable still wins nothing
-    and loses nothing — it is checked second so a one-off override works.
-    """
+    """GEMINI_API_KEY from `.dev.vars`, falling back to the environment."""
     dev = ROOT / ".dev.vars"
     if dev.exists():
-        # utf-8-sig, not utf-8. PowerShell's redirection and Notepad both write
-        # a byte-order mark by default, and a BOM makes the first key
-        # "﻿GEMINI_API_KEY", which matches nothing and looks for all the
-        # world like the file was ignored.
+        # utf-8-sig: PowerShell and Notepad write a BOM by default.
         for line in dev.read_text(encoding="utf-8-sig").splitlines():
             line = line.strip()
             if line.startswith("#") or "=" not in line:
@@ -983,19 +890,13 @@ def read_key(name):
 
 
 def key_help(name):
-    """Why the key wasn't found, specifically.
-
-    "Not found" covers three different mistakes — no file, an empty file, a
-    file without that line — and they have three different fixes. An empty
-    .dev.vars in particular is what a failed write leaves behind, which is
-    exactly the case that looks like the tool is at fault.
-    """
+    """Explain why the key wasn't found (no file, empty file, or no such line)."""
     dev = ROOT / ".dev.vars"
     lines = [f"No {name} found."]
     if not dev.exists():
         lines.append(f"  {dev} does not exist.")
     elif dev.stat().st_size == 0:
-        lines.append(f"  {dev} exists but is EMPTY — the write didn't land.")
+        lines.append(f"  {dev} exists but is EMPTY - the write didn't land.")
         lines.append("  (A disk with no free space produces exactly this.)")
     else:
         keys = [l.split("=", 1)[0].strip()
@@ -1004,7 +905,7 @@ def key_help(name):
         lines.append(f"  {dev} has: {', '.join(keys) or '(no KEY=VALUE lines)'}")
     lines += [
         "",
-        "Fix it with one line — from the project root:",
+        "Fix it with one line - from the project root:",
         f'    "{name}=your-key-here" | Out-File -Encoding utf8 .dev.vars',
         "",
         "Or open .dev.vars in your editor and paste:",
@@ -1022,22 +923,17 @@ def cmd_score(args):
         print(key_help("GEMINI_API_KEY"))
         return 1
     data = json.loads(CANDIDATES.read_text(encoding="utf-8"))
-    # gemini-2.5-flash was retired for new keys — the API answers 404 with
-    # "no longer available to new users", which reads like a bad URL and is
-    # not. Override with GEMINI_MODEL in .dev.vars if this one goes the same
-    # way; `models?key=...` lists what the key can actually call.
+    # gemini-2.5-flash isn't available to new keys. Override with
+    # GEMINI_MODEL in .dev.vars; `models?key=...` lists what's available.
     model = read_key("GEMINI_MODEL") or "gemini-flash-latest"
     if args.unsure:
         flagged = {sid for sid, v in load_picks().items() if v.get("verdict") == "unsure"}
         todo = [(k, v) for k, v in data.items() if k in flagged and v["candidates"]]
         print(f"{len(todo)} species you marked unsure\n")
     else:
-        # A SPECIES THAT IS ALREADY DECIDED IS LEFT ALONE, and this is not an
-        # optimisation. Scoring RE-SORTS a species' candidate list, and
-        # picks.json stores an INDEX into that list — so re-scoring something
-        # already picked silently repoints it at a different photo while the
-        # credit line in the manifest still belongs to the old one. It moved
-        # five of the sixty-eight before it was caught.
+        # Skip species that are already decided. Scoring re-sorts the
+        # candidates and picks.json stores an index, so re-scoring would point
+        # the pick at a different photo.
         settled = {sid for sid, v in load_picks().items()
                    if v.get("verdict") in ("pick", "none")}
         todo = [(k, v) for k, v in data.items()
@@ -1056,7 +952,7 @@ def cmd_score(args):
                 with urllib.request.urlopen(req, timeout=40) as r:
                     blob = r.read()
             except Exception as e:
-                print(f"  {sid}: could not fetch candidate — {e}")
+                print(f"  {sid}: could not fetch candidate - {e}")
                 continue
             import base64
             body = json.dumps({
@@ -1073,10 +969,7 @@ def cmd_score(args):
                 "generationConfig": {"responseMimeType": "application/json"},
             }).encode()
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            # 429 IS THE NORMAL CASE ON THE FREE TIER, not an error worth
-            # abandoning a species over. Without a backoff a burst of them
-            # burned through all 43 species in under a minute and scored
-            # nothing at all, which looks like the model rejecting the photos.
+            # 429s are expected on the free tier; back off rather than skip.
             out = None
             for attempt in range(4):
                 try:
@@ -1101,7 +994,7 @@ def cmd_score(args):
                 print(f"  {sid} #{rec['candidates'].index(c)}  {c['gemini']['score']:.2f}  "
                       f"{c['gemini']['why']}")
             except Exception as e:
-                print(f"  {sid}: scoring failed — {e}")
+                print(f"  {sid}: scoring failed - {e}")
             time.sleep(0.6)
         # Re-order this species by Gemini's opinion where it has one.
         rec["candidates"].sort(key=lambda c: -(c.get("gemini", {}).get("score", -1)))
@@ -1111,17 +1004,11 @@ def cmd_score(args):
 
 
 # --------------------------------------------------------------------------
-# stage 2c — verify what you picked
+# stage 2c: verify picks
 # --------------------------------------------------------------------------
 
-# What a good species photo is, in this app — decided by reviewing 68 of them
-# rather than assumed up front.
-#
-# The brief started as "out of water, laid flat, skip underwater". The review
-# disagreed on both counts: market piles are worse than clean in-water shots,
-# and more than one fish in frame is disqualifying however good the fish are.
-# This wording is what goes to the model AND what the ranking leans on, so the
-# two cannot drift apart.
+# What makes a good species photo (from reviewing the first 68). Used both in
+# the model prompt and by the ranking.
 GOOD_PHOTO = (
     "A good photo shows ONE fish, side-on, whole - snout to tail fin, no part "
     "cropped - sharp, against a background that does not compete with it. "
@@ -1161,21 +1048,15 @@ def cmd_verify(args):
         if not v.get("verdict"):
             warn(sid, "has a remark but no verdict")
 
-    # --- 2. the same photo used twice ---------------------------------------
-    # Easy to do when browsing quickly, and it means one of the two cards shows
-    # the wrong fish - the exact failure this app must not have.
+    # --- 2. the same photo used for two species -----------------------------
     seen = {}
     for sid, v in chosen.items():
         rec = data.get(sid)
         if not rec or v["index"] >= len(rec["candidates"]):
             bad(sid, f"pick #{v['index']} no longer exists - re-run review")
             continue
-        # KEY ON THE RECORD, NOT THE FILE URL. Stripping the query to
-        # normalise iNat's size parameters also collapsed SAIAB's specimen
-        # images, which carry the filename IN the query — so two different
-        # museum photos looked like one and a good pick was reported as a
-        # duplicate. The observation or occurrence page is the real identity
-        # of a photo; the URL is only where the bytes happen to live.
+        # Key on the observation/occurrence page, not the image URL: SAIAB
+        # images put the filename in the query string.
         cnd = rec["candidates"][v["index"]]
         url = cnd.get("page") or cnd["url"]
         if url in seen:
@@ -1197,11 +1078,7 @@ def cmd_verify(args):
         if c["width"] and c["height"] and c["width"] / c["height"] < 0.8:
             warn(sid, f"portrait {c['width']}x{c['height']} - often a held-up or cropped fish")
 
-    # --- 4. does the observation actually say this species? -----------------
-    # The strongest identity check available without a model: ask iNaturalist
-    # what the observation is identified as, and compare. Catches a photo taken
-    # from the wrong species' page, which no amount of looking would reveal if
-    # the two fish resemble each other.
+    # --- 4. does the observation's ID match this species? -----------------
     if not args.no_taxon:
         print("Cross-checking each photo's observation against the species name...")
         for sid, v in sorted(chosen.items()):
@@ -1252,11 +1129,9 @@ def cmd_verify(args):
 
 
 def gemini_call(key, model, prompt, blob, timeout=90):
-    """One vision call, with backoff on the free tier's minute budget.
+    """One vision call. Backs off and retries on 429.
 
-    Returns (parsed_json, None) or (None, "why it failed"). A 429 is not a
-    failure worth reporting to the user — it is the expected shape of a free
-    tier, and the server tells us how long to wait, so we wait.
+    Returns (parsed_json, None) or (None, reason).
     """
     import base64
     body = json.dumps({
@@ -1279,11 +1154,11 @@ def gemini_call(key, model, prompt, blob, timeout=90):
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")
             if e.code == 429:
-                # The message carries "Please retry in 37.1s" — believe it.
+                # The message carries "Please retry in 37.1s" - believe it.
                 m = re.search(r"retry in ([\d.]+)s", detail)
                 wait = min(float(m.group(1)) + 1, 65) if m else 20 * (attempt + 1)
                 if "PerDay" in detail or "per day" in detail.lower():
-                    return None, "daily free-tier quota is spent — try again tomorrow"
+                    return None, "daily free-tier quota is spent - try again tomorrow"
                 print(f"      rate limited, waiting {wait:.0f}s")
                 time.sleep(wait)
                 continue
@@ -1296,11 +1171,7 @@ def gemini_call(key, model, prompt, blob, timeout=90):
 
 
 def pick_model(key):
-    """The first model that actually answers.
-
-    Costs one tiny text call per model tried, which is far cheaper than
-    discovering forty photos into a run that the model is unavailable today.
-    """
+    """Return the first model that answers a tiny test call."""
     override = read_key("GEMINI_MODEL")
     order = ([override] + GEMINI_MODELS) if override else GEMINI_MODELS
     for model in order:
@@ -1338,8 +1209,7 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
         print(f"\n{err}")
         return 1
 
-    # Anything already checked is skipped. Re-running costs nothing but the
-    # photos that have not been looked at yet.
+    # Already-checked photos are skipped.
     def done(sid, v):
         rec = data.get(sid)
         if not rec or v["index"] >= len(rec["candidates"]):
@@ -1352,7 +1222,7 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
     already = len(chosen) - len([1 for s, v in chosen.items() if not done(s, v)])
 
     print(f"\nUsing {model}.")
-    print(f"  {len(todo)} photos to check, {already} already done — "
+    print(f"  {len(todo)} photos to check, {already} already done - "
           f"that is {len(todo)} API calls, about "
           f"{len(todo) * (GEMINI_PAUSE + 3.5) / 60:.0f} min at a free-tier-safe pace.\n")
     if not todo:
@@ -1367,10 +1237,8 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
             with urllib.request.urlopen(req, timeout=45) as r:
                 blob = r.read()
         except Exception as e:
-            # A dead image link is a source problem, not a model problem.
-            # Saying which is the difference between "re-pick this one" and
-            # "the AI is broken".
-            warn(sid, f"photo could not be downloaded ({e}) — the source link may be dead")
+            # Broken image link: a source problem, not a model problem.
+            warn(sid, f"photo could not be downloaded ({e}) - the source link may be dead")
             continue
 
         prompt = (
@@ -1388,19 +1256,16 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
             warn(sid, f"could not be checked by the model - {err}")
             if "quota" in err:
                 print("\n  Stopping here rather than hammering a spent quota.")
-                print("  Re-run when it resets — everything checked so far is saved.")
+                print("  Re-run when it resets - everything checked so far is saved.")
                 break
             continue
 
         c["verify"] = got
-        # Written after EVERY photo, not at the end of the run. A call that is
-        # paid for and then lost to a crash is the one genuinely wasteful thing
-        # this could do on a free tier, and it also means a re-run resumes
-        # instead of starting over.
+        # Save after every photo so a crash doesn't lose paid-for calls and
+        # re-runs resume.
         CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
         flags = []
-        # Identity is the only one that makes a card actively lie, so it is the
-        # only one raised as a problem rather than a warning.
+        # A wrong species is an error; everything else is a warning.
         if got.get("looks_like_species") is False:
             bad(sid, f"model says this is not {sp.get('scientific','')} "
                      f"- {got.get('identity_note','')}")
@@ -1425,48 +1290,33 @@ def gemini_verify(data, chosen, species, bad, warn, limit=0):
 
 
 # --------------------------------------------------------------------------
-# stage 3 — build
+# stage 3: build
 # --------------------------------------------------------------------------
 
-# The longest edge a shipped photo may have. Big enough to stay sharp on a
-# hero card at 2x, small enough that 68 of them are not a download.
-#
-# NOTE there is no card width or height here any more, and that is the point:
-# nothing is cropped or composited. The whole original frame ships and the card
-# gives it a consistent shape in CSS. A crop decided here would be permanent
-# and could take a fin with it; a crop decided in CSS is a stylesheet edit.
+# Longest edge of a shipped photo (sharp at 2x on the hero card).
 MAX_EDGE = 1400
 
 
 CARD_ASPECT = 4 / 3
-# Breathing room around the fish, as a fraction of its own size. Cropped hard
-# to the fish it looks like a mugshot; this leaves enough water or deck around
-# it to read as a photograph.
+# Margin around the fish, as a fraction of its size.
 FISH_MARGIN = 1.22
 
 
 def find_fish(img, session):
-    """Where the fish is, as a box in the original image.
+    """Bounding box of the fish in the original image, from u2net's saliency
+    mask (the mask is only used for location; the photo isn't altered).
 
-    u2net is a salient-object detector — the thing rembg uses to decide what to
-    keep. We want only its opinion of WHERE the subject is, not its cut-out, so
-    this takes the mask and throws the matting away. The pixels that ship are
-    the photographer's, untouched.
-
-    Returns (x0, y0, x1, y1) or None if it cannot find a subject.
+    Returns (x0, y0, x1, y1) or None.
     """
     from rembg import remove
     mask = remove(img, session=session, only_mask=True)
-    # Threshold before measuring. A raw mask has a faint halo of low-confidence
-    # pixels around the subject, and getbbox() counts any non-zero pixel, so
-    # the untresholded box creeps outward towards the whole frame.
+    # Threshold first; the mask's faint halo would inflate getbbox().
     mask = mask.point(lambda p: 255 if p > 96 else 0)
     box = mask.getbbox()
     if not box:
         return None
     x0, y0, x1, y1 = box
-    # Something that fills almost everything is the detector shrugging, not a
-    # fish; and something tiny is usually a speck of noise.
+    # Nearly the whole frame or a tiny speck: treat as not found.
     frac = ((x1 - x0) * (y1 - y0)) / float(img.width * img.height)
     if frac > 0.97 or frac < 0.01:
         return None
@@ -1474,12 +1324,8 @@ def find_fish(img, session):
 
 
 def frame_on_fish(img, box):
-    """A CARD_ASPECT window centred on the fish that contains all of it.
-
-    Crops the picture, never the fish. If the fish is so long that no window of
-    this shape can hold it inside the photo, this gives up and returns None —
-    the whole frame ships and the card letterboxes it. Cutting a tail off to
-    make the shape work would be the one thing worth avoiding here.
+    """A CARD_ASPECT window centred on the fish that contains all of it. Returns
+    None if the fish is too long to fit; that photo ships uncropped.
     """
     W, H = img.width, img.height
     x0, y0, x1, y1 = box
@@ -1507,8 +1353,7 @@ def frame_on_fish(img, box):
     left = max(0, min(left, W - cw))
     top = max(0, min(top, H - ch))
 
-    # The fish must be wholly inside. Clamping to the edge can push the window
-    # off it, so nudge back if so.
+    # Nudge back if clamping pushed the window off the fish.
     if x0 < left:
         left = x0
     if y0 < top:
@@ -1525,17 +1370,8 @@ def frame_on_fish(img, box):
 
 
 def fill_to_card(img):
-    """Pad a photo out to the card's shape using a blurred copy of itself.
-
-    Some fish cannot be framed to 4:3 without cutting a tail off, so those ship
-    whole — which left bars down the sides of the card. Gabriel asked for the
-    container to be filled by the image.
-
-    The two obvious answers are both bad. Cropping to fit takes the fin off,
-    which is the one thing this pipeline refuses to do. A flat colour behind it
-    is still a bar, just a tidier one. Blurring an enlarged copy of the photo
-    behind the photo fills the frame with the picture's own colours and light,
-    so the card reads as one image and nothing is lost.
+    """Pad a photo to the card's aspect ratio with a blurred, enlarged copy of
+    itself behind it, instead of cropping the fish or leaving bars.
     """
     from PIL import Image, ImageFilter, ImageEnhance
     w, h = img.width, img.height
@@ -1547,8 +1383,7 @@ def fill_to_card(img):
     else:
         ch, cw = h, round(h * CARD_ASPECT)
 
-    # Cover the canvas with the photo, blur it hard enough that no detail reads
-    # as a second fish, and dim it so the real photo stays the subject.
+    # Blurred, dimmed background copy.
     scale = max(cw / w, ch / h) * 1.08
     back = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
     left, top = (back.width - cw) // 2, (back.height - ch) // 2
@@ -1582,8 +1417,7 @@ def cmd_build(args):
         if counts["unsure"] or counts["more"]:
             print(f"  ({counts['unsure']} unsure, {counts['more']} waiting on `more`)")
         return 1
-    # 'unsure' still builds — a flagged favourite beats a gap, and the flag
-    # stays in picks.json so you can come back to it.
+    # 'unsure' picks still build; the flag stays in picks.json.
     unsure = [sid for sid, v in picks.items() if v.get("verdict") == "unsure"]
     if unsure:
         print(f"Building {len(unsure)} still marked unsure: {', '.join(sorted(unsure))}\n")
@@ -1594,8 +1428,7 @@ def cmd_build(args):
     manifest = {}
     fitted = {}
     wrote = 0
-    # Loaded once. Building the session per photo would re-read 176 MB of model
-    # forty-three times.
+    # Load the model once (176 MB).
     session = new_session("u2net")
 
     crops = load_crops()
@@ -1604,45 +1437,32 @@ def cmd_build(args):
         rec = data.get(sid)
         if not rec or idx is None or idx < 0 or idx >= len(rec["candidates"]):
             continue
-        # A photo failed in the crop review is pulled entirely — the card says
-        # "photo not yet available", which is the honest state until it is
-        # replaced, rather than shipping something already judged wrong.
+        # Failed in crop review: ship no photo until it's replaced.
         cv = dict(crops.get(sid, {}))
-        # Stale verdict: it was passed on a different photo. Ignoring it is the
-        # only safe reading — the picture it judged is gone.
+        # Verdict was for a different photo; ignore it.
         if cv.get("verdict") and cv.get("for_index") is not None and cv["for_index"] != idx:
             cv = {k: v for k, v in cv.items() if k == "note"}
-        # "Replace this" and "rotate this" together is a contradiction worth
-        # surfacing rather than resolving quietly: it usually means the photo
-        # was failed BECAUSE it was sideways, and straightening it is the fix.
-        # Building it keeps the choice open; pulling it would throw away a
-        # photo the remark says is fine.
+        # "Replace" plus "rotate" usually means it failed because it was
+        # sideways, so build it (rotated) rather than pulling it.
         if cv.get("verdict") == "fail" and not int(cv.get("rotate", 0)):
             out_dead = OUT_DIR / f"{sid}.jpg"
             if out_dead.exists():
                 out_dead.unlink()
-            print(f"  {sid:34} pulled — marked 'replace' in the crop review")
+            print(f"  {sid:34} pulled - marked 'replace' in the crop review")
             continue
         if cv.get("verdict") == "fail":
-            print(f"  {sid:34} marked 'replace' BUT rotated — building it rotated "
+            print(f"  {sid:34} marked 'replace' BUT rotated - building it rotated "
                   f"so you can judge it straightened")
         cand = rec["candidates"][idx]
         out = OUT_DIR / f"{sid}.jpg"
 
-        # A hand-supplied photo beats anything fetched. Credit comes from a
-        # sidecar JSON if there is one — an image with no provenance recorded
-        # is worse than no image, so the default says plainly that it is
-        # unrecorded rather than inventing a licence.
-        # Case-insensitive on the extension, because a file saved from a
-        # browser arrives as .JPG as often as .jpg.
+        # A manual photo overrides fetched ones. Credit comes from a sidecar
+        # JSON if present, otherwise it's marked as unrecorded.
         manual = next((f for e in ("jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG", "WEBP")
                        for f in [MANUAL / f"{sid}.{e}"] if f.exists()), None)
 
-        # Normally an existing file is left alone. Not when you have just said
-        # its crop is wrong — the whole point of that verdict is to change the
-        # file, and making you remember --refresh for it would be a trap.
-        # A rotation you have just asked for has to be applied, so a species
-        # carrying one always rebuilds. There are only ever a handful.
+        # Rebuild existing files when the crop was rejected or a rotation was
+        # requested.
         turn = int(crops.get(sid, {}).get("rotate", 0)) % 360
         recrop = crops.get(sid, {}).get("verdict") == "full" or turn
         if out.exists() and not args.refresh and not recrop:
@@ -1654,7 +1474,7 @@ def cmd_build(args):
             side = MANUAL / f"{sid}.json"
             meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
             cand = {
-                "credit": meta.get("credit", "supplied by hand — provenance not recorded"),
+                "credit": meta.get("credit", "supplied by hand - provenance not recorded"),
                 "licence": meta.get("licence", "cc-by"),
                 "page": meta.get("source", ""),
             }
@@ -1666,35 +1486,26 @@ def cmd_build(args):
             with urllib.request.urlopen(req, timeout=60) as r:
                 blob = r.read()
           except Exception as e:
-            # Some hosts refuse programmatic downloads outright — the French
-            # museum's media server 403s whatever you send. That is their
-            # policy, not a bug to route around, so the candidate is marked
-            # unavailable and the review sheet stops offering it.
-            print(f"  {sid}: download failed — {e}")
+            # Some hosts refuse downloads (403); mark unavailable and move on.
+            print(f"  {sid}: download failed - {e}")
             if "403" in str(e) or "404" in str(e):
                 cand["unavailable"] = str(e)[:80]
                 CANDIDATES.write_text(json.dumps(data, indent=1), encoding="utf-8")
-                print(f"  {' ' * 34}marked unavailable — supply it by hand in "
+                print(f"  {' ' * 34}marked unavailable - supply it by hand in "
                       f"tools/_photo_work/manual/, or pick another in `review`")
             continue
 
         try:
             src = Image.open(io.BytesIO(blob))
-            # EXIF orientation is a flag, not applied pixels. Without this a
-            # phone photo taken in portrait arrives on its side.
+            # Apply EXIF orientation.
             src = ImageOps.exif_transpose(src).convert("RGB")
-            # Straighten it before anything else looks at it — the detector
-            # reads a sideways fish as a tall thin subject and frames it badly.
+            # Rotate before detection.
             if turn:
                 src = src.rotate(-turn, expand=True)
 
-            # Find the fish and frame on it. The pixels that ship are the
-            # photographer's — the detector only decides WHERE to cut the
-            # picture, never what to erase from it.
+            # Crop around the fish.
             note = "full frame"
-            # "Bad crop, good photo" — ship the whole frame and skip detection
-            # entirely. Re-running the detector would only find the same wrong
-            # thing again.
+            # "Use whole photo": skip detection.
             box = None if crops.get(sid, {}).get("verdict") == "full"                 else find_fish(src, session)
             if crops.get(sid, {}).get("verdict") == "full":
                 note = "whole frame (your call)"
@@ -1706,13 +1517,10 @@ def cmd_build(args):
                     src = src.crop(window)
                     note = "centred on fish"
                 else:
-                    note = "fish too long to frame — full frame kept"
+                    note = "fish too long to frame - full frame kept"
             elif crops.get(sid, {}).get("verdict") != "full":
-                # Only say the detector found nothing when it actually looked.
-                # For a "use whole photo" verdict it was never asked, and
-                # reporting a failure there would send you hunting a bug that
-                # is really your own instruction being followed.
-                note = "no subject found — full frame kept"
+                # Only report "not found" if detection actually ran.
+                note = "no subject found - full frame kept"
             if manual:
                 note += " (supplied by hand)"
             fitted[note] = fitted.get(note, 0) + 1
@@ -1726,7 +1534,7 @@ def cmd_build(args):
             print(f"  {sid:34} {src.width}x{src.height}  "
                   f"{out.stat().st_size // 1024:>4} KB  {note}")
         except Exception as e:
-            print(f"  {sid}: could not be processed — {e}")
+            print(f"  {sid}: could not be processed - {e}")
             continue
 
         manifest[sid] = manifest_entry(sid, cand)
@@ -1743,21 +1551,15 @@ def cmd_build(args):
 
 
 # --------------------------------------------------------------------------
-# stage 3b — pass or fail the crops
+# stage 3b: crop review
 # --------------------------------------------------------------------------
 #
-# The crop is decided by a saliency model, and a saliency model is sometimes
-# looking at the diver, the hand, or the brightest rock. Nothing in the build
-# can tell you it got the wrong thing — only looking can.
+# The saliency model sometimes frames the wrong thing (a diver, a hand, a
+# bright rock). Verdicts:
 #
-# Three verdicts, because "fail" alone would not say what to do about it:
-#
-#   pass  the crop is good
-#   full  the crop is wrong but the PHOTO is fine — ship the whole frame
-#   fail  the photo itself is no good — pull it and find another
-#
-# `full` is the useful one. Most bad crops are a good photograph framed badly,
-# and re-picking a perfectly good photo to fix a crop would be wasted work.
+#   pass  crop is fine
+#   full  crop is wrong but the photo is fine: ship the whole frame
+#   fail  photo is no good: pull it and pick another
 
 CROPS = WORK / "crops.json"
 
@@ -1788,8 +1590,7 @@ def cmd_crops(args):
         print("Nothing built yet. Run `build` first.")
         return 1
 
-    # How each one was framed, so a letterboxed card is obviously a decision
-    # rather than a mistake.
+    # Show how each was framed.
     data = json.loads(CANDIDATES.read_text(encoding="utf-8")) if CANDIDATES.exists() else {}
 
     rows = []
@@ -1802,7 +1603,7 @@ def cmd_crops(args):
         with Image.open(p) as im:
             w, h = im.size
         shape = "4:3, centred on the fish" if abs((w / h) - CARD_ASPECT) < 0.02 \
-            else f"whole frame, {w}x{h} — letterboxed on the card"
+            else f"whole frame, {w}x{h} - letterboxed on the card"
 
         btn = lambda kind, label: (
             f"<button class='v v--{kind}{' is-on' if verdict == kind else ''}' "
@@ -1816,13 +1617,12 @@ def cmd_crops(args):
             f"<p class='shape'>{html_escape(shape)}</p>"
             f"<div class='verdicts'>"
             f"{btn('pass', 'Crop is good')}"
-            f"{btn('full', 'Bad crop — use whole photo')}"
-            f"{btn('fail', 'Bad photo — replace it')}"
+            f"{btn('full', 'Bad crop - use whole photo')}"
+            f"{btn('fail', 'Bad photo - replace it')}"
             f"<button class='v v--clear' data-sp='{sid}' data-verdict='clear'>Clear</button>"
             f"<span class='state' data-state='{sid}'></span>"
             f"</div>"
-            # Rotation is not a verdict — a photo can be good AND on its side.
-            # Kept separate so you can pass it and straighten it in one go.
+            # Rotation is separate from the verdict.
             f"<div class='verdicts'>"
             f"<span class='rotlabel'>Rotate</span>"
             f"<button class='v v--rot' data-sp='{sid}' data-rot='-90'>&#8634; left</button>"
@@ -1831,7 +1631,7 @@ def cmd_crops(args):
             f"{(str(v.get('rotate', 0)) + '&deg;') if v.get('rotate') else ''}</span>"
             f"</div>"
             f"<textarea class='note' data-sp='{sid}' rows='2' "
-            f"placeholder='Remarks — what is wrong with this crop or photo'>"
+            f"placeholder='Remarks - what is wrong with this crop or photo'>"
             f"{html_escape(v.get('note', ''))}</textarea>"
             f"</div></section>")
 
@@ -1875,7 +1675,7 @@ def cmd_crops(args):
  .tag{{font:700 11px monospace;padding:3px 8px;border-radius:99px;background:#30363d;color:#8b949e}}
 </style>
 <h1>Pass or fail each crop</h1>
-<p class=lede>Each photo is shown exactly as the species card shows it — same ratio, same fit,
+<p class=lede>Each photo is shown exactly as the species card shows it - same ratio, same fit,
 same backing. <b>Crop is good</b> keeps it. <b>Bad crop</b> keeps the photo but ships the whole
 frame instead, which is the right answer when the framing is off but the picture is fine.
 <b>Bad photo</b> pulls it entirely and the card says "photo not yet available" until it is
@@ -1911,7 +1711,7 @@ async function post(path, body, sp) {{
     document.getElementById('state').textContent = '';
   }} catch (e) {{
     if (cell) cell.textContent = '';
-    document.getElementById('state').textContent = 'NOT SAVED — is the server still running?';
+    document.getElementById('state').textContent = 'NOT SAVED - is the server still running?';
   }}
 }}
 
@@ -1972,8 +1772,7 @@ def serve_crops(port):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            # Served from here rather than by file:// path, so the sheet works
-            # the same whichever directory it is opened from.
+            # Served over HTTP so it works from any directory.
             if self.path.startswith("/photo/"):
                 name = os.path.basename(self.path)
                 f = OUT_DIR / name
@@ -2011,10 +1810,7 @@ def serve_crops(port):
                     verdict = msg.get("verdict")
                     if verdict:
                         entry["verdict"] = verdict
-                        # WHICH photo this verdict is about. A verdict is a
-                        # judgement of one image, not of the species — without
-                        # this, "replace" sticks to the slot and quietly kills
-                        # the replacement you then chose.
+                        # Which photo the verdict applies to.
                         pk = load_picks().get(sid, {})
                         if pk.get("index") is not None:
                             entry["for_index"] = pk["index"]
@@ -2064,23 +1860,14 @@ def serve_crops(port):
 
 
 def bump_cache_version(n):
-    """Force devices to drop the photos they already hold.
-
-    The service worker is cache-first for images, which is right — they are
-    large and they do not usually change. But these DO change: rebuilding a
-    photo rewrites the same URL with different pixels, so a device that cached
-    the old one keeps it forever and no amount of deploying helps.
-
-    CACHE_VERSION exists for exactly this and was being left alone, so Gabriel
-    saw a portrait fish and a tight crop that had both been fixed days earlier.
-    Bumping it here means writing photos and evicting them can no longer come
-    apart, because the same command does both.
+    """Bump CACHE_VERSION in sw.js so devices drop cached photos. Images are
+    cache-first and rebuilt photos keep the same URL.
     """
     sw = ROOT / "sw.js"
     src = sw.read_text(encoding="utf-8")
     m = re.search(r"const CACHE_VERSION = 'v(\d+)';", src)
     if not m:
-        print("  ! could not find CACHE_VERSION in sw.js — bump it by hand")
+        print("  ! could not find CACHE_VERSION in sw.js - bump it by hand")
         return
     nxt = int(m.group(1)) + 1
     sw.write_text(src.replace(m.group(0), f"const CACHE_VERSION = 'v{nxt}';"), encoding="utf-8")
@@ -2090,14 +1877,10 @@ def bump_cache_version(n):
 
 def write_manifest(manifest):
     lines = [
-        "// GENERATED by tools/fish_photos.py — do not edit by hand.",
+        "// Generated by tools/fish_photos.py. Don't edit by hand.",
         "//",
-        "// One entry per species that has a usable, openly licensed photo. A",
-        "// species missing from here has no photo, and the card says so rather",
-        "// than showing something that could be mistaken for the fish.",
-        "//",
-        "// `credit` and `licence` are not decoration: CC BY and CC BY-SA both",
-        "// require attribution, so the card that shows the photo shows these.",
+        "// Species with an openly licensed photo. `credit` and `licence` are",
+        "// shown on the card, as CC BY / BY-SA require.",
         "",
         "export const SPECIES_PHOTOS = {",
     ]
@@ -2129,9 +1912,7 @@ def cmd_status(args):
     print(f"fetched        {len(data)}")
     print(f"no licensed photo {len(no_cands)}")
     print(f"low confidence {len(doubtful)}")
-    # Entries, not decisions: a species can carry a remark with no verdict,
-    # and counting those as decided overstates how done you are by exactly the
-    # number of things still waiting on you.
+    # Count verdicts, not entries (remark-only entries aren't decided).
     print(f"decided        {decided_count(picks)} of {len(species)}")
     print(f"  picked       {counts['pick']}")
     print(f"  no good ones {counts['none']}")
@@ -2149,10 +1930,7 @@ def cmd_status(args):
 
 
 def main():
-    # Line-buffered, so a run redirected to a log is watchable while it works.
-    # Python block-buffers stdout when it is not a terminal, which meant a
-    # forty-minute background search wrote nothing at all until it exited —
-    # indistinguishable, from outside, from a job that had silently died.
+    # Line-buffered so redirected output shows up as it runs.
     try:
         sys.stdout.reconfigure(line_buffering=True)
     except Exception:
