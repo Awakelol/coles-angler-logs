@@ -5,10 +5,42 @@
 //
 // To release: add an entry at the top, update APP_VERSION below, and bump
 // CACHE_VERSION in sw.js.
+//
+// Also read by an external portfolio site: `portfolio: true` marks entries
+// worth showing publicly, and STATUS is a summary of the project. Settings
+// ignores both.
 
-export const APP_VERSION = '3.23.2';
+export const APP_VERSION = '3.23.3';
+
+export const STATUS = {
+  summary: 'Offline-first fishing companion PWA for the waters around Leyte: catch log, species guide, fishing map, conditions and photo fish ID.',
+  status: 'in progress', // in progress | stable | paused
+  services: [
+    'Open-Meteo (weather)',
+    'WorldTides / Stormglass (tides, optional)',
+    'Fishial (photo ID)',
+    'Gemini / Claude (optional ID second opinion)',
+    'Firebase Auth + Firestore (accounts, cloud sync)',
+    'Cloudflare Workers (API proxy, hosting)',
+    'Leaflet with OpenStreetMap and Esri satellite tiles',
+    'iNaturalist / Wikimedia Commons (species photos)',
+  ],
+  url: null,
+};
 
 export const CHANGELOG = [
+  {
+    version: '3.23.3',
+    date: '2026-09-29',
+    title: 'Your log, and only yours',
+    changes: [
+      'As a guest you only see catches that belong to no account, not everyone’s on the phone.',
+      'Export, import and “delete all” act on your own log only, and deleting everything now syncs.',
+      'Signing back in to a synced account on the same phone reconnects it to the cloud.',
+      'Handles can’t be renamed from an offline copy of a synced account.',
+      'Fixed the username filter letting some blocked names through.',
+    ],
+  },
   {
     version: '3.23.2',
     date: '2026-08-10',
@@ -38,6 +70,7 @@ export const CHANGELOG = [
   {
     version: '3.22.0',
     date: '2026-08-10',
+    portfolio: true,
     title: 'Position your photo, and change your handle',
     changes: [
       'Drag and zoom your profile photo inside a circle before saving it.',
@@ -67,6 +100,7 @@ export const CHANGELOG = [
   {
     version: '3.19.0',
     date: '2026-08-10',
+    portfolio: true,
     title: '39 more fish',
     changes: [
       'The guide now holds 107 species, up from 68.',
@@ -77,6 +111,7 @@ export const CHANGELOG = [
   {
     version: '3.18.0',
     date: '2026-08-10',
+    portfolio: true,
     title: 'A proper profile',
     changes: [
       'Account is a profile now — a cover, your photo, and your numbers.',
@@ -96,6 +131,7 @@ export const CHANGELOG = [
   {
     version: '3.16.0',
     date: '2026-08-09',
+    portfolio: true,
     title: 'A live camera, and a full-screen map',
     changes: [
       'The camera is now a live viewfinder — frame the fish and shoot.',
@@ -259,6 +295,7 @@ export const CHANGELOG = [
   {
     version: '3.3.0',
     date: '2026-08-04',
+    portfolio: true,
     title: 'A proper desktop layout',
     changes: [
       'On a big screen the navigation is a rail down the left.',
@@ -289,6 +326,7 @@ export const CHANGELOG = [
   {
     version: '3.0.0',
     date: '2026-08-04',
+    portfolio: true,
     title: 'A new look on mobile',
     changes: [
       'Blue and off-white throughout, with soft edges instead of hard outlines.',
@@ -302,6 +340,7 @@ export const CHANGELOG = [
   {
     version: '2.2.0',
     date: '2026-08-03',
+    portfolio: true,
     title: 'Real photographs, and spots need an account',
     changes: [
       'Every one of the 68 species now shows a real photograph instead of drawn art.',
@@ -315,6 +354,7 @@ export const CHANGELOG = [
   {
     version: '2.1.0',
     date: '2026-08-03',
+    portfolio: true,
     title: 'Local names first, and real photographs',
     changes: [
       'Species cards lead with the local name — maya-maya, not "mangrove red snapper".',
@@ -336,6 +376,7 @@ export const CHANGELOG = [
   {
     version: '1.6.0',
     date: '2026-08-02',
+    portfolio: true,
     title: 'Deeper zoom and satellite imagery',
     changes: [
       'Satellite imagery, switchable from the map. Free, no account needed.',
@@ -358,6 +399,7 @@ export const CHANGELOG = [
   {
     version: '1.4.0',
     date: '2026-08-02',
+    portfolio: true,
     title: 'Your own spots',
     changes: [
       'Long-press the map (right-click on a desktop) to drop and name a spot.',
@@ -389,6 +431,7 @@ export const CHANGELOG = [
   {
     version: '1.1.0',
     date: '2026-07-30',
+    portfolio: true,
     title: 'The whole island',
     changes: [
       'Expanded from Leyte Gulf to all seven waters around Leyte.',
@@ -401,6 +444,7 @@ export const CHANGELOG = [
   {
     version: '1.0.0',
     date: '2026-07-30',
+    portfolio: true,
     title: 'Identify a fish from a photo',
     changes: [
       'Photograph a fish and get a name, checked against what actually swims here.',
@@ -412,6 +456,7 @@ export const CHANGELOG = [
   {
     version: '0.9.0',
     date: '2026-07-29',
+    portfolio: true,
     title: 'Accounts, cloud sync, and one Info page',
     changes: [
       'Species and Tips became one Info page, with Gear alongside them.',
@@ -433,6 +478,7 @@ export const CHANGELOG = [
   {
     version: '0.7.0',
     date: '2026-07-28',
+    portfolio: true,
     title: 'Accounts and media',
     changes: [
       'Local username and password profiles, with the catch log behind them.',
@@ -443,6 +489,7 @@ export const CHANGELOG = [
   {
     version: '0.6.0',
     date: '2026-07-27',
+    portfolio: true,
     title: 'Dark mode and better search',
     changes: [
       'Dark mode, with a light / dark / system setting.',
@@ -483,6 +530,7 @@ export const CHANGELOG = [
   {
     version: '0.1.0',
     date: '2026-07-27',
+    portfolio: true,
     title: 'First build',
     changes: [
       'Species guide, fishing map, tide and weather dashboard, catch log.',

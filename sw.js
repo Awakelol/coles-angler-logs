@@ -7,7 +7,7 @@
 // Code is network-first so deploys show up on the next load without bumping
 // CACHE_VERSION. Bump it only when an image changes in place.
 
-const CACHE_VERSION = 'v52';
+const CACHE_VERSION = 'v53';
 const CACHE_NAME = `angler-log-${CACHE_VERSION}`;
 
 const SHELL = [
